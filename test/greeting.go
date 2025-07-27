@@ -72,4 +72,7 @@ func main() {
 	}
 
 	fmt.Println("✅ 挨拶プログラム実行完了")
+	
+	// 追加: 実行時間の表示
+	fmt.Printf("実行完了時刻: %s\n", time.Now().Format("2006-01-02 15:04:05"))
 }
