@@ -389,7 +389,8 @@ func showStatsJSON(stats *types.Statistics) {
 // showStatsSummary はサマリー形式で統計を表示する
 func showStatsSummary(stats *types.Statistics) {
 	fmt.Println("📊 AI Code Tracker サマリー")
-	fmt.Println(strings.Repeat("=", 30))
+	fmt.Print(strings.Repeat("=", 30))
+	fmt.Println()
 	
 	if stats.TotalEvents == 0 {
 		fmt.Println("まだイベントが記録されていません")
