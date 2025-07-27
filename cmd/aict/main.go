@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/ai-code-tracker/aict/internal/blame"
 	"github.com/ai-code-tracker/aict/internal/storage"
 	"github.com/ai-code-tracker/aict/internal/tracker"
 	"github.com/ai-code-tracker/aict/pkg/types"
@@ -106,6 +107,9 @@ func showHelp() {
     --since <date>    指定日以降の統計 (YYYY-MM-DD)
     --author <name>   作成者でフィルタ
   blame <file>        ファイルのAI/人間による変更履歴を表示
+    --no-color        カラー表示を無効化
+    --stats           貢献者統計のみ表示
+    --top <N>         上位N名の貢献者を表示
   config              設定を管理
     --list            現在の設定を表示
     --set <key=value> 設定を変更
@@ -118,7 +122,9 @@ func showHelp() {
   %s track --author "John Doe" --files main.go --message "バグ修正"
   %s stats --format table --since 2024-01-01
   %s blame src/main.go
-`, AppName, Version, AppName, AppName, AppName, AppName, AppName, AppName)
+  %s blame --stats main.go
+  %s blame --top 5 main.go
+`, AppName, Version, AppName, AppName, AppName, AppName, AppName, AppName, AppName, AppName)
 }
 
 // handleInit はプロジェクトの初期化を処理する
@@ -407,15 +413,97 @@ func showStatsSummary(stats *types.Statistics) {
 	}
 }
 
-// handleBlame はファイルのblame情報を表示する（今後実装）
+// handleBlame はファイルのblame情報を表示する
 func handleBlame(args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("ファイルパスが必要です")
 	}
 
-	fmt.Printf("Blame機能は今後のバージョンで実装予定です\n")
-	fmt.Printf("対象ファイル: %s\n", args[0])
-	
+	var (
+		filePath  = args[0]
+		useColor  = true
+		showStats = false
+		topN      = 0
+	)
+
+	// コマンドライン引数をパース
+	for i := 1; i < len(args); i++ {
+		switch args[i] {
+		case "--no-color":
+			useColor = false
+		case "--stats":
+			showStats = true
+		case "--top":
+			if i+1 < len(args) {
+				if n, err := fmt.Sscanf(args[i+1], "%d", &topN); n == 1 && err == nil {
+					i++
+				}
+			}
+		}
+	}
+
+	// 現在のディレクトリを取得
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("現在のディレクトリの取得に失敗しました: %w", err)
+	}
+
+	// ストレージを初期化
+	storage, err := storage.NewStorage("")
+	if err != nil {
+		return fmt.Errorf("ストレージの初期化に失敗しました: %w", err)
+	}
+	defer storage.Close()
+
+	// Blamerを初期化
+	blamer := blame.NewBlamer(storage, currentDir)
+
+	// ファイルパスを検証
+	if err := blamer.ValidateFilePath(filePath); err != nil {
+		return fmt.Errorf("ファイル検証エラー: %w", err)
+	}
+
+	if showStats || topN > 0 {
+		// 統計情報または上位貢献者を表示
+		if topN > 0 {
+			contributors, err := blamer.GetTopContributors(filePath, topN)
+			if err != nil {
+				return fmt.Errorf("貢献者情報の取得に失敗しました: %w", err)
+			}
+
+			fmt.Printf("=== %s の上位貢献者 ===\n\n", filePath)
+			for i, contributor := range contributors {
+				indicator := "👤"
+				if contributor.IsAI {
+					indicator = "🤖"
+				}
+				fmt.Printf("%d. %s %s - %d行 (%.1f%%)\n", 
+					i+1, indicator, contributor.Name, contributor.Lines, contributor.Percentage)
+			}
+		} else {
+			// 貢献者別統計のみ表示
+			contribution, err := blamer.GetFileContribution(filePath)
+			if err != nil {
+				return fmt.Errorf("貢献者情報の取得に失敗しました: %w", err)
+			}
+
+			fmt.Printf("=== %s の貢献者統計 ===\n\n", filePath)
+			for contributor, lines := range contribution {
+				fmt.Printf("%-20s: %d行\n", contributor, lines)
+			}
+		}
+	} else {
+		// 通常のblame表示
+		result, err := blamer.BlameFile(filePath)
+		if err != nil {
+			return fmt.Errorf("Blame情報の取得に失敗しました: %w", err)
+		}
+
+		// フォーマットして出力
+		output := blamer.FormatBlameOutput(result, useColor)
+		fmt.Print(output)
+	}
+
 	return nil
 }
 
