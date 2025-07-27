@@ -3,6 +3,8 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 必ず日本語でチャットしてください。
 日本語が含まれるファイルはUTF-8で保存してください。
+コードのコメントは日本語で記載すること
+作業完了時に`.claude/workspace/task.md`を更新すること
 
 ## Project Overview
 

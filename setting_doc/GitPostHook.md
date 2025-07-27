@@ -90,7 +90,7 @@ main() {
         
         if [ "$IS_CLAUDE" = true ]; then
             # AIコミットとして記録
-            aict track --ai --author "$COMMIT_AUTHOR" --model "claude-3-opus" "${TRACK_ARGS[@]}"
+            aict track --ai --author "$COMMIT_AUTHOR" --model "claude-sonnet-4" "${TRACK_ARGS[@]}"
         else
             # 人間のコミットとして記録
             aict track --author "$COMMIT_AUTHOR" "${TRACK_ARGS[@]}"

@@ -34,7 +34,7 @@ Claude Codeを中心としたAIコーディングツールの利用において�
 #### 2.2.1 JSONL形式
 ```jsonl
 {"id":"track-001","timestamp":"2024-01-01T10:00:00Z","event_type":"pre_edit","author":"John Doe","files":{"main.go":{"lines_before":100}}}
-{"id":"track-002","timestamp":"2024-01-01T10:05:00Z","event_type":"ai_edit","author":"Claude Code","model":"claude-3-opus","files":{"main.go":{"lines_added":50,"lines_modified":10,"lines_deleted":5}}}
+{"id":"track-002","timestamp":"2024-01-01T10:05:00Z","event_type":"ai_edit","author":"Claude Code","model":"claude-sonnet-4","files":{"main.go":{"lines_added":50,"lines_modified":10,"lines_deleted":5}}}
 ```
 
 #### 2.2.2 保存場所
@@ -55,7 +55,7 @@ act track [--ai] [--author <name>] [--model <model>]
 # 拡張blame表示
 act blame <file>
   10  John Doe    2024-01-01  func main() {
-  11  Claude Code 2024-01-01  ├─ claude-3-opus
+  11  Claude Code 2024-01-01  ├─ claude-sonnet-4
   12  Claude Code 2024-01-01  │  if err != nil {
   13  John Doe    2024-01-02      log.Fatal(err) // 修正
 

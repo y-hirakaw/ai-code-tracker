@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'INPUT=$(cat); FILE=$(echo \"$INPUT\" | jq -r \".tool_input.path // .tool_input.file_path // empty\"); if [ -n \"$FILE\" ]; then aict track --quiet --ai --author \"Claude Code\" --model \"claude-3-opus\" --files \"$FILE\" 2>/dev/null || true; fi; echo \"{\\\"continue\\\": true}\"'"
+            "command": "bash -c 'INPUT=$(cat); FILE=$(echo \"$INPUT\" | jq -r \".tool_input.path // .tool_input.file_path // empty\"); if [ -n \"$FILE\" ]; then aict track --quiet --ai --author \"Claude Code\" --model \"claude-sonnet-4\" --files \"$FILE\" 2>/dev/null || true; fi; echo \"{\\\"continue\\\": true}\"'"
           }
         ]
       },
@@ -37,7 +37,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'INPUT=$(cat); CMD=$(echo \"$INPUT\" | jq -r \".tool_input.command // empty\"); aict track --quiet --ai --author \"Claude Code\" --model \"claude-3-opus\" --command \"$CMD\" 2>/dev/null || true; echo \"{\\\"continue\\\": true}\"'"
+            "command": "bash -c 'INPUT=$(cat); CMD=$(echo \"$INPUT\" | jq -r \".tool_input.command // empty\"); aict track --quiet --ai --author \"Claude Code\" --model \"claude-sonnet-4\" --command \"$CMD\" 2>/dev/null || true; echo \"{\\\"continue\\\": true}\"'"
           }
         ]
       }
