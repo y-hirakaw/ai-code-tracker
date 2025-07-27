@@ -20,6 +20,24 @@ test:
 	@echo "Running tests..."
 	go test -v ./...
 
+# Run integration tests (including E2E)
+test-integration:
+	@echo "Running integration tests..."
+	go test -v ./test/integration/...
+
+# Run performance benchmarks
+bench-performance:
+	@echo "Running performance benchmarks..."
+	go run cmd/aict-bench/main.go --all --events=1000
+
+# Run security scan
+security-scan:
+	@echo "Running security scan..."
+	bash scripts/security-scan.sh
+
+# Run all tests and checks
+test-all: test test-integration bench-performance security-scan
+
 # Install the binary to $GOPATH/bin
 install: build
 	@echo "Installing $(BINARY_NAME) to $$GOPATH/bin..."
@@ -61,4 +79,8 @@ help:
 	@echo "  vet       - Vet code"
 	@echo "  check     - Run fmt, vet, and test"
 	@echo "  dev       - Build development version with race detection"
+	@echo "  test-integration - Run integration tests"
+	@echo "  bench-performance - Run performance benchmarks"
+	@echo "  security-scan - Run security scan"
+	@echo "  test-all  - Run all tests and checks"
 	@echo "  help      - Show this help"
