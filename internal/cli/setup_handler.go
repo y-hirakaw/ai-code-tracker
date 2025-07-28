@@ -184,9 +184,17 @@ func (h *SetupHandler) checkClaudeHooksStatus(hookManager *hooks.HookManager) (b
 		hasNewSettings = true
 		var settings map[string]interface{}
 		if json.Unmarshal(data, &settings) == nil {
-			// JSON全体を文字列として確認（aictコマンドが含まれているか）
-			if strings.Contains(string(data), "aict track") || strings.Contains(string(data), "aict ") {
-				hasValidAICTHooks = true
+			// hooksセクションが存在するかチェック
+			if hooks, exists := settings["hooks"]; exists {
+				// JSON全体を文字列として確認（aictコマンドが含まれているか）
+				if strings.Contains(string(data), "aict track") || strings.Contains(string(data), "aict ") {
+					hasValidAICTHooks = true
+				}
+				// hooks設定が存在する場合は確認を促す（他のツールとの共存を考慮）
+				if !hasValidAICTHooks && hooks != nil {
+					// 既存のhooks設定があることを示すフラグを設定
+					hasNewSettings = true
+				}
 			}
 		}
 	}
@@ -218,9 +226,9 @@ func (h *SetupHandler) checkClaudeHooksStatus(hookManager *hooks.HookManager) (b
 			"   設定後、旧ファイルは手動で削除することを推奨します。"
 		needsGuidance = true
 	} else if hasNewSettings && !hasValidAICTHooks {
-		message = "📋 ~/.claude/settings.json が存在しますが、AICT hooksは未設定です。\n" +
-			"🔧 AICT hooksを追加します。"
-		needsGuidance = false // 通常の設定として進行
+		message = "📋 ~/.claude/settings.json に既存のhooks設定があります。\n" +
+			"🔧 既存設定を保持してAICT hooksを追加します。"
+		needsGuidance = true // 既存設定がある場合は確認
 	} else {
 		message = "📋 ~/.claude/settings.json が存在しません。\n" +
 			"🆕 新規作成してAICT hooksを設定します。"

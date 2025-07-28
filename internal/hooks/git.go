@@ -136,7 +136,32 @@ func (hm *HookManager) SetupClaudeCodeHooks() error {
 	}
 
 	// 既存のhooks設定とマージ
-	currentSettings["hooks"] = hm.mergeHooksConfig(currentSettings, aictHooks)
+	mergedHooks := hm.mergeHooksConfig(currentSettings, aictHooks)
+	
+	// 大文字小文字が混在するキーを統一（Claude Codeの標準形式に合わせる）
+	normalizedHooks := make(map[string][]ClaudeCodeHook)
+	for hookType, hooks := range mergedHooks {
+		switch strings.ToLower(hookType) {
+		case "pretooluse":
+			// 既存のpreToolUseと統合
+			if existing, exists := normalizedHooks["preToolUse"]; exists {
+				normalizedHooks["preToolUse"] = append(existing, hooks...)
+			} else {
+				normalizedHooks["preToolUse"] = hooks
+			}
+		case "posttooluse":
+			// 既存のpostToolUseと統合
+			if existing, exists := normalizedHooks["postToolUse"]; exists {
+				normalizedHooks["postToolUse"] = append(existing, hooks...)
+			} else {
+				normalizedHooks["postToolUse"] = hooks
+			}
+		default:
+			normalizedHooks[hookType] = hooks
+		}
+	}
+	
+	currentSettings["hooks"] = normalizedHooks
 
 	// JSON形式で保存
 	data, err := json.MarshalIndent(currentSettings, "", "  ")
@@ -158,8 +183,10 @@ func (hm *HookManager) mergeHooksConfig(currentSettings map[string]interface{}, 
 	// 既存のhooks設定を取得
 	if existingHooks, exists := currentSettings["hooks"]; exists {
 		if hooksMap, ok := existingHooks.(map[string]interface{}); ok {
-			// 各フック種別を処理
+			// 各フック種別を処理（大文字小文字を統一）
 			for hookType, hooksList := range hooksMap {
+				// キーを小文字に統一
+				normalizedHookType := strings.ToLower(hookType)
 				if hooksArray, ok := hooksList.([]interface{}); ok {
 					var mergedHooks []ClaudeCodeHook
 					
@@ -196,7 +223,7 @@ func (hm *HookManager) mergeHooksConfig(currentSettings map[string]interface{}, 
 													if strings.Contains(cmdStr, "aict ") || 
 													   strings.Contains(cmdStr, `'{"decision": "approve"}'`) ||
 													   strings.Contains(cmdStr, "AICT Session") ||
-													   (hookType == "notification" && cmdStr == "exit 0") {
+													   (normalizedHookType == "notification" && cmdStr == "exit 0") {
 														keepHook = false
 														break
 													}
@@ -217,16 +244,18 @@ func (hm *HookManager) mergeHooksConfig(currentSettings map[string]interface{}, 
 					
 					// 空の配列は結果に含めない
 					if len(mergedHooks) > 0 {
-						result[hookType] = mergedHooks
+						result[normalizedHookType] = mergedHooks
 					}
 				}
 			}
 		}
 	}
 	
-	// AICT hooksを追加
+	// AICT hooksを追加（大文字小文字を考慮してマージ）
 	for hookType, aictHooksList := range aictHooks {
-		result[hookType] = append(result[hookType], aictHooksList...)
+		// 既存のhooksと統合
+		existing := result[hookType]
+		result[hookType] = append(existing, aictHooksList...)
 	}
 	
 	return result
