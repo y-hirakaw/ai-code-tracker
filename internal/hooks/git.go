@@ -135,8 +135,8 @@ func (hm *HookManager) SetupClaudeCodeHooks() error {
 		},
 	}
 
-	// 既存設定にhooksを追加
-	currentSettings["hooks"] = aictHooks
+	// 既存のhooks設定とマージ
+	currentSettings["hooks"] = hm.mergeHooksConfig(currentSettings, aictHooks)
 
 	// JSON形式で保存
 	data, err := json.MarshalIndent(currentSettings, "", "  ")
@@ -149,6 +149,83 @@ func (hm *HookManager) SetupClaudeCodeHooks() error {
 	}
 
 	return nil
+}
+
+// mergeHooksConfig は既存のhooks設定とAICT hooksをマージする
+func (hm *HookManager) mergeHooksConfig(currentSettings map[string]interface{}, aictHooks map[string][]ClaudeCodeHook) map[string][]ClaudeCodeHook {
+	result := make(map[string][]ClaudeCodeHook)
+	
+	// 既存のhooks設定を取得
+	if existingHooks, exists := currentSettings["hooks"]; exists {
+		if hooksMap, ok := existingHooks.(map[string]interface{}); ok {
+			// 各フック種別を処理
+			for hookType, hooksList := range hooksMap {
+				if hooksArray, ok := hooksList.([]interface{}); ok {
+					var mergedHooks []ClaudeCodeHook
+					
+					// 既存のhooksからAICT関連以外を保持
+					for _, hook := range hooksArray {
+						if hookItem, ok := hook.(map[string]interface{}); ok {
+							claudeHook := ClaudeCodeHook{}
+							
+							// matcher設定
+							if matcher, exists := hookItem["matcher"]; exists {
+								if matcherStr, ok := matcher.(string); ok {
+									claudeHook.Matcher = matcherStr
+								}
+							}
+							
+							// hooks配列を処理
+							if hooksField, exists := hookItem["hooks"]; exists {
+								if hooksDef, ok := hooksField.([]interface{}); ok {
+									var hooks []Hook
+									keepHook := true
+									
+									for _, h := range hooksDef {
+										if hookDef, ok := h.(map[string]interface{}); ok {
+											hook := Hook{}
+											if hookType, exists := hookDef["type"]; exists {
+												if typeStr, ok := hookType.(string); ok {
+													hook.Type = typeStr
+												}
+											}
+											if command, exists := hookDef["command"]; exists {
+												if cmdStr, ok := command.(string); ok {
+													hook.Command = cmdStr
+													// AICT関連のhookかチェック（より広範囲に判定）
+													if strings.Contains(cmdStr, "aict ") || 
+													   strings.Contains(cmdStr, `'{"decision": "approve"}'`) ||
+													   strings.Contains(cmdStr, "AICT Session") {
+														keepHook = false
+														break
+													}
+												}
+											}
+											hooks = append(hooks, hook)
+										}
+									}
+									
+									if keepHook {
+										claudeHook.Hooks = hooks
+										mergedHooks = append(mergedHooks, claudeHook)
+									}
+								}
+							}
+						}
+					}
+					
+					result[hookType] = mergedHooks
+				}
+			}
+		}
+	}
+	
+	// AICT hooksを追加
+	for hookType, aictHooksList := range aictHooks {
+		result[hookType] = append(result[hookType], aictHooksList...)
+	}
+	
+	return result
 }
 
 // generatePostCommitHook はpost-commit hook スクリプトを生成する
