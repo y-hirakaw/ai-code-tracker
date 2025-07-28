@@ -236,12 +236,6 @@ export AICT_ENCRYPT_DATA=true  # データ暗号化
 | Blame表示 | 280ms | 500ms | ✅ |
 | 統計計算 | 750ms | 1000ms | ✅ |
 
-## 🤝 サポート
-
-- **Issues**: [GitHub Issues](https://github.com/ai-code-tracker/aict/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/ai-code-tracker/aict/discussions)
-- **Email**: contact@ai-code-tracker.dev
-
 ## 📄 ライセンス
 
 MIT License - 詳細は[LICENSE](LICENSE)を参照
