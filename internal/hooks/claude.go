@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // ※ 型定義はgit.goのClaudeCodeHooksConfig, ClaudeCodeHook, Hookを使用
@@ -159,25 +160,14 @@ func (m *HookManager) GetClaudeHookStatus() map[string]interface{} {
 	claudeHookStatus := map[string]interface{}{
 		"installed": false,
 		"path": settingsPath,
-		"env_var_set": false,
 		"backup": false,
 	}
 
 	// 設定ファイルの存在確認
 	if data, err := os.ReadFile(settingsPath); err == nil {
-		var settings map[string]interface{}
-		if err := json.Unmarshal(data, &settings); err == nil {
-			// hooks設定が存在するかチェック
-			if hooks, exists := settings["hooks"]; exists {
-				if hooksMap, ok := hooks.(map[string]interface{}); ok {
-					// AICT関連のhooksが設定されているかチェック
-					if postToolUse, exists := hooksMap["postToolUse"]; exists {
-						if hooksList, ok := postToolUse.([]interface{}); ok && len(hooksList) > 0 {
-							claudeHookStatus["installed"] = true
-						}
-					}
-				}
-			}
+		// JSON全体を文字列として確認（aictコマンドが含まれているか）
+		if strings.Contains(string(data), "aict track") || strings.Contains(string(data), "aict ") {
+			claudeHookStatus["installed"] = true
 		}
 	}
 

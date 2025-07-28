@@ -73,51 +73,92 @@ func (hm *HookManager) SetupGitHooks() error {
 	return nil
 }
 
-// SetupClaudeCodeHooks はClaude Code hooksを自動設定する
+// SetupClaudeCodeHooks はClaude Code hooksを設定する（settings.json版）
 func (hm *HookManager) SetupClaudeCodeHooks() error {
-	config, err := hm.generateClaudeCodeHooksConfig()
-	if err != nil {
-		return fmt.Errorf("Claude Code hooks設定の生成に失敗しました: %w", err)
-	}
-
-	// 設定をJSONに変換
-	configJSON, err := json.MarshalIndent(config, "", "  ")
-	if err != nil {
-		return fmt.Errorf("Claude Code hooks設定のJSON変換に失敗しました: %w", err)
-	}
-
-	// 設定ファイルのパスを決定
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return fmt.Errorf("ホームディレクトリの取得に失敗しました: %w", err)
+		return fmt.Errorf("ホームディレクトリの取得に失敗: %w", err)
 	}
 
 	claudeDir := filepath.Join(homeDir, ".claude")
+	settingsPath := filepath.Join(claudeDir, "settings.json")
+
+	// .claudeディレクトリを作成
 	if err := os.MkdirAll(claudeDir, 0755); err != nil {
-		return fmt.Errorf("Claude設定ディレクトリの作成に失敗しました: %w", err)
+		return fmt.Errorf("Claudeディレクトリの作成に失敗: %w", err)
 	}
 
-	hooksConfigPath := filepath.Join(claudeDir, "hooks-aict.json")
-
-	// 既存の設定ファイルがある場合、バックアップを作成
-	if _, err := os.Stat(hooksConfigPath); err == nil {
-		backupPath := hooksConfigPath + ".backup"
-		if err := os.Rename(hooksConfigPath, backupPath); err != nil {
-			return fmt.Errorf("既存のClaude Code hooks設定のバックアップに失敗しました: %w", err)
+	// 現在の設定を読み込み（存在する場合）
+	var currentSettings map[string]interface{}
+	if data, err := os.ReadFile(settingsPath); err == nil {
+		if err := json.Unmarshal(data, &currentSettings); err != nil {
+			currentSettings = make(map[string]interface{})
 		}
-		fmt.Printf("既存のClaude Code hooks設定を %s にバックアップしました\n", backupPath)
+	} else {
+		currentSettings = make(map[string]interface{})
 	}
 
-	// hooks設定を書き込み
-	err = os.WriteFile(hooksConfigPath, configJSON, 0644)
+	// AICT hooks設定を作成
+	aictHooks := map[string][]ClaudeCodeHook{
+		"preToolUse": {
+			{
+				Matcher: "Edit|Write|MultiEdit",
+				Hooks: []Hook{
+					{
+						Type:    "command",
+						Command: `echo '{"decision": "approve"}'`,
+					},
+				},
+			},
+		},
+		"postToolUse": {
+			{
+				Matcher: "Edit|Write|MultiEdit",
+				Hooks: []Hook{
+					{
+						Type: "command", 
+						Command: `bash -c 'INPUT=$(cat); FILE=$(echo "$INPUT" | jq -r ".tool_input.path // .tool_input.file_path // empty"); if [ -n "$FILE" ]; then aict track --ai --author "Claude Code" --model "claude-sonnet-4" --files "$FILE" --message "Claude Code automated edit" 2>/dev/null || true; fi; echo "{\"continue\": true}"'`,
+					},
+				},
+			},
+		},
+		"stop": {
+			{
+				Matcher: "*",
+				Hooks: []Hook{
+					{
+						Type: "command",
+						Command: `bash -c 'STATS=$(aict stats 2>/dev/null | head -3 || echo "No stats available"); echo "{\"continue\": true, \"userMessage\": \"📊 AICT Session: $STATS\"}" 2>/dev/null || echo "{\"continue\": true}"'`,
+					},
+				},
+			},
+		},
+		"notification": {
+			{
+				Matcher: "*",
+				Hooks: []Hook{
+					{
+						Type:    "command",
+						Command: "exit 0",
+					},
+				},
+			},
+		},
+	}
+
+	// 既存設定にhooksを追加
+	currentSettings["hooks"] = aictHooks
+
+	// JSON形式で保存
+	data, err := json.MarshalIndent(currentSettings, "", "  ")
 	if err != nil {
-		return fmt.Errorf("Claude Code hooks設定の書き込みに失敗しました: %w", err)
+		return fmt.Errorf("設定のJSON変換に失敗: %w", err)
 	}
 
-	fmt.Printf("Claude Code hooks設定を作成しました: %s\n", hooksConfigPath)
-	fmt.Println("Claude Codeでこの設定を有効にするには、以下を実行してください:")
-	fmt.Printf("  export CLAUDE_HOOKS_CONFIG=%s\n", hooksConfigPath)
-	
+	if err := os.WriteFile(settingsPath, data, 0644); err != nil {
+		return fmt.Errorf("設定ファイルの保存に失敗: %w", err)
+	}
+
 	return nil
 }
 
@@ -322,33 +363,42 @@ func (hm *HookManager) RemoveGitHooks() error {
 	return nil
 }
 
-// RemoveClaudeCodeHooks はClaude Code hooksを削除する
+// RemoveClaudeCodeHooks はClaude Code hooksを削除する（settings.json版）
 func (hm *HookManager) RemoveClaudeCodeHooks() error {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return fmt.Errorf("ホームディレクトリの取得に失敗しました: %w", err)
+		return fmt.Errorf("ホームディレクトリの取得に失敗: %w", err)
 	}
 
-	hooksConfigPath := filepath.Join(homeDir, ".claude", "hooks-aict.json")
+	settingsPath := filepath.Join(homeDir, ".claude", "settings.json")
 
-	// 設定ファイルが存在する場合は削除
-	if _, err := os.Stat(hooksConfigPath); err == nil {
-		// バックアップが存在する場合は復元
-		backupPath := hooksConfigPath + ".backup"
-		if _, err := os.Stat(backupPath); err == nil {
-			if err := os.Rename(backupPath, hooksConfigPath); err != nil {
-				return fmt.Errorf("Claude Code hooks設定の復元に失敗しました: %w", err)
-			}
-			fmt.Printf("Claude Code hooks設定を復元しました: %s\n", hooksConfigPath)
-		} else {
-			// バックアップがない場合は削除
-			if err := os.Remove(hooksConfigPath); err != nil {
-				return fmt.Errorf("Claude Code hooks設定の削除に失敗しました: %w", err)
-			}
-			fmt.Printf("Claude Code hooks設定を削除しました: %s\n", hooksConfigPath)
-		}
-	} else {
-		fmt.Printf("Claude Code hooks設定が見つかりません\n")
+	// 設定ファイルが存在しない場合は何もしない
+	if _, err := os.Stat(settingsPath); os.IsNotExist(err) {
+		return nil
+	}
+
+	// 現在の設定を読み込み
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		return fmt.Errorf("設定ファイルの読み込みに失敗: %w", err)
+	}
+
+	var settings map[string]interface{}
+	if err := json.Unmarshal(data, &settings); err != nil {
+		return fmt.Errorf("設定ファイルの解析に失敗: %w", err)
+	}
+
+	// hooksを削除
+	delete(settings, "hooks")
+
+	// 保存
+	newData, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return fmt.Errorf("設定のJSON変換に失敗: %w", err)
+	}
+
+	if err := os.WriteFile(settingsPath, newData, 0644); err != nil {
+		return fmt.Errorf("設定ファイルの保存に失敗: %w", err)
 	}
 
 	return nil
