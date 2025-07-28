@@ -106,7 +106,7 @@ func (hm *HookManager) SetupClaudeCodeHooks() error {
 				Hooks: []Hook{
 					{
 						Type:    "command",
-						Command: `bash -c 'INPUT=$(cat); FILE=$(echo "$INPUT" | jq -r ".tool_input.path // .tool_input.file_path // empty"); SESSION_ID=$(date +%s%N | cut -b1-13); if [ -n "$FILE" ] && [ -f "$FILE" ]; then aict track --pre-edit --files "$FILE" --session "$SESSION_ID" 2>/dev/null || true; echo "$SESSION_ID" > "/tmp/aict-session-$$.tmp"; fi; echo "{\"decision\": \"approve\"}'`,
+						Command: `bash -c 'INPUT=$(cat); FILE=$(echo "$INPUT" | jq -r ".tool_input.path // .tool_input.file_path // empty"); SESSION_ID=$(date +%s%N | cut -b1-13); if [ -n "$FILE" ] && [ -f "$FILE" ]; then aict track --pre-edit --files "$FILE" --session "$SESSION_ID" 2>/dev/null || true; echo "$SESSION_ID" > "/tmp/aict-session-$$.tmp"; fi; echo "{\"decision\": \"approve\"}";'`,
 					},
 				},
 			},
