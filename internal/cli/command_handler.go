@@ -27,6 +27,7 @@ type CommandHandler struct {
 	wizardHandler  *WizardHandler
 	langHandler    *LangHandler
 	webHandler     *WebHandler
+	periodHandler  *PeriodHandler
 	versionHandler *VersionHandler
 	helpHandler    *HelpHandler
 }
@@ -48,6 +49,7 @@ func NewCommandHandler(helpSystem *ui.HelpSystem) *CommandHandler {
 	ch.wizardHandler = NewWizardHandler(helpSystem)
 	ch.langHandler = NewLangHandler()
 	ch.webHandler = NewWebHandler()
+	ch.periodHandler = NewPeriodHandler()
 	ch.versionHandler = NewVersionHandler()
 	ch.helpHandler = NewHelpHandler(helpSystem)
 	
@@ -104,6 +106,11 @@ func (ch *CommandHandler) registerCommands() {
 			Name:        "web",
 			Description: "Webダッシュボードを起動する",
 			Handler:     ch.webHandler.Handle,
+		},
+		"period": {
+			Name:        "period",
+			Description: "期間別分析を実行する",
+			Handler:     ch.periodHandler.Handle,
 		},
 		"version": {
 			Name:        "version",

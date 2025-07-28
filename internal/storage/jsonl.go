@@ -98,6 +98,11 @@ func (s *Storage) ensureDataDir() error {
 	return nil
 }
 
+// StoreTrackEvent writes a tracking event to the JSONL file (implements StorageInterface)
+func (s *Storage) StoreTrackEvent(event *types.TrackEvent) error {
+	return s.WriteEvent(event)
+}
+
 // WriteEvent writes a tracking event to the JSONL file
 func (s *Storage) WriteEvent(event *types.TrackEvent) error {
 	s.mutex.Lock()
