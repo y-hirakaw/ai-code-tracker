@@ -133,17 +133,6 @@ func (hm *HookManager) SetupClaudeCodeHooks() error {
 				},
 			},
 		},
-		"notification": {
-			{
-				Matcher: "*",
-				Hooks: []Hook{
-					{
-						Type:    "command",
-						Command: "exit 0",
-					},
-				},
-			},
-		},
 	}
 
 	// 既存設定にhooksを追加
