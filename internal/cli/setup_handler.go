@@ -95,7 +95,7 @@ func (h *SetupHandler) setupHooks(hookManager *hooks.HookManager, gitOnly, claud
 	// Claude Code hooks設定
 	if !gitOnly {
 		fmt.Println("\n🤖 Claude Code hooks を設定中...")
-		if err := hookManager.SetupClaudeCodeHooks(); err != nil {
+		if err := hookManager.SetupClaudeCodeHooksNew(); err != nil {
 			return errors.WrapError(err, errors.ErrorTypeConfig, "claude_hooks_setup_failed")
 		}
 		fmt.Println("✅ Claude Code hooks を設定しました")
@@ -132,7 +132,7 @@ func (h *SetupHandler) removeHooks(hookManager *hooks.HookManager, gitOnly, clau
 	// Claude Code hooks削除
 	if !gitOnly {
 		fmt.Println("\n🤖 Claude Code hooks を削除中...")
-		if err := hookManager.RemoveClaudeCodeHooks(); err != nil {
+		if err := hookManager.RemoveClaudeCodeHooksNew(); err != nil {
 			return errors.WrapError(err, errors.ErrorTypeConfig, "claude_hooks_removal_failed")
 		}
 		fmt.Println("✅ Claude Code hooks を削除しました")

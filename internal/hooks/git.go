@@ -407,31 +407,9 @@ func (hm *HookManager) GetHookStatus() (map[string]interface{}, error) {
 
 	status["git_hooks"] = gitHookStatus
 
-	// Claude Code hooks状況
-	homeDir, err := os.UserHomeDir()
-	if err == nil {
-		hooksConfigPath := filepath.Join(homeDir, ".claude", "hooks-aict.json")
-		
-		claudeHookStatus := map[string]interface{}{
-			"installed": false,
-			"path":      hooksConfigPath,
-			"backup":    false,
-		}
-
-		if _, err := os.Stat(hooksConfigPath); err == nil {
-			claudeHookStatus["installed"] = true
-		}
-
-		// バックアップファイルの存在チェック
-		if _, err := os.Stat(hooksConfigPath + ".backup"); err == nil {
-			claudeHookStatus["backup"] = true
-		}
-
-		// 環境変数のチェック
-		claudeHookStatus["env_var_set"] = os.Getenv("CLAUDE_HOOKS_CONFIG") == hooksConfigPath
-
-		status["claude_hooks"] = claudeHookStatus
-	}
+	// Claude Code hooks状況（claude.goの機能を使用）
+	claudeHookStatus := hm.GetClaudeHookStatus()
+	status["claude_hooks"] = claudeHookStatus
 
 	return status, nil
 }
