@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -63,36 +62,31 @@ func benchmarkTracking(config *BenchConfig) *BenchResult {
 	os.MkdirAll(gitDir, 0755)
 
 	// ストレージとトラッカーの初期化
-	storageManager := storage.NewStorageManager(tempDir)
-	trackingManager := tracker.NewTracker(tempDir)
+	storageManager, err := storage.NewStorage("")
+	if err != nil {
+		return &BenchResult{
+			Operation: "Storage Init",
+			Success:   false,
+			Error:     err,
+		}
+	}
+	defer storageManager.Close()
+	
+	trackingManager := tracker.NewTracker(storageManager, tempDir)
 
 	// イベントの生成と追加
 	for i := 0; i < config.NumEvents; i++ {
-		event := &types.TrackEvent{
-			ID:        fmt.Sprintf("bench-event-%d", i),
-			Timestamp: time.Now(),
-			EventType: types.EventTypeAI,
-			Author:    "Claude Sonnet 4",
-			Model:     "claude-sonnet-4",
-			Message:   fmt.Sprintf("ベンチマークイベント %d", i),
-			Files: []types.FileInfo{
-				{
-					Path:         fmt.Sprintf("test/file_%d.go", i%config.NumFiles),
-					LinesAdded:    10 + i%50,
-					LinesDeleted:  i % 20,
-					LinesModified: 5 + i%30,
-				},
-			},
-		}
 
 		if config.Concurrent {
 			// 並行処理でのトラッキング
-			go func(e *types.TrackEvent) {
-				trackingManager.Track(e)
-			}(event)
+			go func(i int) {
+				files := []string{fmt.Sprintf("test-file-%d.go", i)}
+				trackingManager.TrackFileChanges(types.EventTypeAI, "bench-user", "claude-sonnet-4", files, "benchmark test")
+			}(i)
 		} else {
 			// 順次処理でのトラッキング
-			if err := trackingManager.Track(event); err != nil {
+			files := []string{fmt.Sprintf("test-file-%d.go", i)}
+			if err := trackingManager.TrackFileChanges(types.EventTypeAI, "bench-user", "claude-sonnet-4", files, "benchmark test"); err != nil {
 				return &BenchResult{
 					Operation: "Tracking",
 					Success:   false,
@@ -137,7 +131,15 @@ func benchmarkStatistics(config *BenchConfig) *BenchResult {
 	defer os.RemoveAll(tempDir)
 
 	// ストレージの初期化とデータ準備
-	storageManager := storage.NewStorageManager(tempDir)
+	storageManager, err := storage.NewStorage("")
+	if err != nil {
+		return &BenchResult{
+			Operation: "Storage Init",
+			Success:   false,
+			Error:     err,
+		}
+	}
+	defer storageManager.Close()
 
 	// テストデータの準備
 	events := make([]*types.TrackEvent, config.NumEvents)
@@ -145,7 +147,7 @@ func benchmarkStatistics(config *BenchConfig) *BenchResult {
 		events[i] = &types.TrackEvent{
 			ID:        fmt.Sprintf("stats-event-%d", i),
 			Timestamp: time.Now().Add(-time.Duration(i) * time.Hour),
-			EventType: types.EventType(i%3 + 1), // AI, Human, Mixed
+			EventType: []types.EventType{types.EventTypeAI, types.EventTypeHuman, types.EventTypeCommit}[i%3],
 			Author:    fmt.Sprintf("Author-%d", i%10),
 			Model:     "claude-sonnet-4",
 			Message:   fmt.Sprintf("統計ベンチマークイベント %d", i),
@@ -158,7 +160,7 @@ func benchmarkStatistics(config *BenchConfig) *BenchResult {
 				},
 			},
 		}
-		storageManager.SaveEvent(events[i])
+		storageManager.WriteEvent(events[i])
 	}
 
 	// 統計生成の実行
@@ -209,7 +211,15 @@ func benchmarkFileIO(config *BenchConfig) *BenchResult {
 	}
 	defer os.RemoveAll(tempDir)
 
-	storageManager := storage.NewStorageManager(tempDir)
+	storageManager, err := storage.NewStorage("")
+	if err != nil {
+		return &BenchResult{
+			Operation: "Storage Init",
+			Success:   false,
+			Error:     err,
+		}
+	}
+	defer storageManager.Close()
 
 	// 大量のイベントを書き込み、読み込み
 	writeStart := time.Now()
@@ -222,7 +232,7 @@ func benchmarkFileIO(config *BenchConfig) *BenchResult {
 			Message:   fmt.Sprintf("I/Oベンチマークイベント %d", i),
 		}
 		
-		if err := storageManager.SaveEvent(event); err != nil {
+		if err := storageManager.WriteEvent(event); err != nil {
 			return &BenchResult{
 				Operation: "FileIO",
 				Success:   false,
@@ -234,7 +244,7 @@ func benchmarkFileIO(config *BenchConfig) *BenchResult {
 
 	// 読み込みベンチマーク
 	readStart := time.Now()
-	events, err := storageManager.GetEvents(nil)
+	events, err := storageManager.ReadEvents()
 	if err != nil {
 		return &BenchResult{
 			Operation: "FileIO",

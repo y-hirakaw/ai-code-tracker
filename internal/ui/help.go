@@ -206,7 +206,7 @@ func (h *HelpSystem) showTrackHelp() {
   %s track --ai --model claude-sonnet-4 --files "src/*.go" --message "リファクタリング"
   %s track --author "John Doe" --files main.go --message "バグ修正"
 
-`, h.appName, h.appName, h.appName, h.appName, h.appName)
+`, h.appName, h.appName, h.appName, h.appName)
 }
 
 func (h *HelpSystem) showStatsHelp() {
@@ -234,7 +234,7 @@ func (h *HelpSystem) showStatsHelp() {
   %s stats --by-file --top 10                # ファイル別上位10件
   %s stats --trend --author claude           # Claudeのトレンド
 
-`, h.appName, h.appName, h.appName, h.appName, h.appName, h.appName, h.appName, h.appName)
+`, h.appName, h.appName, h.appName, h.appName, h.appName, h.appName, h.appName)
 }
 
 func (h *HelpSystem) showBlameHelp() {
@@ -259,7 +259,7 @@ func (h *HelpSystem) showBlameHelp() {
   %s blame --top 5 src/main.go            # 上位5名
   %s blame --no-color --format compact src/main.go  # 簡潔表示
 
-`, h.appName, h.appName, h.appName, h.appName, h.appName, h.appName, h.appName)
+`, h.appName, h.appName, h.appName, h.appName, h.appName, h.appName)
 }
 
 func (h *HelpSystem) showConfigHelp() {
@@ -291,7 +291,7 @@ func (h *HelpSystem) showConfigHelp() {
   %s config --set default_author="John Doe"  # 作成者設定
   %s config --get enable_encryption          # 暗号化設定確認
 
-`, h.appName, h.appName, h.appName, h.appName, h.appName, h.appName)
+`, h.appName, h.appName, h.appName, h.appName, h.appName)
 }
 
 func (h *HelpSystem) showSetupHelp() {
@@ -316,7 +316,7 @@ func (h *HelpSystem) showSetupHelp() {
   %s setup --status           # 設定状況確認
   %s setup --remove           # hooks削除
 
-`, h.appName, h.appName, h.appName, h.appName, h.appName, h.appName, h.appName)
+`, h.appName, h.appName, h.appName, h.appName, h.appName, h.appName)
 }
 
 func (h *HelpSystem) showWizardHelp() {
@@ -339,7 +339,7 @@ func (h *HelpSystem) showWizardHelp() {
   %s wizard security          # セキュリティ設定
   %s wizard quickstart        # クイックスタート
 
-`, h.appName, h.appName, h.appName, h.appName, h.appName, h.appName)
+`, h.appName, h.appName, h.appName, h.appName, h.appName)
 }
 
 func (h *HelpSystem) showSecurityHelp() {
@@ -373,7 +373,7 @@ func (h *HelpSystem) showSecurityHelp() {
   %s security audit --show            # 監査ログ表示
   %s security scan --check permissions --output report.json
 
-`, h.appName, h.appName, h.appName, h.appName, h.appName, h.appName, h.appName)
+`, h.appName, h.appName, h.appName, h.appName, h.appName, h.appName)
 }
 
 // ShowError はエラーメッセージを表示する
