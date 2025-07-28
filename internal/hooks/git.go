@@ -195,7 +195,8 @@ func (hm *HookManager) mergeHooksConfig(currentSettings map[string]interface{}, 
 													// AICT関連のhookかチェック（より広範囲に判定）
 													if strings.Contains(cmdStr, "aict ") || 
 													   strings.Contains(cmdStr, `'{"decision": "approve"}'`) ||
-													   strings.Contains(cmdStr, "AICT Session") {
+													   strings.Contains(cmdStr, "AICT Session") ||
+													   (hookType == "notification" && cmdStr == "exit 0") {
 														keepHook = false
 														break
 													}
@@ -214,7 +215,10 @@ func (hm *HookManager) mergeHooksConfig(currentSettings map[string]interface{}, 
 						}
 					}
 					
-					result[hookType] = mergedHooks
+					// 空の配列は結果に含めない
+					if len(mergedHooks) > 0 {
+						result[hookType] = mergedHooks
+					}
 				}
 			}
 		}
