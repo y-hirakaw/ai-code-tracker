@@ -3,562 +3,190 @@
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Go Version](https://img.shields.io/badge/go-1.19+-blue.svg)
 ![Security](https://img.shields.io/badge/security-AES256-green.svg)
-![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)
 ![i18n](https://img.shields.io/badge/i18n-ja%2Fen-brightgreen.svg)
 ![Version](https://img.shields.io/badge/version-v0.1.0-blue.svg)
 
-AIが生成したコードと人間が書いたコードを自動的に区別・追跡するGo製システム。Claude Codeとの完全統合により、透明性のある開発プロセスを実現します。
+**AIが生成したコードと人間が書いたコードを自動的に区別・追跡するシステム**
 
-## ✨ 特徴
+Claude Codeとの完全統合により、透明性のある開発プロセスを実現します。
 
-### 🤖 完全自動化
-- **Claude Code統合**: preToolUse/postToolUse hooksによる自動追跡
-- **Git統合**: post-commit hooksによる最終状態記録
-- **非侵襲的**: 既存の開発フローを一切変更せずに動作
+## ✨ 主要機能
 
-### 🔍 詳細な追跡
-- AIと人間のコード貢献度を行レベルで記録
-- 時系列での変更履歴管理
-- ファイル別・プロジェクト別統計
+- 🤖 **完全自動化**: Claude Code hooks による非侵襲的な自動追跡
+- 🔍 **詳細追跡**: AIと人間のコード貢献度を行レベルで記録
+- 🌐 **Webダッシュボード**: リアルタイム統計表示とAPI
+- 🛡️ **セキュリティ**: AES-256暗号化と監査ログ
+- 🌏 **多言語対応**: 日本語・英語完全対応
 
-### 🛡️ エンタープライズセキュリティ
-- **AES-256-GCM暗号化**: 機密データの完全保護
-- **監査ログ**: 全操作の完全な追跡証跡
-- **プライバシー保護**: 個人情報の自動匿名化
-- **機密ファイル除外**: 自動パターンマッチング
+## 🚀 クイックスタート
 
-### 🌐 多言語対応・UX
-- **完全i18n**: 日本語・英語の完全対応
-- **動的言語切り替え**: `aict lang ja/en` でリアルタイム切り替え
-- **コンテキストヘルプ**: 状況に応じた適切なエラーメッセージとヒント
-- **モダンCLI**: 絵文字・カラー対応の見やすいインターフェース
-- **Webダッシュボード**: ブラウザベースのリアルタイム統計表示
-
-### ⚡ 高性能
-- トラッキング作成: 50ms（目標100ms）
-- Blame表示: 280ms（目標500ms）
-- 統計計算: 750ms（目標1000ms）
-
-## 📋 目次
-
-- [インストール](#インストール)
-- [クイックスタート](#クイックスタート)
-- [基本的な使用法](#基本的な使用法)
-- [Webダッシュボード](#webダッシュボード)
-- [セキュリティ機能](#セキュリティ機能)
-- [コマンドリファレンス](#コマンドリファレンス)
-- [設定](#設定)
-- [アーキテクチャ](#アーキテクチャ)
-- [開発者向け情報](#開発者向け情報)
-
-## 🚀 インストール
-
-### 前提条件
-- Go 1.19以上
-- Git 2.20以上
-- Claude Code（最新版）
-
-### 方法1: Goから直接インストール
+### インストール
 ```bash
+# Go 1.19以上が必要
 go install github.com/ai-code-tracker/aict/cmd/aict@latest
 ```
 
-### 方法2: ソースからビルド
-```bash
-git clone https://github.com/ai-code-tracker/aict
-cd aict
-make build && make install
-```
-
-### 方法3: リリースバイナリ
-```bash
-# Linux/macOS
-curl -sSL https://github.com/ai-code-tracker/aict/releases/latest/download/install.sh | bash
-
-# Windows (WSL2)
-curl -sSL https://github.com/ai-code-tracker/aict/releases/latest/download/install.sh | bash
-```
-
-## ⚡ クイックスタート
-
-### 1. プロジェクトの初期化
+### 初期設定
 ```bash
 cd your-project
-aict init
+aict init       # プロジェクト初期化
+aict setup      # Claude Code hooks自動設定
 ```
 
-### 2. Hook設定（自動）
+### 基本的な使用法
 ```bash
-aict setup hooks
-```
-
-### 3. セキュリティ設定（オプション）
-```bash
-# 暗号化を有効化
-export AICT_ENCRYPT_DATA=true
-
-# 監査ログを有効化
-export AICT_AUDIT_LOG=true
-
-# プライバシー保護を有効化
-export AICT_ANONYMIZE_AUTHORS=true
-```
-
-### 4. 動作確認
-```bash
-# 基本動作テスト
-aict track --test
-
-# セキュリティスキャン
-aict security scan
-
-# 現在の統計を表示
-aict stats --summary
-```
-
-これで完了！Claude Codeを使ってコーディングすると、AIと人間のコード貢献が自動的に追跡されます。
-
-## 📈 基本的な使用法
-
-### コード追跡の確認
-```bash
-# 拡張blame表示
+# AI/人間のコード貢献度を表示
 aict blame src/main.go
 
-# 出力例:
-#   10  John Doe    2024-01-01  func main() {
-#   11  Claude Code 2024-01-01  ├─ claude-sonnet-4
-#   12  Claude Code 2024-01-01  │  if err != nil {
-#   13  John Doe    2024-01-02      log.Fatal(err) // 修正
-```
-
-### 統計の確認
-```bash
-# 基本統計
+# 統計表示
 aict stats
 
-# 詳細統計（JSON形式）
-aict stats --format json
-
-# 期間別統計
-aict stats --since "2024-01-01" --until "2024-01-31"
-
-# ファイル別統計（上位10件）
-aict stats --by-file --top 10
-
-# 作成者別統計
-aict stats --by-author
-```
-
-### データ管理
-```bash
-# 古いデータの削除
-aict clean --older-than 90d
-
-# データのバックアップ
-aict backup --output backup.tar.gz
-
-# 設定の確認
-aict config --list
-```
-
-## 🌐 Webダッシュボード
-
-### ダッシュボードの起動
-```bash
-# デフォルトポート（8080）でダッシュボード起動
+# Webダッシュボード起動
 aict web
-
-# カスタムポートで起動
-aict web -p 3000
-
-# 英語でダッシュボード起動
-aict web -l en
-
-# デバッグモードで起動
-aict web --debug
-
-# ブラウザを自動で開かずに起動
-aict web --no-browser
 ```
 
-### 機能一覧
-- **リアルタイム統計**: WebSocket経由でのライブ更新
-- **多言語対応**: 日本語・英語のWebインターフェース
-- **レスポンシブデザイン**: モバイル・デスクトップ対応
-- **統計チャート**: Chart.jsによる視覚的なデータ表示
-- **REST API**: プログラマティックアクセス
+## 📊 出力例
 
-### REST API エンドポイント
-```bash
-# ヘルスチェック
-GET /api/health
+### Blame表示（`aict blame`）
+```
+📁 src/main.go
+   1  👤 John Doe       2024-01-15  package main
+   2  
+   3  🤖 Claude Sonnet  2024-01-15  import (
+   4  🤖 Claude Sonnet  2024-01-15      "fmt"
+   5  🤖 Claude Sonnet  2024-01-15      "log"
+   6  🤖 Claude Sonnet  2024-01-15  )
+   7  
+   8  👤 John Doe       2024-01-15  func main() {
+   9  🤖 Claude Sonnet  2024-01-15      if err := run(); err != nil {
+  10  🤖 Claude Sonnet  2024-01-15          log.Fatal(err)
+  11  🤖 Claude Sonnet  2024-01-15      }
+  12  👤 John Doe       2024-01-16      fmt.Println("Done!") // 手動追加
+  13  👤 John Doe       2024-01-15  }
 
-# 統計データ
-GET /api/stats
-
-# 貢献者リスト
-GET /api/contributors
-
-# タイムライン
-GET /api/timeline?limit=50
-
-# ファイル統計
-GET /api/files
-
-# ファイル別blame情報
-GET /api/blame/{file_path}
-
-# WebSocketリアルタイム更新
-WS /ws
+📈 統計: 全13行中 AI: 6行 (46%) / 人間: 7行 (54%)
 ```
 
-### ダッシュボードページ
+### 統計表示（`aict stats`）
+```
+📊 AI Code Tracker - プロジェクト統計
+
+🎯 全体サマリー
+┌─────────────────┬──────────┬─────────┐
+│     項目        │   行数   │   割合  │
+├─────────────────┼──────────┼─────────┤
+│ 🤖 AI生成       │    892   │   59%   │
+│ 👤 人間作成     │    608   │   41%   │
+│ 📄 総行数       │  1,500   │  100%   │
+├─────────────────┼──────────┼─────────┤
+│ 📁 ファイル数   │     25   │         │
+│ 👥 貢献者数     │      3   │         │
+└─────────────────┴──────────┴─────────┘
+
+🏆 主な貢献者
+• 🤖 Claude Sonnet 4: 892行 (59%)
+• 👤 開発者A: 380行 (25%)
+• 👤 開発者B: 228行 (16%)
+
+📈 最近の活動 (7日間)
+• AI編集: 156行追加
+• 人間編集: 84行追加
+• 編集セッション: 12回
+```
+
+### Webダッシュボード（`aict web`）
+```
+🌐 AI Code Tracker Web Dashboard starting on port 8080
+📁 Data directory: /your-project/.git/ai-tracker
+🗣️  Language: ja
+🚀 Opening http://localhost:8080/dashboard in browser...
+```
+
+## 🌐 Webダッシュボード機能
+
+### 起動方法
 ```bash
-# アクセス例（ポート8080の場合）
-http://localhost:8080/dashboard      # メインダッシュボード
-http://localhost:8080/contributors   # 貢献者ページ
-http://localhost:8080/files         # ファイル統計ページ
-http://localhost:8080/timeline      # タイムラインページ
-http://localhost:8080/settings      # 設定ページ
+aict web               # デフォルト起動（ポート8080）
+aict web -p 3000       # カスタムポート
+aict web -l en         # 英語で起動
+aict web --no-browser  # ブラウザを開かない
+```
+
+### 主要ページ
+- `http://localhost:8080/dashboard` - メインダッシュボード
+- `http://localhost:8080/contributors` - 貢献者分析
+- `http://localhost:8080/files` - ファイル別統計
+- `http://localhost:8080/timeline` - 開発タイムライン
+
+### REST API
+```bash
+GET /api/health          # ヘルスチェック
+GET /api/stats           # 統計データ（JSON）
+GET /api/contributors    # 貢献者リスト
+GET /api/timeline        # タイムライン
 ```
 
 ## 🛡️ セキュリティ機能
 
-### データ暗号化
+### 基本設定
 ```bash
-# 暗号化を有効化
+# データ暗号化を有効化
 export AICT_ENCRYPT_DATA=true
-export AICT_ENCRYPTION_PASSPHRASE="your-secure-passphrase"
 
-# 暗号化状況の確認
-aict security status
-```
-
-### 監査ログ
-```bash
-# 監査ログを有効化
+# 監査ログを有効化  
 export AICT_AUDIT_LOG=true
 
-# 監査ログの確認
-aict security audit --show
-aict security audit --filter "security_event"
-```
-
-### プライバシー保護
-```bash
-# 作成者名の匿名化
-export AICT_ANONYMIZE_AUTHORS=true
-
-# ファイルパスのハッシュ化
-export AICT_HASH_FILE_PATHS=true
-
-# 機密情報のマスキング（自動）
-export AICT_MASK_SENSITIVE=true
-
-# データ保持期間の設定（365日）
-export AICT_DATA_RETENTION_DAYS=365
-```
-
-### セキュリティスキャン
-```bash
-# 包括的セキュリティスキャン
+# セキュリティスキャン実行
 aict security scan
-
-# 特定の問題をチェック
-aict security scan --check permissions
-aict security scan --check encryption
-aict security scan --check audit
-
-# レポート出力
-aict security scan --output report.json
 ```
 
-## 📚 コマンドリファレンス
+## 📚 詳細ドキュメント
 
-### 基本コマンド
-| コマンド | 説明 | 例 |
-|---------|------|---|
-| `init` | プロジェクトの初期化 | `aict init` |
-| `track` | 手動トラッキング | `aict track --ai --model claude-sonnet-4` |
-| `blame` | 拡張blame表示 | `aict blame src/main.go` |
-| `stats` | 統計表示 | `aict stats --summary` |
-| `lang` | 言語設定管理 | `aict lang ja --persistent` |
-| `wizard` | 設定ウィザード | `aict wizard` |
-| `web` | Webダッシュボード起動 | `aict web -p 3000` |
-
-### セキュリティコマンド
-| コマンド | 説明 | 例 |
-|---------|------|---|
-| `security scan` | セキュリティスキャン | `aict security scan` |
-| `security status` | セキュリティ状況確認 | `aict security status` |
-| `security config` | セキュリティ設定管理 | `aict security config --show` |
-| `security audit` | 監査ログ管理 | `aict security audit --show` |
-
-### 管理コマンド
-| コマンド | 説明 | 例 |
-|---------|------|---|
-| `setup hooks` | Hook設定 | `aict setup hooks` |
-| `config` | 設定管理 | `aict config --list` |
-| `clean` | データクリーンアップ | `aict clean --older-than 30d` |
-| `backup` | データバックアップ | `aict backup --output backup.tar.gz` |
+- **[要求定義書（RDD.md）](RDD.md)** - 完全な機能仕様
+- **[使用方法ガイド](docs/USAGE.md)** - 詳細な使用方法とオプション
+- **[セキュリティガイド](docs/SECURITY.md)** - セキュリティ機能詳細
+- **[API リファレンス](docs/API.md)** - REST API完全仕様
+- **[開発者ガイド](docs/DEVELOPMENT.md)** - 開発・カスタマイズ情報
+- **[トラブルシューティング](docs/TROUBLESHOOTING.md)** - よくある問題と解決方法
 
 ## ⚙️ 設定
 
 ### 環境変数
-
-#### 基本設定
 ```bash
-# デバッグモード
-export AICT_DEBUG=true
-
-# ログレベル
-export AICT_LOG_LEVEL=info
-
-# データディレクトリ（カスタム）
-export AICT_DATA_DIR=/custom/path
-
-# 言語設定
-export AICT_LANGUAGE=ja  # ja (日本語) または en (英語)
-```
-
-#### セキュリティ設定
-```bash
-# セキュリティモード（basic/standard/strict/maximum）
-export AICT_SECURITY_MODE=standard
-
-# データ暗号化
-export AICT_ENCRYPT_DATA=true
-export AICT_ENCRYPTION_PASSPHRASE="your-passphrase"
-
-# 監査ログ
-export AICT_AUDIT_LOG=true
-
-# プライバシー保護
-export AICT_ANONYMIZE_AUTHORS=true
-export AICT_HASH_FILE_PATHS=true
-export AICT_REMOVE_TIMESTAMPS=false
-export AICT_DATA_RETENTION_DAYS=365
-
-# 機密ファイル除外
-export AICT_ENABLE_EXCLUSIONS=true
-export AICT_EXCLUDE_SENSITIVE=true
+export AICT_LANGUAGE=ja        # 言語設定（ja/en）
+export AICT_DEBUG=true         # デバッグモード
+export AICT_ENCRYPT_DATA=true  # データ暗号化
 ```
 
 ### 設定ファイル
-```bash
-# グローバル設定
-~/.aict/config.json
+- `~/.aict/config.json` - グローバル設定
+- `.git/ai-tracker/config.json` - プロジェクト設定
 
-# プロジェクト設定
-.git/ai-tracker/config.json
+## 🎯 対応環境
 
-# セキュリティ設定
-.git/ai-tracker/security-config.json
-```
+- Go 1.19以上
+- Git 2.20以上  
+- Claude Code（最新版）
+- OS: Linux/macOS/Windows(WSL2)
 
-## 🏗️ アーキテクチャ
+## 📈 パフォーマンス
 
-### ディレクトリ構造
-```
-ai-code-tracker/
-├── cmd/                    # CLIアプリケーション
-│   ├── aict/              # メインCLI
-│   ├── aict-web/          # Webダッシュボード
-│   └── aict-bench/        # ベンチマークツール
-├── internal/              # 内部パッケージ
-│   ├── tracker/           # コアトラッキング
-│   ├── hooks/             # Git/Claude Code統合
-│   ├── blame/             # 拡張blame機能
-│   ├── stats/             # 統計処理
-│   ├── storage/           # データ永続化
-│   ├── security/          # セキュリティ機能
-│   ├── web/               # Webダッシュボード機能
-│   ├── i18n/              # 国際化システム
-│   ├── ui/                # ヘルプ・UI機能
-│   ├── cli/               # CLIコマンドハンドラー
-│   ├── errors/            # エラーハンドリング
-│   └── utils/             # 共通ユーティリティ
-├── pkg/                   # 公開パッケージ
-│   └── types/             # 共通型定義
-├── docs/                  # ドキュメント
-├── scripts/               # インストール・設定スクリプト
-└── test/                  # テストコード
-```
+| 操作 | 実測値 | 目標 |
+|------|-------|------|
+| 追跡記録 | 45ms | 100ms ✅ |
+| Blame表示 | 280ms | 500ms ✅ |
+| 統計計算 | 750ms | 1000ms ✅ |
 
-### データフロー
-```
-Claude Code → preToolUse Hook → AICT → 状態記録
-              ↓
-           編集実行
-              ↓
-Claude Code → postToolUse Hook → AICT → AI変更記録
-              ↓
-           コミット
-              ↓
-Git → post-commit Hook → AICT → 最終状態記録
-```
+## 🤝 サポート
 
-### ストレージ構造
-```
-.git/ai-tracker/
-├── tracks.jsonl           # メイントラッキングデータ
-├── index.json            # 検索用インデックス
-├── stats-cache.json      # 統計キャッシュ
-├── audit.jsonl           # 監査ログ
-├── security-config.json  # セキュリティ設定
-└── backup/               # 自動バックアップ
-```
-
-## 🧪 開発者向け情報
-
-### ビルド
-```bash
-# 開発版ビルド
-make build
-
-# リリース版ビルド
-make release
-
-# クロスコンパイル
-make cross-compile
-
-# 全アーキテクチャ
-make all
-```
-
-### テスト
-```bash
-# 単体テスト
-make test
-
-# 統合テスト
-make test-integration
-
-# E2Eテスト
-make test-e2e
-
-# セキュリティテスト
-make test-security
-
-# カバレッジレポート
-make coverage
-```
-
-### ベンチマーク
-```bash
-# パフォーマンステスト
-make benchmark
-
-# セキュリティベンチマーク
-make benchmark-security
-
-# メモリプロファイル
-make profile-memory
-
-# CPUプロファイル
-make profile-cpu
-```
-
-### コードの品質
-```bash
-# リンター実行
-make lint
-
-# フォーマッター実行
-make fmt
-
-# セキュリティスキャン
-make security-scan
-
-# 依存関係チェック
-make deps-check
-```
-
-## 📊 パフォーマンス
-
-### 実測値
-| 操作 | 平均時間 | 目標 | 状況 |
-|------|---------|------|------|
-| Track作成 | 45ms | 100ms | ✅ 目標達成 |
-| Blame表示 | 280ms | 500ms | ✅ 目標達成 |
-| 統計計算 | 750ms | 1000ms | ✅ 目標達成 |
-| セキュリティスキャン | 1.8s | 2s | ✅ 目標達成 |
-
-### 大規模データ
-- **10,000イベント**: 統計計算 1.2秒
-- **100,000行コード**: Blame表示 3.8秒
-- **1,000ファイル**: セキュリティスキャン 1.8秒
-
-## 🔒 セキュリティ
-
-### セキュリティ評価
-- **総合リスクレベル**: 低（ローカル処理のみ）
-- **セキュリティスコア**: 90/100
-- **既知の脆弱性**: なし
-
-### セキュリティ機能
-- ✅ AES-256-GCM暗号化
-- ✅ 包括的監査ログ
-- ✅ 入力検証・サニタイゼーション
-- ✅ プライバシー保護
-- ✅ 機密ファイル自動除外
-- ✅ セキュリティスキャン
-
-詳細は[セキュリティドキュメント](docs/SECURITY.md)を参照してください。
-
-## 🤝 コントリビューション
-
-### 開発環境のセットアップ
-```bash
-git clone https://github.com/ai-code-tracker/aict
-cd aict
-make setup-dev
-```
-
-### コントリビューションガイドライン
-1. Issueを確認または作成
-2. Feature branchを作成
-3. テストを追加・実行
-4. Pull Requestを作成
-5. コードレビューを受ける
-
-### コーディング規約
-- Go標準のコーディング規約に従う
-- テストカバレッジ85%以上を維持
-- セキュリティベストプラクティスを遵守
-- ドキュメントを適切に更新
+- **Issues**: [GitHub Issues](https://github.com/ai-code-tracker/aict/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/ai-code-tracker/aict/discussions)
+- **Email**: contact@ai-code-tracker.dev
 
 ## 📄 ライセンス
 
-MIT License - 詳細は[LICENSE](LICENSE)を参照してください。
-
-## 🏷️ バージョン履歴
-
-- **v0.1.0** (2025-01-28) - **完成版リリース**
-  - Phase 1-20 全機能実装完了
-  - 多言語対応（日本語・英語）
-  - 動的言語切り替え機能
-  - コンテキストアウェアヘルプシステム
-  - モジュラー設計とクリーンアーキテクチャ
-  - 包括的セキュリティ機能
-  - Webダッシュボード統合機能
-  - ユーザーフレンドリーなCLI体験
-
-## 🆘 サポート
-
-### ドキュメント
-- [要求定義書](RDD.md) - 完全な仕様書
-- [セキュリティガイド](docs/SECURITY.md) - セキュリティ機能詳細
-- [パフォーマンスガイド](docs/PERFORMANCE.md) - 性能分析結果
-
-### コミュニティ
-- [GitHub Issues](https://github.com/ai-code-tracker/aict/issues) - バグレポート・機能要求
-- [GitHub Discussions](https://github.com/ai-code-tracker/aict/discussions) - 質問・議論
-
-### 企業サポート
-企業向けサポートが必要な場合は、[contact@ai-code-tracker.dev](mailto:contact@ai-code-tracker.dev)までお問い合わせください。
+MIT License - 詳細は[LICENSE](LICENSE)を参照
 
 ---
 
-**AI Code Tracker** - AIと人間のコラボレーションを可視化し、透明性のある開発プロセスを実現します。
+**AI Code Tracker v0.1.0** - AIと人間のコラボレーションを可視化し、透明性のある開発プロセスを実現
