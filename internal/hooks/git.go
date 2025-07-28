@@ -98,9 +98,9 @@ func (hm *HookManager) SetupClaudeCodeHooks() error {
 		currentSettings = make(map[string]interface{})
 	}
 
-	// AICT hooks設定を作成
+	// AICT hooks設定を作成（Claude CLI標準形式）
 	aictHooks := map[string][]ClaudeCodeHook{
-		"preToolUse": {
+		"PreToolUse": {
 			{
 				Matcher: "Edit|Write|MultiEdit",
 				Hooks: []Hook{
@@ -111,7 +111,7 @@ func (hm *HookManager) SetupClaudeCodeHooks() error {
 				},
 			},
 		},
-		"postToolUse": {
+		"PostToolUse": {
 			{
 				Matcher: "Edit|Write|MultiEdit",
 				Hooks: []Hook{
@@ -122,7 +122,7 @@ func (hm *HookManager) SetupClaudeCodeHooks() error {
 				},
 			},
 		},
-		"stop": {
+		"Stop": {
 			{
 				Matcher: "*",
 				Hooks: []Hook{
@@ -138,23 +138,30 @@ func (hm *HookManager) SetupClaudeCodeHooks() error {
 	// 既存のhooks設定とマージ
 	mergedHooks := hm.mergeHooksConfig(currentSettings, aictHooks)
 	
-	// 大文字小文字が混在するキーを統一（Claude Codeの標準形式に合わせる）
+	// 大文字小文字が混在するキーを統一（Claude CLI標準形式に合わせる）
 	normalizedHooks := make(map[string][]ClaudeCodeHook)
 	for hookType, hooks := range mergedHooks {
 		switch strings.ToLower(hookType) {
 		case "pretooluse":
-			// 既存のpreToolUseと統合
-			if existing, exists := normalizedHooks["preToolUse"]; exists {
-				normalizedHooks["preToolUse"] = append(existing, hooks...)
+			// 既存のPreToolUseと統合
+			if existing, exists := normalizedHooks["PreToolUse"]; exists {
+				normalizedHooks["PreToolUse"] = append(existing, hooks...)
 			} else {
-				normalizedHooks["preToolUse"] = hooks
+				normalizedHooks["PreToolUse"] = hooks
 			}
 		case "posttooluse":
-			// 既存のpostToolUseと統合
-			if existing, exists := normalizedHooks["postToolUse"]; exists {
-				normalizedHooks["postToolUse"] = append(existing, hooks...)
+			// 既存のPostToolUseと統合
+			if existing, exists := normalizedHooks["PostToolUse"]; exists {
+				normalizedHooks["PostToolUse"] = append(existing, hooks...)
 			} else {
-				normalizedHooks["postToolUse"] = hooks
+				normalizedHooks["PostToolUse"] = hooks
+			}
+		case "stop":
+			// 既存のStopと統合
+			if existing, exists := normalizedHooks["Stop"]; exists {
+				normalizedHooks["Stop"] = append(existing, hooks...)
+			} else {
+				normalizedHooks["Stop"] = hooks
 			}
 		default:
 			normalizedHooks[hookType] = hooks
