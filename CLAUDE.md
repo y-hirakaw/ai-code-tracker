@@ -60,12 +60,41 @@ Post-commit hook configuration in `setting_doc/GitPostHook.md`:
 
 ## Development Commands
 
-Since this is a planning phase project, standard Go commands would be used once implementation begins:
 ```bash
 go build ./cmd/aict          # Build the CLI tool
 go test ./...               # Run tests
 go mod tidy                 # Manage dependencies
 ```
+
+## Release Process
+
+**重要**: リリース時は以下の順序を厳守すること：
+
+1. **バージョン定数を更新**:
+   ```bash
+   # internal/cli/app.go の Version 定数を更新
+   Version = "X.Y.Z"
+   
+   # internal/web/handlers/simple_api.go のバージョンも同期更新
+   "version": "X.Y.Z"
+   ```
+
+2. **コミットしてからタグ作成**:
+   ```bash
+   git add -A
+   git commit -m "🔖 バージョンをX.Y.Zに更新"
+   git tag vX.Y.Z
+   git push origin main
+   git push origin vX.Y.Z
+   ```
+
+3. **確認**:
+   ```bash
+   go install github.com/y-hirakaw/ai-code-tracker/cmd/aict@vX.Y.Z
+   $(go env GOPATH)/bin/aict version  # "aict version X.Y.Z" が表示されることを確認
+   ```
+
+**注意**: タグを作成してからバージョン定数を変更すると、タグとバージョン表示に不整合が生じる。
 
 ## Key Features (Planned)
 
