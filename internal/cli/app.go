@@ -9,7 +9,7 @@ import (
 
 const (
 	// Version はアプリケーションのバージョン
-	Version = "0.2.3"
+	Version = "0.2.4"
 	// AppName はアプリケーション名
 	AppName = "aict"
 )

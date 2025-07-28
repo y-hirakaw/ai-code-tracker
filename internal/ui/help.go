@@ -214,12 +214,16 @@ func (h *HelpSystem) showTrackHelp() {
   --model <model>     AI モデル名（--ai 使用時）
   --message <msg>     変更の説明
   --session <id>      セッションID
+  --pre-edit          編集前状態を記録（Claude Code hooks用）
+  --post-edit         編集後変更を記録（Claude Code hooks用）
 
 例:
   %s track --ai --model claude-sonnet-4 --files "src/*.go" --message "リファクタリング"
   %s track --author "John Doe" --files main.go --message "バグ修正"
+  %s track --pre-edit --files "main.go" --session "abc123"  # 編集前状態記録
+  %s track --post-edit --ai --files "main.go" --session "abc123"  # 編集後記録
 
-`, h.appName, h.appName, h.appName, h.appName)
+`, h.appName, h.appName, h.appName, h.appName, h.appName, h.appName)
 }
 
 func (h *HelpSystem) showStatsHelp() {

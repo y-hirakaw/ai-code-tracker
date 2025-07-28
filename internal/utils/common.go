@@ -1,6 +1,9 @@
 package utils
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"time"
@@ -101,4 +104,58 @@ func CreateFileIfNotExists(filePath string) error {
 	defer file.Close()
 	
 	return nil
+}
+
+// GenerateSessionID はセッション用のランダムIDを生成する
+func GenerateSessionID() string {
+	bytes := make([]byte, 8)
+	rand.Read(bytes)
+	return hex.EncodeToString(bytes)
+}
+
+// GetCurrentTime は現在時刻を取得する
+func GetCurrentTime() time.Time {
+	return time.Now()
+}
+
+// GetCurrentTimeString は現在時刻の文字列を取得する
+func GetCurrentTimeString() string {
+	return time.Now().Format(time.RFC3339)
+}
+
+// ParseFiles はファイルリスト文字列を解析する
+func ParseFiles(filesStr string) []string {
+	if filesStr == "" {
+		return []string{}
+	}
+	return SplitAndTrim(filesStr, ",")
+}
+
+// WriteJSON はJSONファイルを書き込む
+func WriteJSON(filePath string, data interface{}) error {
+	file, err := os.Create(filePath)
+	if err != nil {
+		return errors.WrapError(err, errors.ErrorTypeFile, "file_creation_failed")
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(data)
+}
+
+// ReadJSON はJSONファイルを読み込む
+func ReadJSON(filePath string) (map[string]interface{}, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, errors.WrapError(err, errors.ErrorTypeFile, "file_open_failed")
+	}
+	defer file.Close()
+
+	var data map[string]interface{}
+	decoder := json.NewDecoder(file)
+	if err := decoder.Decode(&data); err != nil {
+		return nil, errors.WrapError(err, errors.ErrorTypeData, "json_decode_failed")
+	}
+	return data, nil
 }

@@ -106,7 +106,7 @@ func (hm *HookManager) SetupClaudeCodeHooks() error {
 				Hooks: []Hook{
 					{
 						Type:    "command",
-						Command: `echo '{"decision": "approve"}'`,
+						Command: `bash -c 'INPUT=$(cat); FILE=$(echo "$INPUT" | jq -r ".tool_input.path // .tool_input.file_path // empty"); SESSION_ID=$(date +%s%N | cut -b1-13); if [ -n "$FILE" ] && [ -f "$FILE" ]; then aict track --pre-edit --files "$FILE" --session "$SESSION_ID" 2>/dev/null || true; echo "$SESSION_ID" > "/tmp/aict-session-$$.tmp"; fi; echo "{\"decision\": \"approve\"}'`,
 					},
 				},
 			},
@@ -117,7 +117,7 @@ func (hm *HookManager) SetupClaudeCodeHooks() error {
 				Hooks: []Hook{
 					{
 						Type: "command", 
-						Command: `bash -c 'INPUT=$(cat); FILE=$(echo "$INPUT" | jq -r ".tool_input.path // .tool_input.file_path // empty"); if [ -n "$FILE" ]; then aict track --ai --author "Claude Code" --model "claude-sonnet-4" --files "$FILE" --message "Claude Code automated edit" 2>/dev/null || true; fi; echo "{\"continue\": true}"'`,
+						Command: `bash -c 'INPUT=$(cat); FILE=$(echo "$INPUT" | jq -r ".tool_input.path // .tool_input.file_path // empty"); MODEL=$(echo "$INPUT" | jq -r ".metadata.model // \"claude-sonnet-4\""); MESSAGE="Claude Code automated edit"; SESSION_FILE="/tmp/aict-session-$$.tmp"; if [ -n "$FILE" ] && [ -f "$SESSION_FILE" ]; then SESSION_ID=$(cat "$SESSION_FILE" 2>/dev/null); aict track --post-edit --ai --author "Claude Code" --model "$MODEL" --files "$FILE" --session "$SESSION_ID" --message "$MESSAGE" 2>/dev/null || true; rm -f "$SESSION_FILE"; elif [ -n "$FILE" ]; then aict track --ai --author "Claude Code" --model "$MODEL" --files "$FILE" --message "$MESSAGE" 2>/dev/null || true; fi; echo "{\"continue\": true}"'`,
 					},
 				},
 			},
@@ -128,7 +128,7 @@ func (hm *HookManager) SetupClaudeCodeHooks() error {
 				Hooks: []Hook{
 					{
 						Type: "command",
-						Command: `bash -c 'STATS=$(aict stats 2>/dev/null | head -3 || echo "No stats available"); echo "{\"continue\": true, \"userMessage\": \"📊 AICT Session: $STATS\"}" 2>/dev/null || echo "{\"continue\": true}"'`,
+						Command: `bash -c 'STATS=$(aict stats --format summary 2>/dev/null || echo "No stats available"); echo "{\"continue\": true, \"userMessage\": \"📊 AICT Session: $STATS\"}" 2>/dev/null || echo "{\"continue\": true}"'`,
 					},
 				},
 			},
