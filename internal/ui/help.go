@@ -9,6 +9,7 @@ import (
 type HelpSystem struct {
 	version string
 	appName string
+	contextHelp *ContextHelpProvider
 }
 
 // NewHelpSystem は新しいヘルプシステムを作成する
@@ -16,6 +17,7 @@ func NewHelpSystem(appName, version string) *HelpSystem {
 	return &HelpSystem{
 		version: version,
 		appName: appName,
+		contextHelp: NewContextHelpProvider(appName),
 	}
 }
 
@@ -59,6 +61,7 @@ func (h *HelpSystem) showCommands() {
 		{"config", "設定を管理", "設定", "⚙️"},
 		{"setup", "Git hooks と Claude Code hooks を自動設定", "設定", "🔧"},
 		{"wizard", "インタラクティブセットアップウィザード", "設定", "🧙"},
+		{"lang", "言語設定を管理", "設定", "🌐"},
 		{"security", "セキュリティ機能を管理", "セキュリティ", "🔒"},
 		{"version", "バージョン情報を表示", "情報", "ℹ️"},
 		{"help", "ヘルプを表示", "情報", "❓"},
@@ -114,6 +117,7 @@ func (h *HelpSystem) showExamples() {
 		{h.appName + " blame src/main.go", "ファイルの変更履歴", "🔍"},
 		{h.appName + " security scan", "セキュリティスキャン", "🔒"},
 		{h.appName + " setup", "hooks 自動設定", "🔧"},
+		{h.appName + " lang ja", "日本語に切り替え", "🌐"},
 	}
 	
 	for _, example := range examples {
@@ -151,6 +155,8 @@ func (h *HelpSystem) ShowCommandHelp(command string) {
 		h.showSetupHelp()
 	case "wizard":
 		h.showWizardHelp()
+	case "lang":
+		h.showLangHelp()
 	case "security":
 		h.showSecurityHelp()
 	default:
@@ -342,6 +348,37 @@ func (h *HelpSystem) showWizardHelp() {
 `, h.appName, h.appName, h.appName, h.appName, h.appName)
 }
 
+func (h *HelpSystem) showLangHelp() {
+	fmt.Printf(`🌐 %s lang - 言語設定管理
+
+説明:
+  表示言語を動的に切り替えます。
+  設定は一時的または永続的に保存できます。
+
+使用方法:
+  %s lang [options] [language_code]
+
+オプション:
+  --list              利用可能な言語を表示
+  --set <code>        言語を設定 (ja|en)
+  --persistent        設定を永続化
+
+引数:
+  language_code       言語コード (ja または en)
+
+例:
+  %s lang                    # 現在の言語を表示
+  %s lang --list             # 利用可能な言語一覧
+  %s lang ja                 # 日本語に切り替え
+  %s lang en                 # 英語に切り替え
+  %s lang ja --persistent    # 日本語に設定して永続化
+
+環境変数:
+  AICT_LANGUAGE       デフォルト言語 (ja|en)
+
+`, h.appName, h.appName, h.appName, h.appName, h.appName, h.appName, h.appName)
+}
+
 func (h *HelpSystem) showSecurityHelp() {
 	fmt.Printf(`🔒 %s security - セキュリティ管理
 
@@ -393,6 +430,16 @@ func (h *HelpSystem) ShowError(err error, command string) {
 	default:
 		fmt.Fprintf(os.Stderr, "\n💡 ヒント: `%s help` で利用可能なコマンドを確認できます。\n", h.appName)
 	}
+}
+
+// ShowContextualError はコンテキストアウェアなエラー表示を提供する
+func (h *HelpSystem) ShowContextualError(ctx *CommandContext) {
+	h.contextHelp.ShowContextualError(ctx)
+}
+
+// GetQuickHelp は簡潔なヘルプを取得する
+func (h *HelpSystem) GetQuickHelp(command string) string {
+	return h.contextHelp.GetQuickHelp(command)
 }
 
 // ShowWarning は警告メッセージを表示する

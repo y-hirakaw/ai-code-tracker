@@ -1,12 +1,10 @@
 package cli
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/ai-code-tracker/aict/internal/errors"
 	"github.com/ai-code-tracker/aict/internal/i18n"
 	"github.com/ai-code-tracker/aict/internal/ui"
+	"github.com/ai-code-tracker/aict/internal/utils"
 )
 
 const (
@@ -54,13 +52,29 @@ func (a *App) Run(args []string) int {
 
 	// コマンドを実行
 	if err := a.commandHandler.Execute(command, cmdArgs); err != nil {
-		// エラーが既にFriendlyErrorの場合はそのまま使用、そうでなければラップ
-		if friendlyErr, ok := err.(*errors.FriendlyError); ok {
-			fmt.Fprint(os.Stderr, errors.FormatError(friendlyErr.WithCommand(command)))
-		} else {
-			friendlyErr := errors.WrapError(err, errors.ErrorTypeGeneral, "generic_error").WithCommand(command)
-			fmt.Fprint(os.Stderr, errors.FormatError(friendlyErr))
+		// コンテキスト情報を作成
+		currentDir, _ := utils.GetCurrentDirectory()
+		gitRepo := utils.IsGitRepository(currentDir)
+		
+		ctx := &ui.CommandContext{
+			Command:    command,
+			Args:       cmdArgs,
+			Error:      err,
+			WorkingDir: currentDir,
+			GitRepo:    gitRepo,
 		}
+		
+		// エラータイプを設定
+		if friendlyErr, ok := err.(*errors.FriendlyError); ok {
+			ctx.ErrorType = friendlyErr.Type
+			ctx.Error = friendlyErr.WithCommand(command)
+		} else {
+			ctx.ErrorType = errors.ErrorTypeGeneral
+			ctx.Error = errors.WrapError(err, errors.ErrorTypeGeneral, "generic_error").WithCommand(command)
+		}
+		
+		// コンテキストアウェアなエラー表示
+		a.helpSystem.ShowContextualError(ctx)
 		return 1
 	}
 

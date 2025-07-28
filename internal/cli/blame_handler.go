@@ -2,12 +2,12 @@ package cli
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/ai-code-tracker/aict/internal/blame"
 	"github.com/ai-code-tracker/aict/internal/errors"
 	"github.com/ai-code-tracker/aict/internal/i18n"
 	"github.com/ai-code-tracker/aict/internal/storage"
+	"github.com/ai-code-tracker/aict/internal/utils"
 )
 
 // BlameHandler はblameコマンドを処理する
@@ -51,9 +51,9 @@ func (h *BlameHandler) Handle(args []string) error {
 	}
 
 	// 現在のディレクトリを取得
-	currentDir, err := os.Getwd()
+	currentDir, err := utils.GetCurrentDirectory()
 	if err != nil {
-		return errors.WrapError(err, errors.ErrorTypeFile, "directory_access_failed")
+		return err
 	}
 
 	// ストレージを初期化

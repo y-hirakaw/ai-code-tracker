@@ -2,13 +2,12 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/ai-code-tracker/aict/internal/errors"
 	"github.com/ai-code-tracker/aict/internal/storage"
-	"github.com/ai-code-tracker/aict/internal/tracker"
 	"github.com/ai-code-tracker/aict/internal/ui"
+	"github.com/ai-code-tracker/aict/internal/utils"
 )
 
 // InitHandler はinitコマンドを処理する
@@ -22,12 +21,12 @@ func NewInitHandler() *InitHandler {
 // Handle はinitコマンドを実行する
 func (h *InitHandler) Handle(args []string) error {
 	// 現在のディレクトリがGitリポジトリかチェック
-	currentDir, err := os.Getwd()
+	currentDir, err := utils.GetCurrentDirectory()
 	if err != nil {
-		return errors.WrapError(err, errors.ErrorTypeFile, "directory_access_failed")
+		return err
 	}
 
-	if !tracker.IsGitRepo(currentDir) {
+	if !utils.IsGitRepository(currentDir) {
 		return errors.GitNotRepository()
 	}
 

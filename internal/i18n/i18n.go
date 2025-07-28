@@ -227,6 +227,26 @@ func (i *I18n) loadDefaultMessages() {
 		"suggestion_track_files":      "ファイルを追跡してみてください",
 		"suggestion_check_permissions": "ファイル権限を確認してください",
 		"suggestion_run_as_admin":     "管理者権限で実行してみてください",
+		
+		// 言語関連
+		"current_language":         "現在の言語",
+		"available_languages":      "利用可能な言語",
+		"change_language_help":     "言語を変更するには",
+		"set_japanese":             "日本語に設定",
+		"set_english":              "英語に設定",
+		"list_languages":           "利用可能な言語を表示",
+		"set_persistent":           "設定を永続化",
+		"usage_examples":           "使用例",
+		"switch_to_japanese":       "日本語に切り替え",
+		"switch_to_english":        "英語に切り替え",
+		"already_set":              "既に設定されています",
+		"persistent_save_failed":   "設定の永続化に失敗しました",
+		"env_var_alternative":      "代替として環境変数 AICT_LANGUAGE を使用できます",
+		"language_set_persistent":  "言語を永続的に設定しました",
+		"language_set_temporary":   "言語を一時的に設定しました",
+		"persistent_hint":          "永続化するには --persistent オプションを使用してください",
+		"language_japanese":        "日本語",
+		"language_english":         "English",
 		"suggestion_run_wizard":       "`aict wizard` で設定を作成してください",
 		
 		// 成功メッセージ
@@ -335,6 +355,26 @@ func (i *I18n) loadDefaultMessages() {
 		"suggestion_track_files":      "Try tracking some files",
 		"suggestion_check_permissions": "Check file permissions",
 		"suggestion_run_as_admin":     "Try running with administrator privileges",
+		
+		// Language related
+		"current_language":         "Current language",
+		"available_languages":      "Available languages",
+		"change_language_help":     "To change language",
+		"set_japanese":             "Set to Japanese",
+		"set_english":              "Set to English",
+		"list_languages":           "List available languages",
+		"set_persistent":           "Make setting persistent",
+		"usage_examples":           "Usage examples",
+		"switch_to_japanese":       "Switch to Japanese",
+		"switch_to_english":        "Switch to English",
+		"already_set":              "Already set to",
+		"persistent_save_failed":   "Failed to save persistent setting",
+		"env_var_alternative":      "Alternatively, you can use environment variable AICT_LANGUAGE",
+		"language_set_persistent":  "Language set persistently to",
+		"language_set_temporary":   "Language set temporarily to", 
+		"persistent_hint":          "Use --persistent option to make it persistent",
+		"language_japanese":        "日本語",
+		"language_english":         "English",
 		"suggestion_run_wizard":       "Create configuration with `aict wizard`",
 		
 		// Success messages
@@ -373,7 +413,64 @@ var globalI18n *I18n
 
 // Initialize はグローバルなi18nシステムを初期化する
 func Initialize() {
+	if globalI18n != nil {
+		return
+	}
+	
+	// デフォルトのロケールを決定
+	locale := LocaleJA // デフォルトは日本語
+	
+	// 環境変数からロケールを取得（優先度順）
+	if envLang := os.Getenv("AICT_LANGUAGE"); envLang != "" {
+		switch envLang {
+		case "ja":
+			locale = LocaleJA
+		case "en":
+			locale = LocaleEN
+		}
+	} else if envLang := os.Getenv("LANG"); envLang != "" {
+		if strings.HasPrefix(envLang, "en") {
+			locale = LocaleEN
+		}
+	}
+	
+	// 設定ファイルからロケールを取得
+	if configLocale := loadLocaleFromConfig(); configLocale != "" {
+		switch configLocale {
+		case "ja":
+			locale = LocaleJA
+		case "en":
+			locale = LocaleEN
+		}
+	}
+	
 	globalI18n = NewI18n()
+	globalI18n.SetLocale(locale)
+}
+
+// loadLocaleFromConfig は設定ファイルからロケールを読み込む
+func loadLocaleFromConfig() string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	
+	configPath := filepath.Join(homeDir, ".aict", "config.json")
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return ""
+	}
+	
+	var config map[string]interface{}
+	if err := json.Unmarshal(data, &config); err != nil {
+		return ""
+	}
+	
+	if lang, ok := config["language"].(string); ok {
+		return lang
+	}
+	
+	return ""
 }
 
 // T はグローバルな翻訳関数

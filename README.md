@@ -4,6 +4,8 @@
 ![Go Version](https://img.shields.io/badge/go-1.19+-blue.svg)
 ![Security](https://img.shields.io/badge/security-AES256-green.svg)
 ![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)
+![i18n](https://img.shields.io/badge/i18n-ja%2Fen-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-v0.1.0-blue.svg)
 
 AIが生成したコードと人間が書いたコードを自動的に区別・追跡するGo製システム。Claude Codeとの完全統合により、透明性のある開発プロセスを実現します。
 
@@ -24,6 +26,12 @@ AIが生成したコードと人間が書いたコードを自動的に区別・
 - **監査ログ**: 全操作の完全な追跡証跡
 - **プライバシー保護**: 個人情報の自動匿名化
 - **機密ファイル除外**: 自動パターンマッチング
+
+### 🌐 多言語対応・UX
+- **完全i18n**: 日本語・英語の完全対応
+- **動的言語切り替え**: `aict lang ja/en` でリアルタイム切り替え
+- **コンテキストヘルプ**: 状況に応じた適切なエラーメッセージとヒント
+- **モダンCLI**: 絵文字・カラー対応の見やすいインターフェース
 
 ### ⚡ 高性能
 - トラッキング作成: 50ms（目標100ms）
@@ -212,6 +220,8 @@ aict security scan --output report.json
 | `track` | 手動トラッキング | `aict track --ai --model claude-sonnet-4` |
 | `blame` | 拡張blame表示 | `aict blame src/main.go` |
 | `stats` | 統計表示 | `aict stats --summary` |
+| `lang` | 言語設定管理 | `aict lang ja --persistent` |
+| `wizard` | 設定ウィザード | `aict wizard` |
 
 ### セキュリティコマンド
 | コマンド | 説明 | 例 |
@@ -243,6 +253,9 @@ export AICT_LOG_LEVEL=info
 
 # データディレクトリ（カスタム）
 export AICT_DATA_DIR=/custom/path
+
+# 言語設定
+export AICT_LANGUAGE=ja  # ja (日本語) または en (英語)
 ```
 
 #### セキュリティ設定
@@ -294,7 +307,12 @@ ai-code-tracker/
 │   ├── blame/             # 拡張blame機能
 │   ├── stats/             # 統計処理
 │   ├── storage/           # データ永続化
-│   └── security/          # セキュリティ機能
+│   ├── security/          # セキュリティ機能
+│   ├── i18n/              # 国際化システム
+│   ├── ui/                # ヘルプ・UI機能
+│   ├── cli/               # CLIコマンドハンドラー
+│   ├── errors/            # エラーハンドリング
+│   └── utils/             # 共通ユーティリティ
 ├── pkg/                   # 公開パッケージ
 │   └── types/             # 共通型定義
 ├── docs/                  # ドキュメント
@@ -451,11 +469,14 @@ MIT License - 詳細は[LICENSE](LICENSE)を参照してください。
 
 ## 🏷️ バージョン履歴
 
-- **v1.4.0** (2025-01-28) - セキュリティ機能の完全実装
-- **v1.3.0** (2025-01-27) - パフォーマンス最適化とベンチマーク
-- **v1.2.0** (2025-01-26) - 統合テストとE2E機能
-- **v1.1.0** (2025-01-25) - 拡張統計機能
-- **v1.0.0** (2025-01-24) - 初回リリース（MVP）
+- **v0.1.0** (2025-01-28) - **完成版リリース**
+  - Phase 1-19 全機能実装完了
+  - 多言語対応（日本語・英語）
+  - 動的言語切り替え機能
+  - コンテキストアウェアヘルプシステム
+  - モジュラー設計とクリーンアーキテクチャ
+  - 包括的セキュリティ機能
+  - ユーザーフレンドリーなCLI体験
 
 ## 🆘 サポート
 

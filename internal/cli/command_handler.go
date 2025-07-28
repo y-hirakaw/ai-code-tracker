@@ -25,6 +25,7 @@ type CommandHandler struct {
 	setupHandler   *SetupHandler
 	configHandler  *ConfigHandler
 	wizardHandler  *WizardHandler
+	langHandler    *LangHandler
 	versionHandler *VersionHandler
 	helpHandler    *HelpHandler
 }
@@ -44,6 +45,7 @@ func NewCommandHandler(helpSystem *ui.HelpSystem) *CommandHandler {
 	ch.setupHandler = NewSetupHandler()
 	ch.configHandler = NewConfigHandler()
 	ch.wizardHandler = NewWizardHandler(helpSystem)
+	ch.langHandler = NewLangHandler()
 	ch.versionHandler = NewVersionHandler()
 	ch.helpHandler = NewHelpHandler(helpSystem)
 	
@@ -90,6 +92,11 @@ func (ch *CommandHandler) registerCommands() {
 			Name:        "wizard",
 			Description: "インタラクティブセットアップウィザードを実行する",
 			Handler:     ch.wizardHandler.Handle,
+		},
+		"lang": {
+			Name:        "lang",
+			Description: "言語設定を管理する",
+			Handler:     ch.langHandler.Handle,
 		},
 		"version": {
 			Name:        "version",

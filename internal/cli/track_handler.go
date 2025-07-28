@@ -2,13 +2,12 @@ package cli
 
 import (
 	"fmt"
-	"os"
-	"strings"
 
 	"github.com/ai-code-tracker/aict/internal/errors"
 	"github.com/ai-code-tracker/aict/internal/i18n"
 	"github.com/ai-code-tracker/aict/internal/storage"
 	"github.com/ai-code-tracker/aict/internal/tracker"
+	"github.com/ai-code-tracker/aict/internal/utils"
 	"github.com/ai-code-tracker/aict/pkg/types"
 )
 
@@ -73,9 +72,9 @@ func (h *TrackHandler) Handle(args []string) error {
 	}
 
 	// 現在のディレクトリを取得
-	currentDir, err := os.Getwd()
+	currentDir, err := utils.GetCurrentDirectory()
 	if err != nil {
-		return errors.WrapError(err, errors.ErrorTypeFile, "directory_access_failed")
+		return err
 	}
 
 	// ストレージとトラッカーを初期化
@@ -90,10 +89,7 @@ func (h *TrackHandler) Handle(args []string) error {
 	// ファイルリストを処理
 	var files []string
 	if filesStr != "" {
-		files = strings.Split(filesStr, ",")
-		for i, file := range files {
-			files[i] = strings.TrimSpace(file)
-		}
+		files = utils.SplitAndTrim(filesStr, ",")
 	} else {
 		// ファイルが指定されていない場合、変更されたファイルを自動検出
 		detectedFiles, err := tracker.DetectChangedFiles()

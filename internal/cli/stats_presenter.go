@@ -7,6 +7,7 @@ import (
 
 	"github.com/ai-code-tracker/aict/internal/errors"
 	"github.com/ai-code-tracker/aict/internal/stats"
+	"github.com/ai-code-tracker/aict/internal/utils"
 	"github.com/ai-code-tracker/aict/pkg/types"
 )
 
@@ -29,8 +30,8 @@ func (p *StatsPresenter) ShowStatsTable(stats *types.Statistics) {
 	fmt.Println("=== AI Code Tracker 統計情報 ===")
 	
 	fmt.Printf("%-20s: %d\n", "総イベント数", stats.TotalEvents)
-	fmt.Printf("%-20s: %d (%.1f%%)\n", "AI イベント", stats.AIEvents, stats.AIPercentage())
-	fmt.Printf("%-20s: %d (%.1f%%)\n", "人間 イベント", stats.HumanEvents, stats.HumanPercentage())
+	fmt.Printf("%-20s: %d (%s)\n", "AI イベント", stats.AIEvents, utils.FormatPercentage(stats.AIPercentage()))
+	fmt.Printf("%-20s: %d (%s)\n", "人間 イベント", stats.HumanEvents, utils.FormatPercentage(stats.HumanPercentage()))
 	fmt.Printf("%-20s: %d\n", "コミット イベント", stats.CommitEvents)
 	fmt.Println()
 	
@@ -41,10 +42,10 @@ func (p *StatsPresenter) ShowStatsTable(stats *types.Statistics) {
 	fmt.Println()
 	
 	if stats.FirstEvent != nil {
-		fmt.Printf("%-20s: %s\n", "最初のイベント", stats.FirstEvent.Format("2006-01-02 15:04:05"))
+		fmt.Printf("%-20s: %s\n", "最初のイベント", utils.FormatTimestamp(*stats.FirstEvent))
 	}
 	if stats.LastEvent != nil {
-		fmt.Printf("%-20s: %s\n", "最後のイベント", stats.LastEvent.Format("2006-01-02 15:04:05"))
+		fmt.Printf("%-20s: %s\n", "最後のイベント", utils.FormatTimestamp(*stats.LastEvent))
 	}
 }
 
@@ -87,7 +88,7 @@ func (p *StatsPresenter) ShowStatsJSON(stats *types.Statistics) {
 // ShowStatsSummary はサマリー形式で統計を表示する
 func (p *StatsPresenter) ShowStatsSummary(stats *types.Statistics) {
 	fmt.Println("📊 AI Code Tracker サマリー")
-	fmt.Println(strings.Repeat("=", 30))
+	fmt.Println(utils.CreateSeparatorLine("=", 30))
 	
 	if stats.TotalEvents == 0 {
 		fmt.Println("まだイベントが記録されていません")
@@ -112,7 +113,7 @@ func (p *StatsPresenter) ShowDailyStats(statsManager *stats.StatsManager, since,
 	}
 
 	fmt.Printf("=== 日次統計 (%s - %s) ===\n\n", 
-		since.Format("2006-01-02"), until.Format("2006-01-02"))
+		utils.FormatDate(since), utils.FormatDate(until))
 
 	if len(dailyStats) == 0 {
 		fmt.Println("指定期間内にデータがありません")
@@ -121,11 +122,11 @@ func (p *StatsPresenter) ShowDailyStats(statsManager *stats.StatsManager, since,
 
 	fmt.Printf("%-12s %-8s %-8s %-8s %-8s %-8s\n", 
 		"日付", "AI", "人間", "コミット", "変更行", "AI率")
-	fmt.Println(strings.Repeat("-", 60))
+	fmt.Println(utils.CreateSeparatorLine("-", 60))
 
 	for _, daily := range dailyStats {
 		fmt.Printf("%-12s %-8d %-8d %-8d %-8d %6.1f%%\n",
-			daily.Date.Format("2006-01-02"),
+			utils.FormatDate(daily.Date),
 			daily.AIEvents,
 			daily.HumanEvents,
 			daily.CommitEvents,
@@ -143,7 +144,7 @@ func (p *StatsPresenter) ShowFileStats(statsManager *stats.StatsManager, since t
 		return errors.WrapError(err, errors.ErrorTypeData, "statistics_fetch_failed")
 	}
 
-	fmt.Printf("=== ファイル別統計 (%s以降) ===\n\n", since.Format("2006-01-02"))
+	fmt.Printf("=== ファイル別統計 (%s以降) ===\n\n", utils.FormatDate(since))
 
 	if len(fileStats) == 0 {
 		fmt.Println("統計データがありません")
@@ -157,7 +158,7 @@ func (p *StatsPresenter) ShowFileStats(statsManager *stats.StatsManager, since t
 
 	fmt.Printf("%-30s %-6s %-6s %-8s %-12s %-20s\n", 
 		"ファイル", "AI", "人間", "変更行", "最終変更", "主要貢献者")
-	fmt.Println(strings.Repeat("-", 90))
+	fmt.Println(utils.CreateSeparatorLine("-", 90))
 
 	limit := 20 // 上位20ファイルを表示
 	for i, file := range fileStats {
@@ -166,17 +167,14 @@ func (p *StatsPresenter) ShowFileStats(statsManager *stats.StatsManager, since t
 		}
 
 		// ファイル名を短縮
-		fileName := file.FilePath
-		if len(fileName) > 28 {
-			fileName = "..." + fileName[len(fileName)-25:]
-		}
+		fileName := utils.TruncateStringPrefix(file.FilePath, 28)
 
 		fmt.Printf("%-30s %-6d %-6d %-8d %-12s %-20s\n",
 			fileName,
 			file.AIEvents,
 			file.HumanEvents,
 			file.TotalChanges,
-			file.LastModified.Format("2006-01-02"),
+			utils.FormatDate(file.LastModified),
 			file.MainContributor)
 	}
 
@@ -194,7 +192,7 @@ func (p *StatsPresenter) ShowContributorStats(statsManager *stats.StatsManager, 
 		return errors.WrapError(err, errors.ErrorTypeData, "statistics_fetch_failed")
 	}
 
-	fmt.Printf("=== 貢献者別統計 (%s以降) ===\n\n", since.Format("2006-01-02"))
+	fmt.Printf("=== 貢献者別統計 (%s以降) ===\n\n", utils.FormatDate(since))
 
 	if len(contributorStats) == 0 {
 		fmt.Println("統計データがありません")
@@ -215,23 +213,17 @@ func (p *StatsPresenter) ShowContributorStats(statsManager *stats.StatsManager, 
 
 	fmt.Printf("%-20s %-4s %-8s %-6s %-6s %-6s %-8s %-15s\n", 
 		"貢献者", "種別", "イベント", "追加", "変更", "削除", "ファイル", "モデル")
-	fmt.Println(strings.Repeat("-", 85))
+	fmt.Println(utils.CreateSeparatorLine("-", 85))
 
 	for _, contributor := range contributorStats {
 		typeIndicator := "👤"
 		model := "-"
 		if contributor.IsAI {
 			typeIndicator = "🤖"
-			model = contributor.Model
-			if len(model) > 13 {
-				model = model[:10] + "..."
-			}
+			model = utils.TruncateString(contributor.Model, 13)
 		}
 
-		name := contributor.Name
-		if len(name) > 18 {
-			name = name[:15] + "..."
-		}
+		name := utils.TruncateString(contributor.Name, 18)
 
 		fmt.Printf("%-20s %-4s %-8d %-6d %-6d %-6d %-8d %-15s\n",
 			name,
@@ -255,7 +247,7 @@ func (p *StatsPresenter) ShowTrendAnalysis(statsManager *stats.StatsManager, sin
 	}
 
 	fmt.Printf("=== トレンド分析 (%s - %s) ===\n\n", 
-		since.Format("2006-01-02"), until.Format("2006-01-02"))
+		utils.FormatDate(since), utils.FormatDate(until))
 
 	// AI使用率の推移
 	if trend, exists := analysis["ai_usage_trend"]; exists {

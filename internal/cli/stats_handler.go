@@ -7,6 +7,7 @@ import (
 	"github.com/ai-code-tracker/aict/internal/i18n"
 	"github.com/ai-code-tracker/aict/internal/stats"
 	"github.com/ai-code-tracker/aict/internal/storage"
+	"github.com/ai-code-tracker/aict/internal/utils"
 )
 
 // StatsHandler はstatsコマンドを処理する
@@ -67,9 +68,9 @@ func (h *StatsHandler) Handle(args []string) error {
 	var err error
 
 	if since != "" {
-		sinceTime, err = time.Parse("2006-01-02", since)
+		sinceTime, err = utils.ParseDate(since)
 		if err != nil {
-			return errors.InvalidDateFormat(since).WithCommand("stats")
+			return err.(*errors.FriendlyError).WithCommand("stats")
 		}
 	} else {
 		// デフォルトは30日前から
@@ -77,9 +78,9 @@ func (h *StatsHandler) Handle(args []string) error {
 	}
 
 	if until != "" {
-		untilTime, err = time.Parse("2006-01-02", until)
+		untilTime, err = utils.ParseDate(until)
 		if err != nil {
-			return errors.InvalidDateFormat(until).WithCommand("stats")
+			return err.(*errors.FriendlyError).WithCommand("stats")
 		}
 	} else {
 		// デフォルトは現在まで

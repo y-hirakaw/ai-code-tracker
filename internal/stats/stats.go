@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ai-code-tracker/aict/internal/storage"
+	"github.com/ai-code-tracker/aict/internal/utils"
 	"github.com/ai-code-tracker/aict/pkg/types"
 )
 
@@ -108,13 +109,13 @@ func (sm *StatsManager) GetDailyStats(since time.Time, until time.Time) ([]Daily
 	// 日付ごとにイベントをグループ化
 	dailyEventMap := make(map[string][]*types.TrackEvent)
 	for _, event := range events {
-		dateKey := event.Timestamp.Format("2006-01-02")
+		dateKey := utils.FormatDate(event.Timestamp)
 		dailyEventMap[dateKey] = append(dailyEventMap[dateKey], event)
 	}
 
 	var dailyStats []DailyStats
 	for dateStr, dayEvents := range dailyEventMap {
-		date, _ := time.Parse("2006-01-02", dateStr)
+		date, _ := utils.ParseDate(dateStr)
 		
 		stats := DailyStats{
 			Date: date,
