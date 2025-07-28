@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/ai-code-tracker/aict/pkg/types"
+	"github.com/y-hirakaw/ai-code-tracker/pkg/types"
 )
 
 // MigrateJSONLToDuckDB は既存のJSONLデータをDuckDBに移行する

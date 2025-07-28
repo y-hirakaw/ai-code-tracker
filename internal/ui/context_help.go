@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ai-code-tracker/aict/internal/errors"
-	"github.com/ai-code-tracker/aict/internal/i18n"
+	"github.com/y-hirakaw/ai-code-tracker/internal/errors"
+	"github.com/y-hirakaw/ai-code-tracker/internal/i18n"
 )
 
 // ContextHelpProvider はコンテキストに応じたヘルプを提供する

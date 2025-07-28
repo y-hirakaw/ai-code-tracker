@@ -7,10 +7,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ai-code-tracker/aict/internal/i18n"
-	"github.com/ai-code-tracker/aict/internal/web"
-	"github.com/ai-code-tracker/aict/internal/web/handlers"
-	"github.com/ai-code-tracker/aict/internal/web/middleware"
+	"github.com/y-hirakaw/ai-code-tracker/internal/i18n"
+	"github.com/y-hirakaw/ai-code-tracker/internal/web"
+	"github.com/y-hirakaw/ai-code-tracker/internal/web/handlers"
+	"github.com/y-hirakaw/ai-code-tracker/internal/web/middleware"
 )
 
 const (

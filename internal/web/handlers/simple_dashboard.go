@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/ai-code-tracker/aict/internal/i18n"
-	"github.com/ai-code-tracker/aict/internal/web"
-	"github.com/ai-code-tracker/aict/internal/web/middleware"
+	"github.com/y-hirakaw/ai-code-tracker/internal/i18n"
+	"github.com/y-hirakaw/ai-code-tracker/internal/web"
+	"github.com/y-hirakaw/ai-code-tracker/internal/web/middleware"
 )
 
 // SimpleDashboardHandler は簡易ダッシュボードページを処理する

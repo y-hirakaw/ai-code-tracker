@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ai-code-tracker/aict/internal/errors"
-	"github.com/ai-code-tracker/aict/internal/i18n"
+	"github.com/y-hirakaw/ai-code-tracker/internal/errors"
+	"github.com/y-hirakaw/ai-code-tracker/internal/i18n"
 )
 
 // WebHandler はWebダッシュボードコマンドを処理する

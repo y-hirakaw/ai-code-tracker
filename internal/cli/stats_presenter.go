@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ai-code-tracker/aict/internal/errors"
-	"github.com/ai-code-tracker/aict/internal/stats"
-	"github.com/ai-code-tracker/aict/internal/utils"
-	"github.com/ai-code-tracker/aict/pkg/types"
+	"github.com/y-hirakaw/ai-code-tracker/internal/errors"
+	"github.com/y-hirakaw/ai-code-tracker/internal/stats"
+	"github.com/y-hirakaw/ai-code-tracker/internal/utils"
+	"github.com/y-hirakaw/ai-code-tracker/pkg/types"
 )
 
 // StatsPresenter は統計情報の表示を担当する

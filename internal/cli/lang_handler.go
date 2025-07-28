@@ -3,9 +3,9 @@ package cli
 import (
 	"fmt"
 
-	"github.com/ai-code-tracker/aict/internal/errors"
-	"github.com/ai-code-tracker/aict/internal/i18n"
-	"github.com/ai-code-tracker/aict/internal/utils"
+	"github.com/y-hirakaw/ai-code-tracker/internal/errors"
+	"github.com/y-hirakaw/ai-code-tracker/internal/i18n"
+	"github.com/y-hirakaw/ai-code-tracker/internal/utils"
 )
 
 // LangHandler は言語設定コマンドを処理する

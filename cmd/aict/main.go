@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/ai-code-tracker/aict/internal/cli"
+	"github.com/y-hirakaw/ai-code-tracker/internal/cli"
 )
 
 // main はアプリケーションのエントリーポイント

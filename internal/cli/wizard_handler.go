@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ai-code-tracker/aict/internal/interactive"
-	"github.com/ai-code-tracker/aict/internal/ui"
+	"github.com/y-hirakaw/ai-code-tracker/internal/interactive"
+	"github.com/y-hirakaw/ai-code-tracker/internal/ui"
 )
 
 // WizardHandler はwizardコマンドを処理する

@@ -3,11 +3,11 @@ package cli
 import (
 	"time"
 
-	"github.com/ai-code-tracker/aict/internal/errors"
-	"github.com/ai-code-tracker/aict/internal/i18n"
-	"github.com/ai-code-tracker/aict/internal/stats"
-	"github.com/ai-code-tracker/aict/internal/storage"
-	"github.com/ai-code-tracker/aict/internal/utils"
+	"github.com/y-hirakaw/ai-code-tracker/internal/errors"
+	"github.com/y-hirakaw/ai-code-tracker/internal/i18n"
+	"github.com/y-hirakaw/ai-code-tracker/internal/stats"
+	"github.com/y-hirakaw/ai-code-tracker/internal/storage"
+	"github.com/y-hirakaw/ai-code-tracker/internal/utils"
 )
 
 // StatsHandler はstatsコマンドを処理する

@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ai-code-tracker/aict/internal/storage"
-	"github.com/ai-code-tracker/aict/pkg/types"
+	"github.com/y-hirakaw/ai-code-tracker/internal/storage"
+	"github.com/y-hirakaw/ai-code-tracker/pkg/types"
 )
 
 // setupTestEnvironment はテスト環境を準備する

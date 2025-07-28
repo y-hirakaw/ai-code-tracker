@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/ai-code-tracker/aict/pkg/types"
+	"github.com/y-hirakaw/ai-code-tracker/pkg/types"
 	_ "github.com/marcboeker/go-duckdb"
 )
 

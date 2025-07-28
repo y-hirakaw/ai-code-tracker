@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/ai-code-tracker/aict/internal/errors"
+	"github.com/y-hirakaw/ai-code-tracker/internal/errors"
 )
 
 // GetCurrentDirectory は現在のディレクトリを取得する共通関数

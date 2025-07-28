@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ai-code-tracker/aict/internal/storage"
-	"github.com/ai-code-tracker/aict/pkg/types"
+	"github.com/y-hirakaw/ai-code-tracker/internal/storage"
+	"github.com/y-hirakaw/ai-code-tracker/pkg/types"
 )
 
 // BlameInfo は1行のblame情報を表す

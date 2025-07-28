@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ai-code-tracker/aict/pkg/types"
-	"github.com/ai-code-tracker/aict/internal/storage"
+	"github.com/y-hirakaw/ai-code-tracker/pkg/types"
+	"github.com/y-hirakaw/ai-code-tracker/internal/storage"
 )
 
 // Tracker はファイル変更の追跡とイベントの記録を管理する

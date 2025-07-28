@@ -1,10 +1,10 @@
 package cli
 
 import (
-	"github.com/ai-code-tracker/aict/internal/errors"
-	"github.com/ai-code-tracker/aict/internal/i18n"
-	"github.com/ai-code-tracker/aict/internal/ui"
-	"github.com/ai-code-tracker/aict/internal/utils"
+	"github.com/y-hirakaw/ai-code-tracker/internal/errors"
+	"github.com/y-hirakaw/ai-code-tracker/internal/i18n"
+	"github.com/y-hirakaw/ai-code-tracker/internal/ui"
+	"github.com/y-hirakaw/ai-code-tracker/internal/utils"
 )
 
 const (

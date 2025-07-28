@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/ai-code-tracker/aict/pkg/types"
+	"github.com/y-hirakaw/ai-code-tracker/pkg/types"
 )
 
 // StorageInterface は統一されたストレージインターフェース

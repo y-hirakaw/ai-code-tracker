@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"os"
 
-	"github.com/ai-code-tracker/aict/internal/errors"
+	"github.com/y-hirakaw/ai-code-tracker/internal/errors"
 )
 
 // ConfigManager は設定管理の共通インターフェース

@@ -5,9 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ai-code-tracker/aict/internal/errors"
-	"github.com/ai-code-tracker/aict/internal/hooks"
-	"github.com/ai-code-tracker/aict/internal/utils"
+	"github.com/y-hirakaw/ai-code-tracker/internal/errors"
+	"github.com/y-hirakaw/ai-code-tracker/internal/hooks"
+	"github.com/y-hirakaw/ai-code-tracker/internal/utils"
 )
 
 // SetupHandler はsetupコマンドを処理する

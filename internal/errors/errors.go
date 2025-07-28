@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ai-code-tracker/aict/internal/i18n"
+	"github.com/y-hirakaw/ai-code-tracker/internal/i18n"
 )
 
 // ErrorType はエラーの種類を定義する

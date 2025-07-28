@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/ai-code-tracker/aict/internal/errors"
-	"github.com/ai-code-tracker/aict/internal/storage"
-	"github.com/ai-code-tracker/aict/internal/ui"
-	"github.com/ai-code-tracker/aict/internal/utils"
+	"github.com/y-hirakaw/ai-code-tracker/internal/errors"
+	"github.com/y-hirakaw/ai-code-tracker/internal/storage"
+	"github.com/y-hirakaw/ai-code-tracker/internal/ui"
+	"github.com/y-hirakaw/ai-code-tracker/internal/utils"
 )
 
 // InitHandler はinitコマンドを処理する
