@@ -29,8 +29,25 @@ Claude Codeとの完全統合により、透明性のある開発プロセスを
 ### インストール
 ```bash
 # Go 1.19以上が必要
-go install github.com/ai-code-tracker/aict/cmd/aict@latest
+go install github.com/y-hirakaw/ai-code-tracker/cmd/aict@latest
 ```
+
+#### PATH設定（初回のみ）
+インストール後、コマンドが見つからない場合はPATHを設定してください：
+
+```bash
+# 一時的に使用する場合
+export PATH=$PATH:$HOME/go/bin
+
+# 永続的に設定する場合（推奨）
+echo 'export PATH=$PATH:$HOME/go/bin' >> ~/.zshrc
+source ~/.zshrc
+
+# 設定確認
+aict version
+```
+
+**注意**: `~/.bashrc`を使用している場合は`.zshrc`を`.bashrc`に置き換えてください。
 
 ### 初期設定
 ```bash
@@ -235,6 +252,56 @@ export AICT_ENCRYPT_DATA=true  # データ暗号化
 | 追跡記録 | 45ms | 100ms | ✅ |
 | Blame表示 | 280ms | 500ms | ✅ |
 | 統計計算 | 750ms | 1000ms | ✅ |
+
+## 🛠️ トラブルシューティング
+
+### インストール関連
+
+#### `command not found: aict`
+```bash
+# GOPATH確認
+go env GOPATH
+
+# バイナリ存在確認
+ls -la $(go env GOPATH)/bin/aict
+
+# PATH設定
+export PATH=$PATH:$(go env GOPATH)/bin
+
+# 永続化
+echo 'export PATH=$PATH:$(go env GOPATH)/bin' >> ~/.zshrc
+```
+
+#### `repository not found`エラー
+正しいリポジトリURLを使用してください：
+```bash
+# ❌ 間違い
+go install github.com/ai-code-tracker/aict/cmd/aict@latest
+
+# ✅ 正しい
+go install github.com/y-hirakaw/ai-code-tracker/cmd/aict@latest
+```
+
+### 使用時のエラー
+
+#### `git repository not found`
+```bash
+# Gitリポジトリかチェック
+git status
+
+# 未初期化の場合
+git init
+aict init
+```
+
+#### `no tracking data found`
+```bash
+# 初期化が必要
+aict init
+
+# 手動でトラッキング
+aict track --ai --files "*.go" --message "initial tracking"
+```
 
 ## 📄 ライセンス
 
