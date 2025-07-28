@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"github.com/ai-code-tracker/aict/internal/blame"
+	"github.com/ai-code-tracker/aict/internal/errors"
 	"github.com/ai-code-tracker/aict/internal/hooks"
+	"github.com/ai-code-tracker/aict/internal/i18n"
 	"github.com/ai-code-tracker/aict/internal/interactive"
 	"github.com/ai-code-tracker/aict/internal/stats"
 	"github.com/ai-code-tracker/aict/internal/storage"
@@ -38,6 +40,12 @@ type Command struct {
 
 // main はアプリケーションのエントリーポイント
 func main() {
+	// i18nシステムを初期化
+	i18n.Initialize()
+	
+	// エラーフォーマッターを初期化
+	errors.InitializeFormatter()
+	
 	// ヘルプシステムを初期化
 	helpSystem = ui.NewHelpSystem(AppName, Version)
 	
@@ -99,12 +107,19 @@ func main() {
 
 	cmd, exists := commands[command]
 	if !exists {
-		helpSystem.ShowError(fmt.Errorf("不明なコマンド: %s", command), "")
+		friendlyErr := errors.UnknownCommand(command)
+		fmt.Fprint(os.Stderr, errors.FormatError(friendlyErr))
 		os.Exit(1)
 	}
 
 	if err := cmd.Handler(args); err != nil {
-		helpSystem.ShowError(err, command)
+		// エラーが既にFriendlyErrorの場合はそのまま使用、そうでなければラップ
+		if friendlyErr, ok := err.(*errors.FriendlyError); ok {
+			fmt.Fprint(os.Stderr, errors.FormatError(friendlyErr.WithCommand(command)))
+		} else {
+			friendlyErr := errors.WrapError(err, errors.ErrorTypeGeneral, "generic_error").WithCommand(command)
+			fmt.Fprint(os.Stderr, errors.FormatError(friendlyErr))
+		}
 		os.Exit(1)
 	}
 }
@@ -115,17 +130,17 @@ func handleInit(args []string) error {
 	// 現在のディレクトリがGitリポジトリかチェック
 	currentDir, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("現在のディレクトリの取得に失敗しました: %w", err)
+		return errors.WrapError(err, errors.ErrorTypeFile, "directory_access_failed")
 	}
 
 	if !tracker.IsGitRepo(currentDir) {
-		return fmt.Errorf("現在のディレクトリはGitリポジトリではありません")
+		return errors.GitNotRepository()
 	}
 
 	// ストレージを初期化
 	storage, err := storage.NewStorage("")
 	if err != nil {
-		return fmt.Errorf("ストレージの初期化に失敗しました: %w", err)
+		return errors.WrapError(err, errors.ErrorTypeData, "storage_initialization_failed")
 	}
 	defer storage.Close()
 
@@ -182,7 +197,8 @@ func handleTrack(args []string) error {
 		if isAI {
 			author = "Claude Code"
 		} else {
-			return fmt.Errorf("--author が必須です")
+			return errors.NewError(errors.ErrorTypeCommand, "missing_required_option", "--author").
+				WithSuggestions(i18n.T("suggestion_specify_author", "--author オプションで作成者を指定してください"))
 		}
 	}
 
@@ -193,13 +209,13 @@ func handleTrack(args []string) error {
 	// 現在のディレクトリを取得
 	currentDir, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("現在のディレクトリの取得に失敗しました: %w", err)
+		return errors.WrapError(err, errors.ErrorTypeFile, "directory_access_failed")
 	}
 
 	// ストレージとトラッカーを初期化
 	storage, err := storage.NewStorage("")
 	if err != nil {
-		return fmt.Errorf("ストレージの初期化に失敗しました: %w", err)
+		return errors.WrapError(err, errors.ErrorTypeData, "storage_initialization_failed")
 	}
 	defer storage.Close()
 
@@ -216,7 +232,7 @@ func handleTrack(args []string) error {
 		// ファイルが指定されていない場合、変更されたファイルを自動検出
 		detectedFiles, err := tracker.DetectChangedFiles()
 		if err != nil {
-			return fmt.Errorf("変更ファイルの検出に失敗しました: %w", err)
+			return errors.WrapError(err, errors.ErrorTypeGit, "git_command_failed", "git diff")
 		}
 		files = detectedFiles
 	}
@@ -235,7 +251,7 @@ func handleTrack(args []string) error {
 	// トラッキングを実行
 	err = tracker.TrackFileChanges(eventType, author, model, files, message)
 	if err != nil {
-		return fmt.Errorf("トラッキングに失敗しました: %w", err)
+		return errors.WrapError(err, errors.ErrorTypeData, "tracking_failed")
 	}
 
 	fmt.Printf("✓ %d個のファイルの変更を追跡しました\n", len(files))
@@ -301,7 +317,7 @@ func handleStats(args []string) error {
 	if since != "" {
 		sinceTime, err = time.Parse("2006-01-02", since)
 		if err != nil {
-			return fmt.Errorf("since日付の形式が不正です (YYYY-MM-DD): %w", err)
+			return errors.InvalidDateFormat(since).WithCommand("stats")
 		}
 	} else {
 		// デフォルトは30日前から
@@ -311,7 +327,7 @@ func handleStats(args []string) error {
 	if until != "" {
 		untilTime, err = time.Parse("2006-01-02", until)
 		if err != nil {
-			return fmt.Errorf("until日付の形式が不正です (YYYY-MM-DD): %w", err)
+			return errors.InvalidDateFormat(until).WithCommand("stats")
 		}
 	} else {
 		// デフォルトは現在まで
@@ -321,7 +337,7 @@ func handleStats(args []string) error {
 	// ストレージを初期化
 	storage, err := storage.NewStorage("")
 	if err != nil {
-		return fmt.Errorf("ストレージの初期化に失敗しました: %w", err)
+		return errors.WrapError(err, errors.ErrorTypeData, "storage_initialization_failed")
 	}
 	defer storage.Close()
 
@@ -351,7 +367,7 @@ func handleStats(args []string) error {
 	// 基本統計情報を取得
 	basicStats, err := storage.GetStatistics()
 	if err != nil {
-		return fmt.Errorf("統計情報の取得に失敗しました: %w", err)
+		return errors.WrapError(err, errors.ErrorTypeData, "statistics_fetch_failed")
 	}
 
 	// 作成者フィルタ処理
@@ -369,7 +385,10 @@ func handleStats(args []string) error {
 	case "summary":
 		showStatsSummary(basicStats)
 	default:
-		return fmt.Errorf("不明な出力形式: %s", format)
+		return errors.NewError(errors.ErrorTypeCommand, "invalid_output_format", format).
+			WithSuggestions(
+				i18n.T("suggestion_valid_formats", "有効な形式: table, json, summary, daily, files, contributors"),
+			).WithCommand("stats")
 	}
 
 	return nil
@@ -459,7 +478,10 @@ func showStatsSummary(stats *types.Statistics) {
 // handleBlame はファイルのblame情報を表示する
 func handleBlame(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("ファイルパスが必要です")
+		return errors.NewError(errors.ErrorTypeCommand, "missing_required_argument", "file_path").
+			WithSuggestions(
+				i18n.T("suggestion_specify_file", "例: aict blame src/main.go"),
+			).WithCommand("blame")
 	}
 
 	var (
@@ -488,13 +510,13 @@ func handleBlame(args []string) error {
 	// 現在のディレクトリを取得
 	currentDir, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("現在のディレクトリの取得に失敗しました: %w", err)
+		return errors.WrapError(err, errors.ErrorTypeFile, "directory_access_failed")
 	}
 
 	// ストレージを初期化
 	storage, err := storage.NewStorage("")
 	if err != nil {
-		return fmt.Errorf("ストレージの初期化に失敗しました: %w", err)
+		return errors.WrapError(err, errors.ErrorTypeData, "storage_initialization_failed")
 	}
 	defer storage.Close()
 
@@ -503,7 +525,7 @@ func handleBlame(args []string) error {
 
 	// ファイルパスを検証
 	if err := blamer.ValidateFilePath(filePath); err != nil {
-		return fmt.Errorf("ファイル検証エラー: %w", err)
+		return errors.FileNotFound(filePath).WithCommand("blame")
 	}
 
 	if showStats || topN > 0 {
@@ -511,7 +533,7 @@ func handleBlame(args []string) error {
 		if topN > 0 {
 			contributors, err := blamer.GetTopContributors(filePath, topN)
 			if err != nil {
-				return fmt.Errorf("貢献者情報の取得に失敗しました: %w", err)
+				return errors.WrapError(err, errors.ErrorTypeData, "contributor_fetch_failed")
 			}
 
 			fmt.Printf("=== %s の上位貢献者 ===\n\n", filePath)
@@ -527,7 +549,7 @@ func handleBlame(args []string) error {
 			// 貢献者別統計のみ表示
 			contribution, err := blamer.GetFileContribution(filePath)
 			if err != nil {
-				return fmt.Errorf("貢献者情報の取得に失敗しました: %w", err)
+				return errors.WrapError(err, errors.ErrorTypeData, "contributor_fetch_failed")
 			}
 
 			fmt.Printf("=== %s の貢献者統計 ===\n\n", filePath)
@@ -539,7 +561,7 @@ func handleBlame(args []string) error {
 		// 通常のblame表示
 		result, err := blamer.BlameFile(filePath)
 		if err != nil {
-			return fmt.Errorf("Blame情報の取得に失敗しました: %w", err)
+			return errors.WrapError(err, errors.ErrorTypeGit, "blame_fetch_failed")
 		}
 
 		// フォーマットして出力
