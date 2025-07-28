@@ -32,6 +32,7 @@ AIが生成したコードと人間が書いたコードを自動的に区別・
 - **動的言語切り替え**: `aict lang ja/en` でリアルタイム切り替え
 - **コンテキストヘルプ**: 状況に応じた適切なエラーメッセージとヒント
 - **モダンCLI**: 絵文字・カラー対応の見やすいインターフェース
+- **Webダッシュボード**: ブラウザベースのリアルタイム統計表示
 
 ### ⚡ 高性能
 - トラッキング作成: 50ms（目標100ms）
@@ -43,6 +44,7 @@ AIが生成したコードと人間が書いたコードを自動的に区別・
 - [インストール](#インストール)
 - [クイックスタート](#クイックスタート)
 - [基本的な使用法](#基本的な使用法)
+- [Webダッシュボード](#webダッシュボード)
 - [セキュリティ機能](#セキュリティ機能)
 - [コマンドリファレンス](#コマンドリファレンス)
 - [設定](#設定)
@@ -160,6 +162,67 @@ aict backup --output backup.tar.gz
 aict config --list
 ```
 
+## 🌐 Webダッシュボード
+
+### ダッシュボードの起動
+```bash
+# デフォルトポート（8080）でダッシュボード起動
+aict web
+
+# カスタムポートで起動
+aict web -p 3000
+
+# 英語でダッシュボード起動
+aict web -l en
+
+# デバッグモードで起動
+aict web --debug
+
+# ブラウザを自動で開かずに起動
+aict web --no-browser
+```
+
+### 機能一覧
+- **リアルタイム統計**: WebSocket経由でのライブ更新
+- **多言語対応**: 日本語・英語のWebインターフェース
+- **レスポンシブデザイン**: モバイル・デスクトップ対応
+- **統計チャート**: Chart.jsによる視覚的なデータ表示
+- **REST API**: プログラマティックアクセス
+
+### REST API エンドポイント
+```bash
+# ヘルスチェック
+GET /api/health
+
+# 統計データ
+GET /api/stats
+
+# 貢献者リスト
+GET /api/contributors
+
+# タイムライン
+GET /api/timeline?limit=50
+
+# ファイル統計
+GET /api/files
+
+# ファイル別blame情報
+GET /api/blame/{file_path}
+
+# WebSocketリアルタイム更新
+WS /ws
+```
+
+### ダッシュボードページ
+```bash
+# アクセス例（ポート8080の場合）
+http://localhost:8080/dashboard      # メインダッシュボード
+http://localhost:8080/contributors   # 貢献者ページ
+http://localhost:8080/files         # ファイル統計ページ
+http://localhost:8080/timeline      # タイムラインページ
+http://localhost:8080/settings      # 設定ページ
+```
+
 ## 🛡️ セキュリティ機能
 
 ### データ暗号化
@@ -222,6 +285,7 @@ aict security scan --output report.json
 | `stats` | 統計表示 | `aict stats --summary` |
 | `lang` | 言語設定管理 | `aict lang ja --persistent` |
 | `wizard` | 設定ウィザード | `aict wizard` |
+| `web` | Webダッシュボード起動 | `aict web -p 3000` |
 
 ### セキュリティコマンド
 | コマンド | 説明 | 例 |
@@ -300,6 +364,7 @@ export AICT_EXCLUDE_SENSITIVE=true
 ai-code-tracker/
 ├── cmd/                    # CLIアプリケーション
 │   ├── aict/              # メインCLI
+│   ├── aict-web/          # Webダッシュボード
 │   └── aict-bench/        # ベンチマークツール
 ├── internal/              # 内部パッケージ
 │   ├── tracker/           # コアトラッキング
@@ -308,6 +373,7 @@ ai-code-tracker/
 │   ├── stats/             # 統計処理
 │   ├── storage/           # データ永続化
 │   ├── security/          # セキュリティ機能
+│   ├── web/               # Webダッシュボード機能
 │   ├── i18n/              # 国際化システム
 │   ├── ui/                # ヘルプ・UI機能
 │   ├── cli/               # CLIコマンドハンドラー
@@ -470,12 +536,13 @@ MIT License - 詳細は[LICENSE](LICENSE)を参照してください。
 ## 🏷️ バージョン履歴
 
 - **v0.1.0** (2025-01-28) - **完成版リリース**
-  - Phase 1-19 全機能実装完了
+  - Phase 1-20 全機能実装完了
   - 多言語対応（日本語・英語）
   - 動的言語切り替え機能
   - コンテキストアウェアヘルプシステム
   - モジュラー設計とクリーンアーキテクチャ
   - 包括的セキュリティ機能
+  - Webダッシュボード統合機能
   - ユーザーフレンドリーなCLI体験
 
 ## 🆘 サポート

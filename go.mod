@@ -2,4 +2,7 @@ module github.com/ai-code-tracker/aict
 
 go 1.24.2
 
-require golang.org/x/crypto v0.40.0 // indirect
+require (
+	github.com/gorilla/websocket v1.5.0
+	golang.org/x/crypto v0.40.0
+)

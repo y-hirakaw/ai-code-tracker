@@ -26,6 +26,7 @@ type CommandHandler struct {
 	configHandler  *ConfigHandler
 	wizardHandler  *WizardHandler
 	langHandler    *LangHandler
+	webHandler     *WebHandler
 	versionHandler *VersionHandler
 	helpHandler    *HelpHandler
 }
@@ -46,6 +47,7 @@ func NewCommandHandler(helpSystem *ui.HelpSystem) *CommandHandler {
 	ch.configHandler = NewConfigHandler()
 	ch.wizardHandler = NewWizardHandler(helpSystem)
 	ch.langHandler = NewLangHandler()
+	ch.webHandler = NewWebHandler()
 	ch.versionHandler = NewVersionHandler()
 	ch.helpHandler = NewHelpHandler(helpSystem)
 	
@@ -97,6 +99,11 @@ func (ch *CommandHandler) registerCommands() {
 			Name:        "lang",
 			Description: "言語設定を管理する",
 			Handler:     ch.langHandler.Handle,
+		},
+		"web": {
+			Name:        "web",
+			Description: "Webダッシュボードを起動する",
+			Handler:     ch.webHandler.Handle,
 		},
 		"version": {
 			Name:        "version",

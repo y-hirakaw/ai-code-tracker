@@ -315,6 +315,7 @@ aict stats --summary
 - ✅ **Phase 17**: 共通ユーティリティの抽出と統合
 - ✅ **Phase 18**: コンテキストアウェアなヘルプメッセージ
 - ✅ **Phase 19**: 動的言語切り替え機能
+- ✅ **Phase 20**: Webダッシュボード統合機能
 
 ### 7.3 完成した主要機能
 - ✅ **多言語対応**: 日本語・英語の完全対応（i18n）
@@ -324,27 +325,91 @@ aict stats --summary
 - ✅ **モジュラー設計**: 責務分離されたクリーンなアーキテクチャ
 - ✅ **設定ウィザード**: インタラクティブセットアップ機能
 - ✅ **CLI UX**: 絵文字・カラー対応の見やすいインターフェース
+- ✅ **Webダッシュボード**: ブラウザベースのリアルタイム統計表示
 
-## 8. 今後の拡張計画
+## 8. Webダッシュボード機能詳細
 
-### Phase 20（統合機能 - 計画中）
-- 🔄 Webダッシュボード
+### 8.1 Phase 20完成機能
+- ✅ **独立Webサーバー**: `aict-web` バイナリによる完全独立動作
+- ✅ **リアルタイム統計**: WebSocket経由でのライブ更新
+- ✅ **多言語Webインターフェース**: 日本語・英語のWebUI
+- ✅ **レスポンシブデザイン**: Bootstrap 5 + Chart.js統合
+- ✅ **RESTful API**: 全統計データへのAPI アクセス
+- ✅ **セキュリティ機能**: CORS、セキュリティヘッダー、入力検証
+
+### 8.2 Webダッシュボード仕様
+
+#### アーキテクチャ
+```
+Browser ←→ aict-web (HTTP/WebSocket) ←→ .git/ai-tracker/
+                ↓
+        Bootstrap UI + Chart.js
+```
+
+#### API エンドポイント
+```
+GET  /api/health          # ヘルスチェック
+GET  /api/stats           # 統計データ（JSON）
+GET  /api/contributors    # 貢献者リスト
+GET  /api/timeline        # タイムライン情報
+GET  /api/files           # ファイル統計
+GET  /api/blame/{file}    # ファイル別blame情報
+WS   /ws                  # WebSocketリアルタイム更新
+```
+
+#### ページ構成
+```
+/                    # インデックス（→ダッシュボード）
+/dashboard           # メインダッシュボード
+/contributors        # 貢献者ページ
+/files              # ファイル統計ページ
+/timeline           # タイムラインページ
+/settings           # 設定ページ
+```
+
+### 8.3 使用方法
+```bash
+# CLI統合起動
+aict web                          # デフォルト（ポート8080）
+aict web -p 3000                  # カスタムポート
+aict web -l en --debug            # 英語+デバッグモード
+aict web --no-browser             # ブラウザを開かない
+
+# 直接起動
+go build ./cmd/aict-web
+./aict-web -port 8080 -lang ja
+
+# アクセス
+http://localhost:8080/dashboard   # メインダッシュボード
+```
+
+### 8.4 技術スタック
+- **Backend**: Go HTTP Server + Gorilla WebSocket
+- **Frontend**: Bootstrap 5 + Chart.js + Vanilla JavaScript
+- **データ形式**: JSON API + JSONL ストレージ
+- **リアルタイム**: WebSocket による双方向通信
+- **多言語**: i18nシステム統合（日本語・英語）
+
+## 9. 今後の拡張計画
+
+### Phase 21（統合機能拡張 - 計画中）
 - 🔄 VSCode拡張機能
 - 🔄 より詳細な差分解析
+- 🔄 Webダッシュボード機能拡張
 
-### Phase 21（エコシステム - 計画中）
+### Phase 22（エコシステム - 計画中）
 - 🔄 他のAIツール対応（GitHub Copilot等）
 - 🔄 チーム分析機能
 - 🔄 クラウド統計ダッシュボード
 
-### Phase 22（高度な分析 - 計画中）
+### Phase 23（高度な分析 - 計画中）
 - 🔄 AIコード品質評価
 - 🔄 機械学習による最適化提案
 - 🔄 開発プロセス分析
 
-## 9. パフォーマンス実測値
+## 10. パフォーマンス実測値
 
-### 9.1 基本操作
+### 10.1 基本操作
 - **Track作成**: 平均 45ms（目標: 100ms）
 - **Blame表示**: 平均 280ms（目標: 500ms）
 - **統計計算**: 平均 750ms（目標: 1000ms）

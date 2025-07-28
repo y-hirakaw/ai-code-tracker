@@ -62,6 +62,7 @@ func (h *HelpSystem) showCommands() {
 		{"setup", "Git hooks と Claude Code hooks を自動設定", "設定", "🔧"},
 		{"wizard", "インタラクティブセットアップウィザード", "設定", "🧙"},
 		{"lang", "言語設定を管理", "設定", "🌐"},
+		{"web", "Webダッシュボードを起動", "分析", "🌐"},
 		{"security", "セキュリティ機能を管理", "セキュリティ", "🔒"},
 		{"version", "バージョン情報を表示", "情報", "ℹ️"},
 		{"help", "ヘルプを表示", "情報", "❓"},
@@ -157,6 +158,8 @@ func (h *HelpSystem) ShowCommandHelp(command string) {
 		h.showWizardHelp()
 	case "lang":
 		h.showLangHelp()
+	case "web":
+		h.showWebHelp()
 	case "security":
 		h.showSecurityHelp()
 	default:
@@ -377,6 +380,44 @@ func (h *HelpSystem) showLangHelp() {
   AICT_LANGUAGE       デフォルト言語 (ja|en)
 
 `, h.appName, h.appName, h.appName, h.appName, h.appName, h.appName, h.appName)
+}
+
+func (h *HelpSystem) showWebHelp() {
+	fmt.Printf(`🌐 %s web - Webダッシュボード
+
+説明:
+  ブラウザベースのリアルタイムダッシュボードを起動します。
+  AI/人間のコード統計、ファイル分析、タイムラインなどを視覚的に表示します。
+
+使用方法:
+  %s web [options]
+
+オプション:
+  -p, --port <port>     サーバーポート（デフォルト: 8080）
+  -l, --lang <lang>     表示言語（ja|en、デフォルト: ja）
+  -d, --debug          デバッグモードを有効化
+      --data <dir>     データディレクトリを指定
+      --no-browser     ブラウザを自動で開かない
+
+機能:
+  • リアルタイム統計更新
+  • 多言語対応インターフェース
+  • レスポンシブデザイン
+  • インタラクティブチャート
+  • ファイル別詳細分析
+  • 貢献者別統計
+  • タイムライン表示
+
+例:
+  %s web                          # デフォルト設定で起動
+  %s web -p 3000                  # ポート3000で起動
+  %s web -l en --debug            # 英語+デバッグモードで起動
+  %s web --no-browser             # ブラウザを開かずに起動
+
+アクセス:
+  http://localhost:8080           # デフォルトURL
+
+`, h.appName, h.appName, h.appName, h.appName, h.appName, h.appName)
 }
 
 func (h *HelpSystem) showSecurityHelp() {

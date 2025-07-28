@@ -1,0 +1,6 @@
+2025/07/28 21:11:44 🌐 AI Code Tracker Web Dashboard starting on port 3001
+2025/07/28 21:11:44 📁 Data directory: /Users/y-hirakawa/git/ai-code-tracker/.git/ai-tracker
+2025/07/28 21:11:44 🗣️  Language: ja
+2025/07/28 21:11:50 GET /api/health 200 170.542µs curl/8.7.1
+2025/07/28 21:11:53 GET /api/stats 0 348.667µs curl/8.7.1
+2025/07/28 21:11:57 GET /dashboard 0 136.666µs curl/8.7.1
