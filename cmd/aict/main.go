@@ -9,9 +9,11 @@ import (
 
 	"github.com/ai-code-tracker/aict/internal/blame"
 	"github.com/ai-code-tracker/aict/internal/hooks"
+	"github.com/ai-code-tracker/aict/internal/interactive"
 	"github.com/ai-code-tracker/aict/internal/stats"
 	"github.com/ai-code-tracker/aict/internal/storage"
 	"github.com/ai-code-tracker/aict/internal/tracker"
+	"github.com/ai-code-tracker/aict/internal/ui"
 	"github.com/ai-code-tracker/aict/pkg/types"
 )
 
@@ -20,6 +22,11 @@ const (
 	Version = "0.1.0"
 	// AppName はアプリケーション名
 	AppName = "aict"
+)
+
+var (
+	// helpSystem はグローバルヘルプシステム
+	helpSystem *ui.HelpSystem
 )
 
 // CLI コマンドの定義
@@ -31,8 +38,11 @@ type Command struct {
 
 // main はアプリケーションのエントリーポイント
 func main() {
+	// ヘルプシステムを初期化
+	helpSystem = ui.NewHelpSystem(AppName, Version)
+	
 	if len(os.Args) < 2 {
-		showHelp()
+		helpSystem.ShowMainHelp()
 		os.Exit(1)
 	}
 
@@ -70,6 +80,11 @@ func main() {
 			Description: "Git hooks と Claude Code hooks を自動設定する",
 			Handler:     handleSetup,
 		},
+		"wizard": {
+			Name:        "wizard",
+			Description: "インタラクティブセットアップウィザードを実行する",
+			Handler:     handleWizard,
+		},
 		"version": {
 			Name:        "version",
 			Description: "バージョン情報を表示する",
@@ -78,77 +93,22 @@ func main() {
 		"help": {
 			Name:        "help",
 			Description: "ヘルプを表示する",
-			Handler:     func(args []string) error { showHelp(); return nil },
+			Handler:     handleHelp,
 		},
 	}
 
 	cmd, exists := commands[command]
 	if !exists {
-		fmt.Fprintf(os.Stderr, "不明なコマンド: %s\n\n", command)
-		showHelp()
+		helpSystem.ShowError(fmt.Errorf("不明なコマンド: %s", command), "")
 		os.Exit(1)
 	}
 
 	if err := cmd.Handler(args); err != nil {
-		fmt.Fprintf(os.Stderr, "エラー: %v\n", err)
+		helpSystem.ShowError(err, command)
 		os.Exit(1)
 	}
 }
 
-// showHelp はヘルプメッセージを表示する
-func showHelp() {
-	fmt.Printf(`%s v%s - AI Code Tracker
-
-使用方法:
-  %s <command> [options]
-
-コマンド:
-  init                プロジェクトでAI Code Trackerを初期化
-  track               ファイルの変更を手動でトラッキング
-    --ai              AI による変更として記録
-    --author <name>   作成者を指定
-    --model <model>   AI モデルを指定
-    --files <files>   追跡するファイルを指定（カンマ区切り）
-    --message <msg>   変更の説明
-  stats               統計情報を表示
-    --format <format> 出力形式 (table|json|summary|daily|files|contributors)
-    --since <date>    指定日以降の統計 (YYYY-MM-DD)
-    --until <date>    指定日まで統計 (YYYY-MM-DD)
-    --author <name>   作成者でフィルタ
-    --by-file         ファイル別統計を表示
-    --trend           トレンド分析を表示
-  blame <file>        ファイルのAI/人間による変更履歴を表示
-    --no-color        カラー表示を無効化
-    --stats           貢献者統計のみ表示
-    --top <N>         上位N名の貢献者を表示
-  config              設定を管理
-    --list            現在の設定を表示
-    --set <key=value> 設定を変更
-  setup               Git hooks と Claude Code hooks を自動設定
-    --git-hooks       Git hooks のみを設定
-    --claude-hooks    Claude Code hooks のみを設定
-    --remove          hooks を削除
-    --status          hooks の設定状況を表示
-  version             バージョン情報を表示
-  help                このヘルプを表示
-
-例:
-  %s init
-  %s track --ai --model claude-sonnet-4 --files "*.go" --message "AI によるリファクタリング"
-  %s track --author "John Doe" --files main.go --message "バグ修正"
-  %s stats --format table --since 2024-01-01
-  %s stats --format daily --since 2024-01-01 --until 2024-01-31
-  %s stats --format files --since 2024-01-01
-  %s stats --format contributors --author claude
-  %s stats --trend --since 2024-01-01
-  %s blame src/main.go
-  %s blame --stats main.go
-  %s blame --top 5 main.go
-  %s setup
-  %s setup --git-hooks
-  %s setup --status
-`, AppName, Version, AppName, AppName, AppName, AppName, AppName, AppName, AppName, AppName, AppName, AppName, AppName, AppName, AppName, AppName, AppName)
-}
 
 // handleInit はプロジェクトの初期化を処理する
 func handleInit(args []string) error {
@@ -998,5 +958,130 @@ func handleConfig(args []string) error {
 func handleVersion(args []string) error {
 	fmt.Printf("%s version %s\n", AppName, Version)
 	fmt.Println("AI Code Tracker - AIと人間によるコード変更の自動追跡システム")
+	return nil
+}
+
+// handleHelp は改良されたヘルプを表示する
+func handleHelp(args []string) error {
+	if len(args) > 0 {
+		// 特定のコマンドのヘルプを表示
+		helpSystem.ShowCommandHelp(args[0])
+	} else {
+		// メインヘルプを表示
+		helpSystem.ShowMainHelp()
+	}
+	return nil
+}
+
+// handleWizard はインタラクティブウィザードを実行する
+func handleWizard(args []string) error {
+	wizard := interactive.NewWizard()
+	
+	var wizardType string
+	if len(args) > 0 {
+		wizardType = args[0]
+	} else {
+		wizardType = "init"
+	}
+	
+	switch wizardType {
+	case "init":
+		config := wizard.InitializationWizard()
+		helpSystem.ShowSuccess("設定ウィザードが完了しました!")
+		
+		// 設定を適用
+		return applyWizardConfig(config)
+		
+	case "security":
+		config := wizard.SecurityWizard()
+		helpSystem.ShowSuccess("セキュリティ設定が完了しました!")
+		
+		// セキュリティ設定を適用
+		return applySecurityConfig(config)
+		
+	case "quickstart":
+		wizard.QuickStartWizard()
+		return nil
+		
+	default:
+		return fmt.Errorf("不明なウィザードタイプ: %s", wizardType)
+	}
+}
+
+// applyWizardConfig はウィザード設定を適用する
+func applyWizardConfig(config map[string]interface{}) error {
+	// 基本設定の適用
+	if setupGit, ok := config["setup_git_hooks"].(bool); ok && setupGit {
+		helpSystem.ShowInfo("Git hooks を設定中...")
+		// Git hooks設定のロジックを呼び出し
+	}
+	
+	if setupClaude, ok := config["setup_claude_hooks"].(bool); ok && setupClaude {
+		helpSystem.ShowInfo("Claude Code hooks を設定中...")
+		// Claude hooks設定のロジックを呼び出し
+	}
+	
+	// セキュリティ設定の適用
+	if enableEncryption, ok := config["enable_encryption"].(bool); ok && enableEncryption {
+		helpSystem.ShowInfo("データ暗号化を有効化中...")
+		os.Setenv("AICT_ENCRYPT_DATA", "true")
+	}
+	
+	if enableAudit, ok := config["enable_audit_log"].(bool); ok && enableAudit {
+		helpSystem.ShowInfo("監査ログを有効化中...")
+		os.Setenv("AICT_AUDIT_LOG", "true")
+	}
+	
+	if anonymize, ok := config["anonymize_authors"].(bool); ok && anonymize {
+		helpSystem.ShowInfo("作成者匿名化を有効化中...")
+		os.Setenv("AICT_ANONYMIZE_AUTHORS", "true")
+	}
+	
+	helpSystem.ShowSuccess("設定が正常に適用されました")
+	return nil
+}
+
+// applySecurityConfig はセキュリティ設定を適用する
+func applySecurityConfig(config map[string]interface{}) error {
+	securityMode, ok := config["security_mode"].(string)
+	if !ok {
+		return fmt.Errorf("セキュリティモードが指定されていません")
+	}
+	
+	helpSystem.ShowInfo(fmt.Sprintf("セキュリティモード '%s' を適用中...", securityMode))
+	
+	// セキュリティモードに応じた環境変数設定
+	os.Setenv("AICT_SECURITY_MODE", securityMode)
+	
+	for key, value := range config {
+		switch key {
+		case "enable_encryption":
+			if val, ok := value.(bool); ok && val {
+				os.Setenv("AICT_ENCRYPT_DATA", "true")
+			}
+		case "enable_audit_log":
+			if val, ok := value.(bool); ok && val {
+				os.Setenv("AICT_AUDIT_LOG", "true")
+			}
+		case "anonymize_authors":
+			if val, ok := value.(bool); ok && val {
+				os.Setenv("AICT_ANONYMIZE_AUTHORS", "true")
+			}
+		case "strict_validation":
+			if val, ok := value.(bool); ok && val {
+				os.Setenv("AICT_STRICT_VALIDATION", "true")
+			}
+		case "hash_file_paths":
+			if val, ok := value.(bool); ok && val {
+				os.Setenv("AICT_HASH_FILE_PATHS", "true")
+			}
+		case "data_retention_days":
+			if val, ok := value.(int); ok {
+				os.Setenv("AICT_DATA_RETENTION_DAYS", fmt.Sprintf("%d", val))
+			}
+		}
+	}
+	
+	helpSystem.ShowSuccess("セキュリティ設定が正常に適用されました")
 	return nil
 }

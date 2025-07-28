@@ -10,9 +10,9 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/ai-code-tracker/internal/storage"
-	"github.com/ai-code-tracker/internal/tracker"
-	"github.com/ai-code-tracker/pkg/types"
+	"github.com/ai-code-tracker/aict/internal/storage"
+	"github.com/ai-code-tracker/aict/internal/tracker"
+	"github.com/ai-code-tracker/aict/pkg/types"
 )
 
 // ベンチマーク設定
@@ -78,9 +78,9 @@ func benchmarkTracking(config *BenchConfig) *BenchResult {
 			Files: []types.FileInfo{
 				{
 					Path:         fmt.Sprintf("test/file_%d.go", i%config.NumFiles),
-					LinesAdded:   10 + i%50,
-					LinesDeleted: i % 20,
-					LinesChanged: 5 + i%30,
+					LinesAdded:    10 + i%50,
+					LinesDeleted:  i % 20,
+					LinesModified: 5 + i%30,
 				},
 			},
 		}
@@ -151,10 +151,10 @@ func benchmarkStatistics(config *BenchConfig) *BenchResult {
 			Message:   fmt.Sprintf("統計ベンチマークイベント %d", i),
 			Files: []types.FileInfo{
 				{
-					Path:         fmt.Sprintf("src/module_%d.go", i%config.NumFiles),
-					LinesAdded:   i % 100,
-					LinesDeleted: i % 50,
-					LinesChanged: i % 75,
+					Path:          fmt.Sprintf("src/module_%d.go", i%config.NumFiles),
+					LinesAdded:    i % 100,
+					LinesDeleted:  i % 50,
+					LinesModified: i % 75,
 				},
 			},
 		}
