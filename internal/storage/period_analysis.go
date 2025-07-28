@@ -448,6 +448,25 @@ func ParsePeriodExpression(expr string) (start, end time.Time, err error) {
 			   time.Date(year, 12, 31, 23, 59, 59, 999999999, time.Local), nil
 	
 	default:
+		// 日付形式（YYYY-MM-DD）の解析を試行
+		if date, err := time.Parse("2006-01-02", expr); err == nil {
+			return time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.Local),
+				   time.Date(date.Year(), date.Month(), date.Day(), 23, 59, 59, 999999999, time.Local), nil
+		}
+		
+		// 日付形式（YYYY/MM/DD）の解析を試行
+		if date, err := time.Parse("2006/01/02", expr); err == nil {
+			return time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.Local),
+				   time.Date(date.Year(), date.Month(), date.Day(), 23, 59, 59, 999999999, time.Local), nil
+		}
+		
+		// 月指定（YYYY-MM）の解析を試行
+		if date, err := time.Parse("2006-01", expr); err == nil {
+			startOfMonth := time.Date(date.Year(), date.Month(), 1, 0, 0, 0, 0, time.Local)
+			endOfMonth := startOfMonth.AddDate(0, 1, -1).Add(time.Hour*23 + time.Minute*59 + time.Second*59 + time.Nanosecond*999999999)
+			return startOfMonth, endOfMonth, nil
+		}
+		
 		return time.Time{}, time.Time{}, fmt.Errorf("unsupported period expression: %s", expr)
 	}
 }

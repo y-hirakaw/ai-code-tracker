@@ -2,6 +2,8 @@ package cli
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/ai-code-tracker/aict/internal/errors"
 	"github.com/ai-code-tracker/aict/internal/i18n"
@@ -77,14 +79,35 @@ func (h *TrackHandler) Handle(args []string) error {
 		return err
 	}
 
-	// ストレージとトラッカーを初期化
-	storage, err := storage.NewStorage("")
+	// データディレクトリのパス
+	dataDir := filepath.Join(currentDir, storage.DefaultDataDir)
+	if _, err := os.Stat(dataDir); os.IsNotExist(err) {
+		// データディレクトリが存在しない場合は作成
+		if err := os.MkdirAll(dataDir, 0755); err != nil {
+			return errors.WrapError(err, errors.ErrorTypeData, "create_data_directory_failed")
+		}
+	}
+
+	// DuckDBストレージを使用（periodコマンドと統一）
+	config := storage.StorageConfig{
+		Type:    storage.StorageTypeDuckDB,
+		DataDir: dataDir,
+		Debug:   os.Getenv("AICT_DEBUG") == "1",
+	}
+
+	store, err := storage.NewAdvancedStorageByType(config)
 	if err != nil {
 		return errors.WrapError(err, errors.ErrorTypeData, "storage_initialization_failed")
 	}
-	defer storage.Close()
+	defer store.Close()
 
-	tracker := tracker.NewTracker(storage, currentDir)
+	// 既存のJSONLデータをDuckDBに移行
+	if err := storage.MigrateJSONLToDuckDB(dataDir, os.Getenv("AICT_DEBUG") == "1"); err != nil {
+		fmt.Printf("⚠️  データ移行エラー: %v\n", err)
+		// 移行エラーは致命的ではないので続行
+	}
+
+	tracker := tracker.NewTracker(store, currentDir)
 
 	// ファイルリストを処理
 	var files []string

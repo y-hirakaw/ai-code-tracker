@@ -58,6 +58,7 @@ func (h *HelpSystem) showCommands() {
 		{"track", "ファイルの変更を手動でトラッキング", "基本", "📝"},
 		{"stats", "統計情報を表示", "分析", "📊"},
 		{"blame", "ファイルのAI/人間による変更履歴を表示", "分析", "🔍"},
+		{"period", "期間別分析を実行", "分析", "📅"},
 		{"config", "設定を管理", "設定", "⚙️"},
 		{"setup", "Git hooks と Claude Code hooks を自動設定", "設定", "🔧"},
 		{"wizard", "インタラクティブセットアップウィザード", "設定", "🧙"},
@@ -115,6 +116,7 @@ func (h *HelpSystem) showExamples() {
 		{h.appName + " track --ai --model claude-sonnet-4 --files \"*.go\"", "AI変更を追跡", "🤖"},
 		{h.appName + " track --author \"John Doe\" --files main.go", "人間の変更を追跡", "👤"},
 		{h.appName + " stats --format table --since 2024-01-01", "期間別統計", "📊"},
+		{h.appName + " period \"Q1 2025\"", "四半期別分析", "📅"},
 		{h.appName + " blame src/main.go", "ファイルの変更履歴", "🔍"},
 		{h.appName + " security scan", "セキュリティスキャン", "🔒"},
 		{h.appName + " setup", "hooks 自動設定", "🔧"},
@@ -150,6 +152,8 @@ func (h *HelpSystem) ShowCommandHelp(command string) {
 		h.showStatsHelp()
 	case "blame":
 		h.showBlameHelp()
+	case "period":
+		h.showPeriodHelp()
 	case "config":
 		h.showConfigHelp()
 	case "setup":
@@ -301,6 +305,41 @@ func (h *HelpSystem) showConfigHelp() {
   %s config --get enable_encryption          # 暗号化設定確認
 
 `, h.appName, h.appName, h.appName, h.appName, h.appName)
+}
+
+func (h *HelpSystem) showPeriodHelp() {
+	fmt.Printf(`📅 %s period - 期間別分析
+
+説明:
+  指定した期間におけるAI/人間のコード貢献度を詳細に分析します。
+  四半期、月、日付などの柔軟な期間指定に対応しています。
+
+使用方法:
+  %s period <period_expression>
+
+期間表現:
+  四半期:     Q1 2025, Q2 2024, q3 2023, q4 2022
+  年:        this year, last year, 2024
+  日付:      2025-07-28, 2025/07/28
+  月:        2025-07, 2024-12
+  月名:      Jan-Mar 2024, Apr-Jun 2025
+  相対:      last 3 months, last month
+
+出力内容:
+  • 全体統計 (AI/人間コード行数、割合)
+  • 上位ファイル別分析
+  • 言語別統計
+  • 貢献者別統計
+  • アクティブ日数
+
+例:
+  %s period "Q1 2025"              # 2025年第1四半期
+  %s period "2025-07-28"           # 特定の日
+  %s period "this year"            # 今年
+  %s period "last 3 months"        # 過去3ヶ月
+  %s period "2024-12"              # 2024年12月
+
+`, h.appName, h.appName, h.appName, h.appName, h.appName, h.appName, h.appName)
 }
 
 func (h *HelpSystem) showSetupHelp() {

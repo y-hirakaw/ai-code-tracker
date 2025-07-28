@@ -250,8 +250,8 @@ func (s *DuckDBStorage) GetBasicStats(ctx context.Context) (*BasicStats, error) 
 			COUNT(*) as total_events,
 			COUNT(DISTINCT t.session_id) as total_sessions,
 			COUNT(DISTINCT fc.file_path) as total_files,
-			SUM(CASE WHEN t.author_type = 'ai' THEN fc.lines_added ELSE 0 END) as ai_lines,
-			SUM(CASE WHEN t.author_type = 'human' THEN fc.lines_added ELSE 0 END) as human_lines,
+			COALESCE(SUM(CASE WHEN t.author_type = 'ai' THEN fc.lines_added ELSE 0 END), 0) as ai_lines,
+			COALESCE(SUM(CASE WHEN t.author_type = 'human' THEN fc.lines_added ELSE 0 END), 0) as human_lines,
 			MIN(t.timestamp) as first_event,
 			MAX(t.timestamp) as last_event
 		FROM tracks t
@@ -259,12 +259,12 @@ func (s *DuckDBStorage) GetBasicStats(ctx context.Context) (*BasicStats, error) 
 		WHERE t.timestamp >= CURRENT_DATE - INTERVAL '30 days'
 	)
 	SELECT 
-		total_events,
-		total_sessions,
-		total_files,
-		ai_lines,
-		human_lines,
-		ai_lines + human_lines as total_lines,
+		COALESCE(total_events, 0) as total_events,
+		COALESCE(total_sessions, 0) as total_sessions,
+		COALESCE(total_files, 0) as total_files,
+		COALESCE(ai_lines, 0) as ai_lines,
+		COALESCE(human_lines, 0) as human_lines,
+		COALESCE(ai_lines, 0) + COALESCE(human_lines, 0) as total_lines,
 		CASE 
 			WHEN (ai_lines + human_lines) > 0 
 			THEN ai_lines::FLOAT / (ai_lines + human_lines) * 100

@@ -17,7 +17,7 @@ import (
 
 // Tracker はファイル変更の追跡とイベントの記録を管理する
 type Tracker struct {
-	storage       *storage.Storage
+	storage       storage.StorageInterface
 	gitRepo       string
 	lastEventTime time.Time
 	duplicateWindow time.Duration
@@ -33,7 +33,7 @@ type DiffResult struct {
 }
 
 // NewTracker は新しいTrackerインスタンスを作成する
-func NewTracker(storageInstance *storage.Storage, gitRepo string) *Tracker {
+func NewTracker(storageInstance storage.StorageInterface, gitRepo string) *Tracker {
 	return &Tracker{
 		storage:         storageInstance,
 		gitRepo:         gitRepo,
@@ -79,7 +79,7 @@ func (t *Tracker) TrackFileChanges(eventType types.EventType, author string, mod
 	}
 
 	// イベントを保存
-	if err := t.storage.WriteEvent(event); err != nil {
+	if err := t.storage.StoreTrackEvent(event); err != nil {
 		return fmt.Errorf("イベントの保存に失敗しました: %w", err)
 	}
 
@@ -139,7 +139,7 @@ func (t *Tracker) TrackCommit(commitHash string, author string, message string) 
 		event.Author = "Claude Code"
 	}
 
-	return t.storage.WriteEvent(event)
+	return t.storage.StoreTrackEvent(event)
 }
 
 // calculateFileDiff は現在のファイルと前回の状態との差分を計算する
