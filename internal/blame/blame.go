@@ -62,15 +62,27 @@ type BlameStatistics struct {
 
 // Blamer は拡張blame機能を提供する
 type Blamer struct {
-	storage *storage.Storage
-	gitRepo string
+	storage   *storage.Storage
+	duckDB    *storage.DuckDBStorage
+	gitRepo   string
+	useDuckDB bool
 }
 
 // NewBlamer は新しいBlamerインスタンスを作成する
 func NewBlamer(storage *storage.Storage, gitRepo string) *Blamer {
 	return &Blamer{
-		storage: storage,
-		gitRepo: gitRepo,
+		storage:   storage,
+		gitRepo:   gitRepo,
+		useDuckDB: false,
+	}
+}
+
+// NewBlamerWithDuckDB はDuckDBを使用する新しいBlamerインスタンスを作成する
+func NewBlamerWithDuckDB(duckDB *storage.DuckDBStorage, gitRepo string) *Blamer {
+	return &Blamer{
+		duckDB:    duckDB,
+		gitRepo:   gitRepo,
+		useDuckDB: true,
 	}
 }
 
@@ -83,7 +95,14 @@ func (b *Blamer) BlameFile(filePath string) (*FileBlameResult, error) {
 	}
 
 	// トラッキング情報を取得
-	events, err := b.storage.ReadEvents()
+	var events []*types.TrackEvent
+	
+	if b.useDuckDB {
+		events, err = b.duckDB.ReadEvents()
+	} else {
+		events, err = b.storage.ReadEvents()
+	}
+	
 	if err != nil {
 		return nil, fmt.Errorf("トラッキング情報の取得に失敗しました: %w", err)
 	}
@@ -283,30 +302,70 @@ func (b *Blamer) combineBlameWithTracking(gitBlameLines []GitBlameLine, events [
 			IsAI:       false,
 		}
 
-		// コミットハッシュから直接的にAI判定
-		if event, exists := commitEventMap[gitLine.CommitHash]; exists {
-			if event.EventType == types.EventTypeAI {
-				blameInfo.IsAI = true
-				blameInfo.Author = "Claude Code"
-				blameInfo.Model = event.Model
+		// DuckDBからの直接判定（最近のAIイベントをコミットハッシュと照合）
+		foundInDuckDB := false
+		if b.useDuckDB {
+			// 最近のAIイベントで該当ファイルがあるかチェック
+			for _, event := range events {
+				if event.EventType == types.EventTypeAI {
+					for _, file := range event.Files {
+						if strings.Contains(file.Path, filePath) || strings.Contains(filePath, file.Path) {
+							// 最近のAIイベント（commit_hashが空）の場合、
+							// gitLine.DateとeventのTimestampを比較して近い時刻なら一致と判定
+							if event.CommitHash == "" {
+								timeDiff := gitLine.Date.Sub(event.Timestamp)
+								if timeDiff < 0 {
+									timeDiff = -timeDiff
+								}
+								// 10分以内なら同じ編集とみなす
+								if timeDiff < 10*time.Minute {
+									blameInfo.IsAI = true
+									blameInfo.Author = "Claude Code"
+									blameInfo.Model = event.Model
+									foundInDuckDB = true
+									if os.Getenv("AICT_DEBUG") == "1" {
+										fmt.Fprintf(os.Stderr, "[DEBUG] Matched AI edit by time: line=%d, timeDiff=%v\n", 
+											gitLine.LineNumber, timeDiff)
+									}
+									break
+								}
+							}
+						}
+					}
+					if foundInDuckDB {
+						break
+					}
+				}
 			}
-		} else if gitLine.CommitHash == "0000000000000000000000000000000000000000" || gitLine.Author == "Not Committed Yet" {
-			// コミットされていない変更の処理
-			if os.Getenv("AICT_DEBUG") == "1" {
-				fmt.Fprintf(os.Stderr, "[DEBUG] Uncommitted line %d: hash=%s, author=%s, hasAI=%v\n", 
-					gitLine.LineNumber, gitLine.CommitHash, gitLine.Author, hasUncommittedAIChanges)
-			}
-			if hasUncommittedAIChanges {
-				blameInfo.IsAI = true
-				blameInfo.Author = "Claude Code"
-				blameInfo.Model = latestAIModel
-			}
-		} else {
-			// Claude Codeのコミットパターンを検出
-			if b.isClaudeCodeAuthor(gitLine.Author) {
-				blameInfo.IsAI = true
-				blameInfo.Author = "Claude Code"
-				blameInfo.Model = b.guessModelFromDate(gitLine.Date)
+		}
+		
+		// 従来の判定ロジック（DuckDBで見つからない場合）
+		if !foundInDuckDB {
+			// コミットハッシュから直接的にAI判定
+			if event, exists := commitEventMap[gitLine.CommitHash]; exists {
+				if event.EventType == types.EventTypeAI {
+					blameInfo.IsAI = true
+					blameInfo.Author = "Claude Code"
+					blameInfo.Model = event.Model
+				}
+			} else if gitLine.CommitHash == "0000000000000000000000000000000000000000" || gitLine.Author == "Not Committed Yet" {
+				// コミットされていない変更の処理
+				if os.Getenv("AICT_DEBUG") == "1" {
+					fmt.Fprintf(os.Stderr, "[DEBUG] Uncommitted line %d: hash=%s, author=%s, hasAI=%v\n", 
+						gitLine.LineNumber, gitLine.CommitHash, gitLine.Author, hasUncommittedAIChanges)
+				}
+				if hasUncommittedAIChanges {
+					blameInfo.IsAI = true
+					blameInfo.Author = "Claude Code"
+					blameInfo.Model = latestAIModel
+				}
+			} else {
+				// Claude Codeのコミットパターンを検出
+				if b.isClaudeCodeAuthor(gitLine.Author) {
+					blameInfo.IsAI = true
+					blameInfo.Author = "Claude Code"
+					blameInfo.Model = b.guessModelFromDate(gitLine.Date)
+				}
 			}
 		}
 

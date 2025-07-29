@@ -56,15 +56,16 @@ func (h *BlameHandler) Handle(args []string) error {
 		return err
 	}
 
-	// ストレージを初期化
-	storage, err := storage.NewStorage("")
+	// DuckDBストレージを直接使用
+	dataDir := ".git/ai-tracker"
+	duckDB, err := storage.NewDuckDBStorage(dataDir, false)
 	if err != nil {
-		return errors.WrapError(err, errors.ErrorTypeData, "storage_initialization_failed")
+		return errors.WrapError(err, errors.ErrorTypeData, "duckdb_initialization_failed")
 	}
-	defer storage.Close()
+	defer duckDB.Close()
 
-	// Blamerを初期化
-	blamer := blame.NewBlamer(storage, currentDir)
+	// Blamerを初期化（DuckDBから直接読み込み用の一時的な修正）
+	blamer := blame.NewBlamerWithDuckDB(duckDB, currentDir)
 
 	// ファイルパスを検証
 	if err := blamer.ValidateFilePath(filePath); err != nil {

@@ -175,7 +175,7 @@ func (h *SimpleAPIHandler) HandleHealth() http.Handler {
 		response := map[string]interface{}{
 			"status":    status,
 			"timestamp": time.Now(),
-			"version":   "0.2.5",
+			"version":   "0.2.6",
 		}
 		
 		w.WriteHeader(statusCode)
