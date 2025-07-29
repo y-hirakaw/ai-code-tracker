@@ -10,3 +10,4 @@ Claude Code hooks動作テスト用の新しい行です。
 blame機能修正後の追加行です。
 Hooksデバッグ出力テスト行です。
 シェルスクリプト化したhooksのテスト行です。
+Claude Code再起動後のhooks動作確認テスト行です。
