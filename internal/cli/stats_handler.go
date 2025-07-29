@@ -1,13 +1,9 @@
 package cli
 
 import (
-	"time"
-
 	"github.com/y-hirakaw/ai-code-tracker/internal/errors"
 	"github.com/y-hirakaw/ai-code-tracker/internal/i18n"
-	"github.com/y-hirakaw/ai-code-tracker/internal/stats"
 	"github.com/y-hirakaw/ai-code-tracker/internal/storage"
-	"github.com/y-hirakaw/ai-code-tracker/internal/utils"
 )
 
 // StatsHandler はstatsコマンドを処理する
@@ -25,12 +21,8 @@ func NewStatsHandler() *StatsHandler {
 // Handle はstatsコマンドを実行する
 func (h *StatsHandler) Handle(args []string) error {
 	var (
-		format  = "table"
-		since   = ""
-		until   = ""
-		author  = ""
-		byFile  = false
-		trend   = false
+		format = "table"
+		author = ""
 	)
 
 	// コマンドライン引数をパース
@@ -41,84 +33,24 @@ func (h *StatsHandler) Handle(args []string) error {
 				format = args[i+1]
 				i++
 			}
-		case "--since":
-			if i+1 < len(args) {
-				since = args[i+1]
-				i++
-			}
-		case "--until":
-			if i+1 < len(args) {
-				until = args[i+1]
-				i++
-			}
 		case "--author":
 			if i+1 < len(args) {
 				author = args[i+1]
 				i++
 			}
-		case "--by-file":
-			byFile = true
-		case "--trend":
-			trend = true
 		}
 	}
 
-	// 日付のパース
-	var sinceTime, untilTime time.Time
-	var err error
-
-	if since != "" {
-		sinceTime, err = utils.ParseDate(since)
-		if err != nil {
-			return err.(*errors.FriendlyError).WithCommand("stats")
-		}
-	} else {
-		// デフォルトは30日前から
-		sinceTime = time.Now().AddDate(0, 0, -30)
-	}
-
-	if until != "" {
-		untilTime, err = utils.ParseDate(until)
-		if err != nil {
-			return err.(*errors.FriendlyError).WithCommand("stats")
-		}
-	} else {
-		// デフォルトは現在まで
-		untilTime = time.Now()
-	}
-
-	// ストレージを初期化
-	storage, err := storage.NewStorage("")
+	// DuckDBストレージを直接使用
+	dataDir := ".git/ai-tracker"
+	duckDB, err := storage.NewDuckDBStorage(dataDir, false)
 	if err != nil {
-		return errors.WrapError(err, errors.ErrorTypeData, "storage_initialization_failed")
+		return errors.WrapError(err, errors.ErrorTypeData, "duckdb_initialization_failed")
 	}
-	defer storage.Close()
+	defer duckDB.Close()
 
-	// StatsManagerを初期化
-	statsManager := stats.NewStatsManager(storage)
-
-	// フォーマット別処理
-	switch format {
-	case "daily":
-		return h.presenter.ShowDailyStats(statsManager, sinceTime, untilTime)
-	case "files":
-		return h.presenter.ShowFileStats(statsManager, sinceTime, author)
-	case "contributors":
-		return h.presenter.ShowContributorStats(statsManager, sinceTime, author)
-	}
-
-	// トレンド分析
-	if trend {
-		return h.presenter.ShowTrendAnalysis(statsManager, sinceTime, untilTime)
-	}
-
-	// ファイル別統計
-	if byFile {
-		return h.presenter.ShowFileStats(statsManager, sinceTime, author)
-	}
-
-	// 基本統計情報を取得
-	basicStats, err := storage.GetStatistics()
+	// 基本統計情報を取得（DuckDBから直接）
+	basicStats, err := duckDB.GetStatistics()
 	if err != nil {
 		return errors.WrapError(err, errors.ErrorTypeData, "statistics_fetch_failed")
 	}
