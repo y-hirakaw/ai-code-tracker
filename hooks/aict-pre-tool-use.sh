@@ -2,6 +2,9 @@
 # AICT PreToolUse Hook Script
 # Claude Codeのファイル編集前の状態を記録する
 
+# 実行確認メッセージ（stdoutに出力してClaude Codeに表示される）
+echo "🔧 [AICT PreToolUse Hook] 実行開始"
+
 # デバッグ出力
 echo "[AICT PreToolUse Hook] Called at $(date)" >&2
 
@@ -39,11 +42,24 @@ if [ -n "$FILE" ] && [ -f "$FILE" ]; then
     $AICT_CMD track --pre-edit --files "$FILE" --session "$SESSION_ID" 2>&1 | sed 's/^/[AICT] /' >&2
     
     # セッションIDを一時ファイルに保存
-    echo "$SESSION_ID" > "/tmp/aict-session-$$.tmp"
+    echo "$SESSION_ID" > "/tmp/aict-session-$(date +%Y%m%d).tmp"
     echo "[AICT PreToolUse Hook] Session ID saved: $SESSION_ID" >&2
 else
     echo "[AICT PreToolUse Hook] No file to track or file not found" >&2
 fi
 
-# 処理を承認
-echo '{"decision": "approve"}'
+# 処理を承認（実行確認メッセージ付き）
+MESSAGE=$(cat << 'EOF'
+🔧 [AICT PreToolUse Hook] 編集前状態を記録しました
+- ファイル: FILE_PLACEHOLDER
+- セッション: SESSION_PLACEHOLDER
+EOF
+)
+
+ESCAPED_MESSAGE=$(echo "$MESSAGE" | sed "s|FILE_PLACEHOLDER|${FILE}|g" | sed "s|SESSION_PLACEHOLDER|${SESSION_ID}|g" | jq -Rs .)
+cat << EOF
+{
+    "decision": "approve",
+    "reason": $ESCAPED_MESSAGE
+}
+EOF

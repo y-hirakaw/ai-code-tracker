@@ -2,6 +2,9 @@
 # AICT Stop Hook Script
 # セッション終了時に統計情報を表示する
 
+# 実行確認メッセージ（stdoutに出力してClaude Codeに表示される）
+echo "📊 [AICT Stop Hook] セッション終了時の統計表示"
+
 # デバッグ出力
 echo "[AICT Stop Hook] Called at $(date)" >&2
 
@@ -25,5 +28,17 @@ echo "[AICT Stop Hook] Using aict command: $AICT_CMD" >&2
 STATS=$($AICT_CMD stats --format summary 2>&1 | tr '\n' ' ' || echo "No stats available")
 echo "[AICT Stop Hook] Stats: $STATS" >&2
 
-# 処理を続行し、ユーザーメッセージに統計情報を含める
-echo "{\"continue\": true, \"userMessage\": \"📊 AICT Session: $STATS\"}"
+# 処理を続行し、統計情報を詳細表示
+MESSAGE=$(cat << EOF
+📊 [AICT Stop Hook] セッション統計
+$STATS
+EOF
+)
+
+ESCAPED_MESSAGE=$(echo "$MESSAGE" | jq -Rs .)
+cat << EOF
+{
+    "continue": true,
+    "userMessage": $ESCAPED_MESSAGE
+}
+EOF

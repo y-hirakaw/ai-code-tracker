@@ -2,6 +2,9 @@
 # AICT PostToolUse Hook Script
 # Claude Codeのファイル編集後の変更を記録する
 
+# 実行確認メッセージ（stdoutに出力してClaude Codeに表示される）
+echo "✅ [AICT PostToolUse Hook] 実行開始"
+
 # デバッグ出力
 echo "[AICT PostToolUse Hook] Called at $(date)" >&2
 
@@ -14,7 +17,7 @@ MODEL=$(echo "$INPUT" | jq -r '.metadata.model // "claude-sonnet-4"')
 echo "[AICT PostToolUse Hook] FILE=$FILE, MODEL=$MODEL" >&2
 
 MESSAGE="Claude Code automated edit"
-SESSION_FILE="/tmp/aict-session-$$.tmp"
+SESSION_FILE="/tmp/aict-session-$(date +%Y%m%d).tmp"
 
 # aictコマンドのパスを探す
 AICT_CMD=""
@@ -55,5 +58,18 @@ else
     echo "[AICT PostToolUse Hook] No file specified" >&2
 fi
 
-# 処理を続行
-echo '{"continue": true}'
+# 処理を続行（実行確認メッセージ付き）
+MESSAGE=$(cat << 'EOF'
+✅ [AICT PostToolUse Hook] AI編集を記録しました
+- ファイル: FILE_PLACEHOLDER
+- モデル: MODEL_PLACEHOLDER
+EOF
+)
+
+ESCAPED_MESSAGE=$(echo "$MESSAGE" | sed "s|FILE_PLACEHOLDER|${FILE}|g" | sed "s|MODEL_PLACEHOLDER|${MODEL}|g" | jq -Rs .)
+cat << EOF
+{
+    "continue": true,
+    "reason": $ESCAPED_MESSAGE
+}
+EOF
