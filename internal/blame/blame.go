@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -106,12 +107,26 @@ func (b *Blamer) BlameFile(filePath string) (*FileBlameResult, error) {
 // getGitBlame はGit blameを実行して基本情報を取得する
 func (b *Blamer) getGitBlame(filePath string) ([]GitBlameLine, error) {
 	// git blame --porcelain でより詳細な情報を取得
-	cmd := exec.Command("git", "blame", "--porcelain", filePath)
+	// --contents - でワーキングディレクトリの内容を使用
+	cmd := exec.Command("git", "blame", "--porcelain", "--contents", "-", filePath)
 	cmd.Dir = b.gitRepo
+
+	// ファイルの現在の内容を標準入力に渡す
+	fileContent, err := os.ReadFile(filepath.Join(b.gitRepo, filePath))
+	if err != nil {
+		return nil, fmt.Errorf("ファイルの読み取りに失敗しました: %w", err)
+	}
+	cmd.Stdin = strings.NewReader(string(fileContent))
 
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("git blameコマンドの実行に失敗しました: %w", err)
+		// フォールバック: 通常のgit blameを実行
+		cmd = exec.Command("git", "blame", "--porcelain", filePath)
+		cmd.Dir = b.gitRepo
+		output, err = cmd.Output()
+		if err != nil {
+			return nil, fmt.Errorf("git blameコマンドの実行に失敗しました: %w", err)
+		}
 	}
 
 	return b.parseGitBlameOutput(string(output))
@@ -196,11 +211,26 @@ func (b *Blamer) parseGitBlameOutput(output string) ([]GitBlameLine, error) {
 
 // combineBlameWithTracking はGit blameとトラッキング情報を結合する
 func (b *Blamer) combineBlameWithTracking(gitBlameLines []GitBlameLine, events []*types.TrackEvent, filePath string) ([]BlameInfo, error) {
+	if os.Getenv("AICT_DEBUG") == "1" {
+		fmt.Fprintf(os.Stderr, "[DEBUG] Total events: %d, filePath: %s\n", len(events), filePath)
+	}
 	// コミットハッシュごとのトラッキング情報マップを作成
 	commitEventMap := make(map[string]*types.TrackEvent)
 	for _, event := range events {
 		if event.CommitHash != "" {
 			commitEventMap[event.CommitHash] = event
+		}
+	}
+
+	// セッションベースのAI編集情報を作成
+	sessionAIEdits := make(map[string]bool) // sessionID -> isAI
+	for _, event := range events {
+		if event.SessionID != "" && event.EventType == types.EventTypeAI {
+			for _, file := range event.Files {
+				if strings.Contains(file.Path, filePath) || strings.Contains(filePath, file.Path) {
+					sessionAIEdits[event.SessionID] = true
+				}
+			}
 		}
 	}
 
@@ -213,6 +243,30 @@ func (b *Blamer) combineBlameWithTracking(gitBlameLines []GitBlameLine, events [
 					// 時刻をキーとしてマッピング
 					timeKey := event.Timestamp.Format("2006-01-02 15:04:05")
 					aiEventsByTime[timeKey] = event
+				}
+			}
+		}
+	}
+
+	// 最新のコミットされていない変更を確認
+	hasUncommittedAIChanges := false
+	var latestAIModel string
+	for _, event := range events {
+		if os.Getenv("AICT_DEBUG") == "1" && event.EventType == types.EventTypeAI {
+			fmt.Fprintf(os.Stderr, "[DEBUG] AI event: commitHash=%s, files=%d\n", event.CommitHash, len(event.Files))
+			for _, file := range event.Files {
+				fmt.Fprintf(os.Stderr, "[DEBUG]   file: %s\n", file.Path)
+			}
+		}
+		if event.EventType == types.EventTypeAI && event.CommitHash == "" {
+			for _, file := range event.Files {
+				if strings.Contains(file.Path, filePath) || strings.Contains(filePath, file.Path) {
+					hasUncommittedAIChanges = true
+					latestAIModel = event.Model
+					if os.Getenv("AICT_DEBUG") == "1" {
+						fmt.Fprintf(os.Stderr, "[DEBUG] Found uncommitted AI change: %s, model: %s\n", file.Path, event.Model)
+					}
+					break
 				}
 			}
 		}
@@ -235,6 +289,17 @@ func (b *Blamer) combineBlameWithTracking(gitBlameLines []GitBlameLine, events [
 				blameInfo.IsAI = true
 				blameInfo.Author = "Claude Code"
 				blameInfo.Model = event.Model
+			}
+		} else if gitLine.CommitHash == "0000000000000000000000000000000000000000" || gitLine.Author == "Not Committed Yet" {
+			// コミットされていない変更の処理
+			if os.Getenv("AICT_DEBUG") == "1" {
+				fmt.Fprintf(os.Stderr, "[DEBUG] Uncommitted line %d: hash=%s, author=%s, hasAI=%v\n", 
+					gitLine.LineNumber, gitLine.CommitHash, gitLine.Author, hasUncommittedAIChanges)
+			}
+			if hasUncommittedAIChanges {
+				blameInfo.IsAI = true
+				blameInfo.Author = "Claude Code"
+				blameInfo.Model = latestAIModel
 			}
 		} else {
 			// Claude Codeのコミットパターンを検出
