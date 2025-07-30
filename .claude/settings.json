@@ -6,7 +6,7 @@
       "hooks": [
         {
           "type": "command",
-          "command": "$CLAUDE_PROJECT_DIR/hooks/pre-tool-use.sh"
+          "command": "$CLAUDE_PROJECT_DIR/.ai_code_tracking/hooks/pre-tool-use.sh"
         }
       ]
     },
@@ -16,7 +16,7 @@
       "hooks": [
         {
           "type": "command",
-          "command": "$CLAUDE_PROJECT_DIR/hooks/post-tool-use.sh"
+          "command": "$CLAUDE_PROJECT_DIR/.ai_code_tracking/hooks/post-tool-use.sh"
         }
       ]
     }

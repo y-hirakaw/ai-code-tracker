@@ -22,10 +22,10 @@ cd ai-code-tracker
 # ビルド
 go build -o bin/aict ./cmd/aict
 
-# 初期化
+# 初期化（フックファイルも自動作成）
 ./bin/aict init
 
-# フック設定（Claude Code連携）
+# Git post-commitフック設定
 ./bin/aict setup-hooks
 ```
 
@@ -44,11 +44,13 @@ go build -o bin/aict ./cmd/aict
 
 ### 3. 自動使用（Claude Code連携）
 
-フック設定後、Claude Codeでファイルを編集すると自動的に追跡されます：
+`aict init`実行後、Claude Codeでファイルを編集すると自動的に追跡されます：
 
 1. **PreToolUse**: Claude編集前に人間状態を記録
-2. **PostToolUse**: Claude編集後にAI状態を記録
+2. **PostToolUse**: Claude編集後にAI状態を記録  
 3. **Post-commit**: コミット時にメトリクス保存
+
+フックファイルは`.ai_code_tracking/hooks/`に自動作成されます。
 
 ## 📊 出力例
 
@@ -80,7 +82,7 @@ Last Updated: 2025-07-30 16:04:08
 
 ## 🔧 Claude Codeフック
 
-`.claude/settings.json`でフックが設定されます：
+`aict init`により`.claude/settings.json`が自動作成されます：
 
 ```json
 {
@@ -88,12 +90,12 @@ Last Updated: 2025-07-30 16:04:08
     {
       "event": "PreToolUse",
       "matcher": "Write|Edit|MultiEdit",
-      "hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/hooks/pre-tool-use.sh"}]
+      "hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.ai_code_tracking/hooks/pre-tool-use.sh"}]
     },
     {
       "event": "PostToolUse", 
       "matcher": "Write|Edit|MultiEdit",
-      "hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/hooks/post-tool-use.sh"}]
+      "hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.ai_code_tracking/hooks/post-tool-use.sh"}]
     }
   ]
 }
@@ -109,14 +111,14 @@ ai-code-tracker/
 │   ├── tracker/              # コア追跡ロジック
 │   ├── storage/              # データ永続化
 │   └── git/                  # Git統合
-├── hooks/                    # フックスクリプト
-│   ├── pre-tool-use.sh
-│   ├── post-tool-use.sh
-│   └── post-commit
 ├── .claude/
 │   └── settings.json         # Claude Codeフック設定
 └── .ai_code_tracking/        # 追跡データ
     ├── config.json
+    ├── hooks/                # フックスクリプト（自動作成）
+    │   ├── pre-tool-use.sh
+    │   ├── post-tool-use.sh
+    │   └── post-commit
     ├── checkpoints/
     └── metrics/
 ```

@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"github.com/y-hirakawa/ai-code-tracker/internal/git"
 	"github.com/y-hirakawa/ai-code-tracker/internal/storage"
+	"github.com/y-hirakawa/ai-code-tracker/internal/templates"
 	"github.com/y-hirakawa/ai-code-tracker/internal/tracker"
 )
 
@@ -68,8 +70,23 @@ func handleInit() {
 		}
 	}
 
+	// Create hook scripts
+	if err := createHookFiles(baseDir); err != nil {
+		fmt.Printf("Warning: Could not create hook files: %v\n", err)
+	} else {
+		fmt.Println("✓ Hook scripts created in .ai_code_tracking/hooks/")
+	}
+
+	// Create Claude settings file
+	if err := createClaudeSettings(); err != nil {
+		fmt.Printf("Warning: Could not create Claude settings: %v\n", err)
+	} else {
+		fmt.Println("✓ Claude Code hook configuration created")
+	}
+
 	fmt.Println("AI Code Tracker initialized successfully!")
 	fmt.Printf("Configuration saved to %s/config.json\n", baseDir)
+	fmt.Println("Run 'aict setup-hooks' to install Git post-commit hook.")
 }
 
 func handleTrack() {
@@ -199,24 +216,66 @@ func countTotalLines(checkpoint *tracker.Checkpoint) int {
 }
 
 func handleSetupHooks() {
-	fmt.Println("Setting up Claude Code hooks and Git post-commit hook...")
+	fmt.Println("Setting up Git post-commit hook...")
 	
-	// Copy Git post-commit hook
-	if err := copyFile("hooks/post-commit", ".git/hooks/post-commit"); err != nil {
-		fmt.Printf("Warning: Could not setup Git post-commit hook: %v\n", err)
+	// Copy Git post-commit hook from .ai_code_tracking/hooks/
+	hookSource := filepath.Join(defaultBaseDir, "hooks", "post-commit")
+	hookDest := ".git/hooks/post-commit"
+	
+	if err := copyFile(hookSource, hookDest); err != nil {
+		fmt.Printf("Error: Could not setup Git post-commit hook: %v\n", err)
+		fmt.Println("Make sure to run 'aict init' first to create hook files.")
+		os.Exit(1)
+	}
+	
+	// Make it executable
+	if err := os.Chmod(hookDest, 0755); err != nil {
+		fmt.Printf("Warning: Could not make post-commit hook executable: %v\n", err)
 	} else {
 		fmt.Println("✓ Git post-commit hook installed")
 	}
 	
-	// Make it executable
-	if err := os.Chmod(".git/hooks/post-commit", 0755); err != nil {
-		fmt.Printf("Warning: Could not make post-commit hook executable: %v\n", err)
-	}
-	
 	fmt.Println("✓ Claude Code hooks are configured in .claude/settings.json")
-	fmt.Println("✓ Hook scripts are available in hooks/")
+	fmt.Println("✓ Hook scripts are available in .ai_code_tracking/hooks/")
 	fmt.Println()
 	fmt.Println("Hook setup complete! Claude Code will now automatically track AI vs Human contributions.")
+}
+
+func createHookFiles(baseDir string) error {
+	hooksDir := filepath.Join(baseDir, "hooks")
+	if err := os.MkdirAll(hooksDir, 0755); err != nil {
+		return err
+	}
+
+	// Create PreToolUse hook
+	preHookPath := filepath.Join(hooksDir, "pre-tool-use.sh")
+	if err := os.WriteFile(preHookPath, []byte(templates.PreToolUseHook), 0755); err != nil {
+		return err
+	}
+
+	// Create PostToolUse hook
+	postHookPath := filepath.Join(hooksDir, "post-tool-use.sh")
+	if err := os.WriteFile(postHookPath, []byte(templates.PostToolUseHook), 0755); err != nil {
+		return err
+	}
+
+	// Create Post-commit hook
+	commitHookPath := filepath.Join(hooksDir, "post-commit")
+	if err := os.WriteFile(commitHookPath, []byte(templates.PostCommitHook), 0755); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func createClaudeSettings() error {
+	claudeDir := ".claude"
+	if err := os.MkdirAll(claudeDir, 0755); err != nil {
+		return err
+	}
+
+	settingsPath := filepath.Join(claudeDir, "settings.json")
+	return os.WriteFile(settingsPath, []byte(templates.ClaudeSettingsJSON), 0644)
 }
 
 func copyFile(src, dst string) error {
