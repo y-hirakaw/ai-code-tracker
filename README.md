@@ -1,4 +1,4 @@
-# AI Code Tracker (AICT)
+# AI Code Tracker (AICT) v0.3.0
 
 A Go-based CLI tool for tracking the proportion of AI-generated versus human-written code, integrated with Claude Code and Git.
 
@@ -173,6 +173,7 @@ Do you want to merge AI Code Tracker hooks? (y/N): y
 | `aict track -author <name>` | Create manual checkpoint |
 | `aict report` | Display current metrics (baseline excluded) |
 | `aict reset` | Reset metrics and create new baseline (with confirmation) |
+| `aict version` | Show version information |
 
 ## 🔄 Workflow
 

@@ -18,6 +18,7 @@ import (
 )
 
 const (
+	version        = "0.3.0"
 	defaultBaseDir = ".ai_code_tracking"
 )
 
@@ -42,6 +43,8 @@ func main() {
 			fmt.Printf("Error: %v\n", err)
 			os.Exit(1)
 		}
+	case "version", "--version", "-v":
+		fmt.Printf("AI Code Tracker (aict) version %s\n", version)
 	default:
 		fmt.Printf("Unknown command: %s\n", command)
 		printUsage()
@@ -507,7 +510,7 @@ func copyFile(src, dst string) error {
 }
 
 func printUsage() {
-	fmt.Println("AI Code Tracker (aict) - Track AI vs Human code contributions")
+	fmt.Printf("AI Code Tracker (aict) v%s - Track AI vs Human code contributions\n", version)
 	fmt.Println()
 	fmt.Println("Usage:")
 	fmt.Println("  aict init                    Initialize tracking in current directory")
@@ -515,6 +518,7 @@ func printUsage() {
 	fmt.Println("  aict report                  Show current tracking metrics")
 	fmt.Println("  aict setup-hooks             Setup Claude Code and Git hooks for automatic tracking")
 	fmt.Println("  aict reset                   Reset metrics to start tracking from current codebase state")
+	fmt.Println("  aict version                 Show version information")
 }
 
 func getGitUserName() string {
