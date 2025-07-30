@@ -102,3 +102,72 @@ When implementing:
 - Integration tests for hook workflows
 - Performance tests for large repositories
 - Test coverage target: 80%+
+
+## バージョン更新手順
+
+新しいバージョンをリリースする際は以下の手順に従ってください：
+
+### 1. バージョン番号の更新
+```bash
+# cmd/aict/main.go の version 定数を更新
+# 例: version = "0.3.4" → version = "0.3.5"
+```
+
+### 2. README.mdのバージョン更新
+```bash
+# README.md の先頭タイトルを更新
+# 例: # AI Code Tracker (AICT) v0.3.4 → # AI Code Tracker (AICT) v0.3.5
+```
+
+### 3. ビルドとテスト
+```bash
+# プロジェクトをビルド
+go build -o bin/aict ./cmd/aict
+
+# バージョン確認
+./bin/aict version
+```
+
+### 4. 変更のコミットとプッシュ
+```bash
+# 変更をステージング
+git add .
+
+# 詳細なコミットメッセージでコミット
+git commit -m "feat: [機能概要] and bump to v[バージョン]
+
+- [変更内容1]
+- [変更内容2]
+- Bumped version to [バージョン]"
+
+# リモートにプッシュ
+git push origin main
+```
+
+### 5. タグの作成とプッシュ
+```bash
+# アノテーション付きタグを作成
+git tag -a v[バージョン] -m "Release v[バージョン] - [リリース概要]
+
+- [主要な変更点1]
+- [主要な変更点2]"
+
+# タグをリモートにプッシュ
+git push origin v[バージョン]
+```
+
+### 6. リリース後の確認
+```bash
+# タグが正しく作成されたことを確認
+git tag -l
+
+# go install でインストールできることを確認（新しいターミナルで）
+go install github.com/y-hirakaw/ai-code-tracker/cmd/aict@v[バージョン]
+```
+
+### 注意事項
+- バージョン番号はセマンティックバージョニング（major.minor.patch）に従う
+- 破壊的変更がある場合はメジャーバージョンを上げる
+- 新機能追加の場合はマイナーバージョンを上げる
+- バグ修正の場合はパッチバージョンを上げる
+- Go Module Proxy のキャッシュ更新には時間がかかる場合がある
