@@ -1,16 +1,17 @@
-# AI Code Tracker (AICT) v0.3.2
+# AI Code Tracker (AICT) v0.3.3
 
 A Go-based CLI tool for tracking the proportion of AI-generated versus human-written code with **ultra-lightweight JSONL storage**, integrated with Claude Code and Git.
 
 ## 🎯 Features
 
-- **Ultra-Lightweight**: JSONL format reduces storage by 70%+ (100 bytes per record)
+- **Ultra-Lightweight**: JSONL format reduces storage by 70%+ (~100 bytes per record)
 - **Automatic Tracking**: Integrated with Claude Code hooks for automatic edit recording
 - **Simple Architecture**: No baseline concept - pure differential tracking
 - **Accurate Analysis**: Git numstat-based precise line counting
 - **Real-time Reporting**: Instant AI/Human ratio calculations
 - **Scalable**: Handles large codebases (10K+ files) efficiently
 - **Configurable**: Customizable tracked file extensions and exclusion patterns
+- **Smart Skip**: Automatically skips recording when only non-tracked files are modified
 
 ## 🚀 Quick Start
 
@@ -101,6 +102,8 @@ Customize settings in `.ai_code_tracking/config.json`:
   "author_mappings": {"y-hirakaw": "human"}
 }
 ```
+
+**Note**: Only files with extensions listed in `tracked_extensions` are monitored. Changes to other files (like `.md`, `.txt`) are automatically skipped for efficiency.
 
 ## 🔧 Claude Code Hooks
 
@@ -204,9 +207,10 @@ Do you want to merge AI Code Tracker hooks? (y/N): y
 
 - **Language**: Go 1.21+
 - **Dependencies**: Standard library only
-- **Data Format**: JSON
+- **Data Format**: Ultra-lightweight JSONL (~100 bytes per record)
 - **Hooks**: Claude Code hooks, Git post-commit
 - **Supported Platforms**: macOS, Linux, Windows
+- **Smart Features**: Tracked file extension filtering, Smart skip for efficiency
 
 ## 📈 Metrics
 

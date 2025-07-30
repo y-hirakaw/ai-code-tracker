@@ -33,6 +33,12 @@ func (cr *CheckpointRecorder) RecordCheckpoint(author string) error {
 		}
 	}
 
+	// Load config to get tracked extensions
+	config, err := cr.loadConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
 	// Collect numstat data (diff from HEAD)
 	numstat, err := cr.collectNumstatData()
 	if err != nil {
@@ -40,12 +46,22 @@ func (cr *CheckpointRecorder) RecordCheckpoint(author string) error {
 		numstat = make(map[string][2]int)
 	}
 
-	// Sum up all added and deleted lines
+	// Sum up only tracked files
 	totalAdded := 0
 	totalDeleted := 0
-	for _, stats := range numstat {
-		totalAdded += stats[0]   // added lines
-		totalDeleted += stats[1] // deleted lines
+	for filePath, stats := range numstat {
+		if cr.shouldTrackFile(filePath, config) {
+			totalAdded += stats[0]   // added lines
+			totalDeleted += stats[1] // deleted lines
+		}
+	}
+
+	// Skip recording if no changes from last record
+	lastRecord, err := cr.getLastRecord()
+	if err == nil && lastRecord != nil {
+		if lastRecord.Added == totalAdded && lastRecord.Deleted == totalDeleted {
+			return nil // No change from last record, skip recording
+		}
 	}
 
 	// Create checkpoint record
@@ -189,4 +205,69 @@ func (cr *CheckpointRecorder) GetLatestRecords(count int) ([]CheckpointRecord, e
 
 	// Return last N records
 	return allRecords[len(allRecords)-count:], nil
+}
+
+// loadConfig loads the configuration file
+func (cr *CheckpointRecorder) loadConfig() (*Config, error) {
+	configPath := filepath.Join(cr.baseDir, "config.json")
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var config Config
+	if err := json.Unmarshal(data, &config); err != nil {
+		return nil, err
+	}
+
+	return &config, nil
+}
+
+// shouldTrackFile checks if a file should be tracked based on configuration
+func (cr *CheckpointRecorder) shouldTrackFile(filePath string, config *Config) bool {
+	// Check if file extension is tracked
+	ext := getFileExtension(filePath)
+	tracked := false
+	for _, trackedExt := range config.TrackedExtensions {
+		if ext == trackedExt {
+			tracked = true
+			break
+		}
+	}
+	
+	if !tracked {
+		return false
+	}
+	
+	// Check exclude patterns
+	for _, pattern := range config.ExcludePatterns {
+		if matched, _ := filepath.Match(pattern, filepath.Base(filePath)); matched {
+			return false
+		}
+	}
+	
+	return true
+}
+
+// getLastRecord gets the most recent checkpoint record
+func (cr *CheckpointRecorder) getLastRecord() (*CheckpointRecord, error) {
+	records, err := cr.GetLatestRecords(1)
+	if err != nil {
+		return nil, err
+	}
+	
+	if len(records) == 0 {
+		return nil, nil // No records exist
+	}
+	
+	return &records[0], nil
+}
+
+// getFileExtension extracts file extension from path
+func getFileExtension(filepath string) string {
+	lastDot := strings.LastIndex(filepath, ".")
+	if lastDot == -1 || lastDot == len(filepath)-1 {
+		return ""
+	}
+	return filepath[lastDot:]
 }

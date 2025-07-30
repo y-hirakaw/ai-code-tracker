@@ -30,8 +30,10 @@ func Divide(a, b int) int {
 	return a / b
 }
 
-// New function to test simplified format after commit
+// New function to test tracked extensions filtering
 func TestSimplified() {
 	fmt.Println("Testing simplified JSONL format after commit")
 	fmt.Println("This should create a new checkpoint")
+	fmt.Println("Only .go files should be tracked, not .md files")
+	fmt.Println("Smart skip functionality test")
 }
