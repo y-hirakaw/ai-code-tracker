@@ -1,4 +1,4 @@
-# AI Code Tracker (AICT) v0.3.0
+# AI Code Tracker (AICT) v0.3.1
 
 A Go-based CLI tool for tracking the proportion of AI-generated versus human-written code, integrated with Claude Code and Git.
 
@@ -14,40 +14,52 @@ A Go-based CLI tool for tracking the proportion of AI-generated versus human-wri
 
 ## 🚀 Quick Start
 
-### 1. Setup
+### 1. Installation
 
 ```bash
-# Clone repository
+# Clone and build AI Code Tracker
 git clone https://github.com/y-hirakaw/ai-code-tracker.git
 cd ai-code-tracker
-
-# Build
 go build -o bin/aict ./cmd/aict
 
-# Initialize (creates configuration, baseline, and hook files)
-./bin/aict init
-
-# Setup hooks (enables Claude Code and Git integration)
-./bin/aict setup-hooks
+# Optional: Add to PATH for global access
+export PATH=$PATH:$(pwd)/bin
+# Or copy to system location: sudo cp bin/aict /usr/local/bin/
 ```
 
-### 2. Manual Usage
+### 2. Setup in Your Project
 
 ```bash
-# Record human code state
-./bin/aict track -author human
+# Navigate to your project directory
+cd /path/to/your-project
 
-# Record AI code state  
-./bin/aict track -author claude
+# Initialize AI Code Tracker (creates .ai_code_tracking/ directory)
+aict init  # or /path/to/ai-code-tracker/bin/aict init
 
-# Display current statistics (baseline excluded)
-./bin/aict report
-
-# Reset tracking from current state (with confirmation)
-./bin/aict reset
+# Setup hooks for automatic tracking with Claude Code and Git
+aict setup-hooks
 ```
 
-### 3. Automatic Usage (Claude Code Integration)
+### 3. Manual Usage
+
+```bash
+# Navigate to your project directory first
+cd /path/to/your-project
+
+# Record human code state
+aict track -author human
+
+# Record AI code state  
+aict track -author claude
+
+# Display current statistics (baseline excluded)
+aict report
+
+# Reset tracking from current state (with confirmation)
+aict reset
+```
+
+### 4. Automatic Usage (Claude Code Integration)
 
 After running `aict setup-hooks`, editing files with Claude Code will automatically track changes:
 
