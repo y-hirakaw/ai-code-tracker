@@ -30,7 +30,8 @@ func Divide(a, b int) int {
 	return a / b
 }
 
-// New function to test simplified format
+// New function to test simplified format after commit
 func TestSimplified() {
-	fmt.Println("Testing simplified JSONL format")
+	fmt.Println("Testing simplified JSONL format after commit")
+	fmt.Println("This should create a new checkpoint")
 }

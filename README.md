@@ -1,16 +1,16 @@
-# AI Code Tracker (AICT) v0.3.1
+# AI Code Tracker (AICT) v0.3.2
 
-A Go-based CLI tool for tracking the proportion of AI-generated versus human-written code, integrated with Claude Code and Git.
+A Go-based CLI tool for tracking the proportion of AI-generated versus human-written code with **ultra-lightweight JSONL storage**, integrated with Claude Code and Git.
 
 ## 🎯 Features
 
+- **Ultra-Lightweight**: JSONL format reduces storage by 70%+ (100 bytes per record)
 - **Automatic Tracking**: Integrated with Claude Code hooks for automatic edit recording
-- **Baseline System**: Track only changes from initialization point, excluding existing codebase
-- **Reset Capability**: Start fresh tracking from any point with confirmation prompts
-- **Accurate Analysis**: Precise line counting through checkpoint-based differential analysis  
-- **Real-time Reporting**: Target achievement rate based on added lines only
+- **Simple Architecture**: No baseline concept - pure differential tracking
+- **Accurate Analysis**: Git numstat-based precise line counting
+- **Real-time Reporting**: Instant AI/Human ratio calculations
+- **Scalable**: Handles large codebases (10K+ files) efficiently
 - **Configurable**: Customizable tracked file extensions and exclusion patterns
-- **Lightweight**: Efficient data storage in JSON format
 
 ## 🚀 Quick Start
 
@@ -74,7 +74,6 @@ Hook files are created in `.ai_code_tracking/hooks/` with confirmation prompts f
 ```
 AI Code Tracking Report
 ======================
-Total Lines: 1472 (including 1284 baseline)
 Added Lines: 505
   AI Lines: 236 (46.7%)
   Human Lines: 269 (53.3%)
@@ -83,6 +82,11 @@ Target: 80.0% AI code
 Progress: 58.4%
 
 Last Updated: 2025-07-30 17:24:59
+```
+
+**JSONL Record Format** (ultra-lightweight):
+```json
+{"timestamp":"2025-07-30T17:24:59+09:00","author":"claude","added":236,"deleted":45}
 ```
 
 ## ⚙️ Configuration

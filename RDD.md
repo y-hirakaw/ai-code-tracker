@@ -3,20 +3,19 @@
 ## 1. プロジェクト概要
 
 ### 1.1 目的
-AI（Claude Code等）と人間が書いたコードの割合を正確に追跡し、設定可能な目標AIコード生成率の達成を支援するツールを開発する。
+AI（Claude Code等）と人間が書いたコードの割合を正確に追跡し、設定可能な目標AIコード生成率の達成を支援する超軽量ツールを開発する。
 
 ### 1.2 主要機能
 - Claude Codeのフックと連携した自動的なコード変更追跡
-- Git post-commitフックによる自動分析
-- **ベースライン機能**: 既存コードベースを基準点として設定し、そこからの変更のみを追跡
-- **リセット機能**: 追跡メトリクスをゼロリセットし、現在のコードベースを新しいベースラインとして設定
+- Git pre/post-commitフックによる自動分析
+- **超軽量JSONL形式**: チェックポイント1つあたり約100バイトで大規模プロジェクトに対応
+- **シンプルなアーキテクチャ**: ベースライン概念を廃止し、差分追跡のみに集中
 - インタラクティブな既存設定マージ機能
-- JSON形式でのデータ保存
-- リアルタイムの進捗表示と目標達成率の可視化（追加された行のみベース）
+- 高速な差分計算とリアルタイム進捗表示
 
 ### 1.3 技術スタック
 - 実装言語: Go
-- データ形式: JSON
+- データ形式: JSONL（JSON Lines）
 - 連携: Claude Code hooks, Git hooks
 - 対象ファイル: 設定可能（任意のプログラミング言語に対応）
 
@@ -46,31 +45,35 @@ ai-code-tracker/
 │   └── settings.json      # Claude Code設定
 └── .ai_code_tracking/     # AI追跡データディレクトリ
     ├── config.json        # 追跡設定
+    ├── checkpoints.jsonl  # 超軽量チェックポイント記録（JSONL形式）
     ├── hooks/             # フックスクリプト（自動生成）
     │   ├── pre-tool-use.sh
     │   ├── post-tool-use.sh
+    │   ├── pre-commit
     │   └── post-commit
-    ├── checkpoints/       # コードスナップショット
-    └── metrics/           # 追跡メトリクス
+    └── metrics/           # レガシーメトリクス（下位互換用）
 ```
 
-### 2.2 自動追跡データフロー（実装済み）
+### 2.2 超軽量追跡データフロー（v0.3.1実装済み）
 
 ```
-1. PreToolUse Hook (人間状態記録)
+1. PreToolUse Hook → JSONL記録: {"author":"human","added":X,"deleted":Y}
    ↓
    Claude Code編集実行
    ↓
-2. PostToolUse Hook (AI状態記録)
+2. PostToolUse Hook → JSONL記録: {"author":"claude","added":X+n,"deleted":Y+m}
    ↓
-   Gitコミット
+   人間の追加編集（optional）
    ↓
-3. Post-commit Hook (メトリクス更新・アーカイブ)
+3. Pre-commit Hook → 現在状態記録
    ↓
-   metrics/current.json更新
-   ↓
-   metrics/archive/commit_<hash>_<timestamp>.json
+4. Post-commit Hook → 分析・アーカイブ（レガシー互換用）
 ```
+
+**JSONL形式の利点**：
+- **超軽量**: 1レコード約100バイト（従来の70%削減）
+- **高速処理**: シンプルな数値計算のみ
+- **大規模対応**: 数万ファイルでも軽量
 
 ## 3. データ仕様（実装済み）
 
@@ -179,29 +182,37 @@ aict reset                     # 途中でベースラインをリセット（�
 - [ ] 複数AIツール対応（GitHub Copilot、Cursor等）
 - [ ] Web UI追加（ブラウザベース統計表示）
 
-### 4.3 主要な型定義（実装済み）
+### 4.3 主要な型定義（v0.3.1実装済み）
 
 ```go
 // internal/tracker/types.go
+
+// 新しい超軽量JSONL形式（v0.3.1）
+type CheckpointRecord struct {
+    Timestamp time.Time `json:"timestamp"`
+    Author    string    `json:"author"`
+    Commit    string    `json:"commit,omitempty"`
+    Added     int       `json:"added"`   // 全ファイルの追加行数合計
+    Deleted   int       `json:"deleted"` // 全ファイルの削除行数合計
+}
+
+// レガシー形式（下位互換用）
 type Checkpoint struct {
-    ID        string                 `json:"id"`
-    Timestamp time.Time              `json:"timestamp"`
-    Author    string                 `json:"author"`
-    Files     map[string]FileContent `json:"files"`
+    ID          string                 `json:"id"`
+    Timestamp   time.Time              `json:"timestamp"`
+    Author      string                 `json:"author"`
+    CommitHash  string                 `json:"commit_hash,omitempty"`
+    Files       map[string]FileContent `json:"files"`
+    NumstatData map[string][2]int      `json:"numstat_data,omitempty"`
 }
 
-type FileContent struct {
-    Path  string   `json:"path"`
-    Lines []string `json:"lines"`
-}
-
+// シンプル化されたメトリクス（ベースライン概念を削除）
 type AnalysisResult struct {
-    TotalLines    int       `json:"total_lines"`
-    BaselineLines int       `json:"baseline_lines"`
-    AILines       int       `json:"ai_lines"`
-    HumanLines    int       `json:"human_lines"`
-    Percentage    float64   `json:"percentage"`
-    LastUpdated   time.Time `json:"last_updated"`
+    TotalLines  int       `json:"total_lines"`
+    AILines     int       `json:"ai_lines"`
+    HumanLines  int       `json:"human_lines"`
+    Percentage  float64   `json:"percentage"`
+    LastUpdated time.Time `json:"last_updated"`
 }
 
 type Config struct {
