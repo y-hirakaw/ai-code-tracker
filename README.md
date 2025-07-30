@@ -50,7 +50,7 @@ go build -o bin/aict ./cmd/aict
 2. **PostToolUse**: Claude編集後にAI状態を記録  
 3. **Post-commit**: コミット時にメトリクス保存
 
-フックファイルは`.ai_code_tracking/hooks/`に作成され、既存設定は保護されます。
+フックファイルは`.ai_code_tracking/hooks/`に作成され、既存設定がある場合は統合確認プロンプトが表示されます。
 
 ## 📊 出力例
 
@@ -82,7 +82,7 @@ Last Updated: 2025-07-30 16:04:08
 
 ## 🔧 Claude Codeフック
 
-`aict setup-hooks`により`.claude/settings.json`が作成されます（既存設定は保護）：
+`aict setup-hooks`により`.claude/settings.json`が作成されます。既存設定がある場合はマージ確認が行われます：
 
 ```json
 {
@@ -139,6 +139,24 @@ ai-code-tracker/
 - AIコードのレビュー対象特定
 - 人間によるコード品質チェック
 - バランスの取れた開発促進
+
+## 🔗 既存設定との統合
+
+既存のGitフックやClaude設定がある場合、`aict setup-hooks`は安全にマージします：
+
+```bash
+$ aict setup-hooks
+Warning: Git post-commit hook already exists at .git/hooks/post-commit
+Do you want to merge AI Code Tracker functionality? (y/N): y
+✓ Git post-commit hook merged with existing hook
+
+Warning: Claude settings already exist at .claude/settings.json  
+Do you want to merge AI Code Tracker hooks? (y/N): y
+✓ Claude Code hooks merged with existing settings
+```
+
+- **Git hookマージ**: 既存フックに追記してAICT機能を統合
+- **Claude設定マージ**: 既存設定にhooksセクションを追加
 
 ## 🔄 ワークフロー
 

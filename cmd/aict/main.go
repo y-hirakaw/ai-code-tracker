@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bufio"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/y-hirakawa/ai-code-tracker/internal/git"
 	"github.com/y-hirakawa/ai-code-tracker/internal/storage"
@@ -262,20 +265,34 @@ func setupGitHook() error {
 	// Check if Git post-commit hook already exists
 	if _, err := os.Stat(hookDest); err == nil {
 		fmt.Printf("Warning: Git post-commit hook already exists at %s\n", hookDest)
-		fmt.Println("Please manually integrate the AI Code Tracker hook or backup existing hook.")
-		return fmt.Errorf("existing Git hook found")
-	}
-	
-	if err := copyFile(hookSource, hookDest); err != nil {
-		fmt.Println("Make sure to run 'aict init' first to create hook files.")
-		return err
+		fmt.Print("Do you want to merge AI Code Tracker functionality? (y/N): ")
+		
+		reader := bufio.NewReader(os.Stdin)
+		response, _ := reader.ReadString('\n')
+		response = strings.TrimSpace(strings.ToLower(response))
+		
+		if response != "y" && response != "yes" {
+			fmt.Println("Git hook setup cancelled. Please manually integrate the AI Code Tracker hook.")
+			return fmt.Errorf("user cancelled Git hook setup")
+		}
+		
+		// Merge with existing hook
+		if err := mergeGitHook(hookSource, hookDest); err != nil {
+			return err
+		}
+		fmt.Println("✓ Git post-commit hook merged with existing hook")
+	} else {
+		// No existing hook, just copy
+		if err := copyFile(hookSource, hookDest); err != nil {
+			fmt.Println("Make sure to run 'aict init' first to create hook files.")
+			return err
+		}
+		fmt.Println("✓ Git post-commit hook installed")
 	}
 	
 	// Make it executable
 	if err := os.Chmod(hookDest, 0755); err != nil {
 		fmt.Printf("Warning: Could not make post-commit hook executable: %v\n", err)
-	} else {
-		fmt.Println("✓ Git post-commit hook installed")
 	}
 	
 	return nil
@@ -288,24 +305,94 @@ func setupClaudeHooks() error {
 	// Check if Claude settings already exist
 	if _, err := os.Stat(settingsPath); err == nil {
 		fmt.Printf("Warning: Claude settings already exist at %s\n", settingsPath)
-		fmt.Println("Please manually add AI Code Tracker hooks to your existing settings.")
-		fmt.Println("Add the following hooks to your .claude/settings.json:")
-		fmt.Println(templates.ClaudeSettingsJSON)
-		return nil
+		fmt.Print("Do you want to merge AI Code Tracker hooks? (y/N): ")
+		
+		reader := bufio.NewReader(os.Stdin)
+		response, _ := reader.ReadString('\n')
+		response = strings.TrimSpace(strings.ToLower(response))
+		
+		if response != "y" && response != "yes" {
+			fmt.Println("Claude hook setup cancelled. Please manually add the following hooks:")
+			fmt.Println(templates.ClaudeSettingsJSON)
+			return nil
+		}
+		
+		// Merge with existing settings
+		if err := mergeClaudeSettings(settingsPath); err != nil {
+			return err
+		}
+		fmt.Println("✓ Claude Code hooks merged with existing settings")
+	} else {
+		// No existing settings, create new
+		if err := os.MkdirAll(claudeDir, 0755); err != nil {
+			return err
+		}
+		
+		if err := os.WriteFile(settingsPath, []byte(templates.ClaudeSettingsJSON), 0644); err != nil {
+			return err
+		}
+		fmt.Println("✓ Claude Code hook configuration created")
 	}
 	
-	if err := os.MkdirAll(claudeDir, 0755); err != nil {
-		return err
-	}
-	
-	if err := os.WriteFile(settingsPath, []byte(templates.ClaudeSettingsJSON), 0644); err != nil {
-		return err
-	}
-	
-	fmt.Println("✓ Claude Code hook configuration created")
 	fmt.Println("✓ Hook scripts are available in .ai_code_tracking/hooks/")
-	
 	return nil
+}
+
+func mergeGitHook(hookSource, hookDest string) error {
+	// Read existing hook
+	existingContent, err := os.ReadFile(hookDest)
+	if err != nil {
+		return err
+	}
+	
+	// Read AI Code Tracker hook
+	aictContent, err := os.ReadFile(hookSource)
+	if err != nil {
+		return err
+	}
+	
+	// Create merged content
+	mergedContent := string(existingContent) + "\n\n# AI Code Tracker\n" + string(aictContent)
+	
+	// Write merged hook
+	return os.WriteFile(hookDest, []byte(mergedContent), 0755)
+}
+
+func mergeClaudeSettings(settingsPath string) error {
+	// Read existing settings
+	existingContent, err := os.ReadFile(settingsPath)
+	if err != nil {
+		return err
+	}
+	
+	var existingSettings map[string]interface{}
+	if err := json.Unmarshal(existingContent, &existingSettings); err != nil {
+		return fmt.Errorf("failed to parse existing settings: %v", err)
+	}
+	
+	// Parse AI Code Tracker settings
+	var aictSettings map[string]interface{}
+	if err := json.Unmarshal([]byte(templates.ClaudeSettingsJSON), &aictSettings); err != nil {
+		return fmt.Errorf("failed to parse AICT settings: %v", err)
+	}
+	
+	// Merge hooks
+	existingHooks, hasHooks := existingSettings["hooks"].([]interface{})
+	if !hasHooks {
+		existingHooks = []interface{}{}
+	}
+	
+	aictHooks := aictSettings["hooks"].([]interface{})
+	mergedHooks := append(existingHooks, aictHooks...)
+	existingSettings["hooks"] = mergedHooks
+	
+	// Write merged settings
+	mergedContent, err := json.MarshalIndent(existingSettings, "", "  ")
+	if err != nil {
+		return err
+	}
+	
+	return os.WriteFile(settingsPath, mergedContent, 0644)
 }
 
 func copyFile(src, dst string) error {

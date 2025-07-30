@@ -1,0 +1,10 @@
+{
+  "total_lines": 817,
+  "ai_lines": 14,
+  "human_lines": 803,
+  "percentage": 1.7135862913096693,
+  "last_updated": "2025-07-30T16:04:08.908335+09:00",
+  "commit_hash": "450eb20814f59dd9c5b0e6ba4184b575cb624081",
+  "commit_author": "y-hirakaw",
+  "commit_message": "refactor: Separate init and setup-hooks responsibilities and protect existing configurations"
+}
