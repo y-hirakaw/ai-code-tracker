@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -29,7 +30,14 @@ func (cm *CheckpointManager) CreateCheckpoint(author string, extensions []string
 		Files:     make(map[string]FileContent),
 	}
 
-	err := cm.scanCodeFiles(".", extensions, checkpoint)
+	// Try to get current commit hash
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	output, err := cmd.Output()
+	if err == nil {
+		checkpoint.CommitHash = strings.TrimSpace(string(output))
+	}
+
+	err = cm.scanCodeFiles(".", extensions, checkpoint)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan code files: %w", err)
 	}

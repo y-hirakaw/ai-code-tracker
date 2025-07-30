@@ -3,10 +3,11 @@ package tracker
 import "time"
 
 type Checkpoint struct {
-	ID        string                 `json:"id"`
-	Timestamp time.Time              `json:"timestamp"`
-	Author    string                 `json:"author"`
-	Files     map[string]FileContent `json:"files"`
+	ID         string                 `json:"id"`
+	Timestamp  time.Time              `json:"timestamp"`
+	Author     string                 `json:"author"`
+	CommitHash string                 `json:"commit_hash,omitempty"`
+	Files      map[string]FileContent `json:"files"`
 }
 
 type FileContent struct {

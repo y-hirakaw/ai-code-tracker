@@ -2,6 +2,8 @@ package tracker
 
 import (
 	"fmt"
+	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -22,6 +24,40 @@ func (a *Analyzer) AnalyzeCheckpoints(before, after *Checkpoint) (*AnalysisResul
 
 	isAIAuthor := a.IsAIAuthor(after.Author)
 
+	// Try to use git numstat for accurate line counting
+	if before.CommitHash != "" && after.CommitHash != "" {
+		numstatData, err := a.getGitNumstat(before.CommitHash, after.CommitHash)
+		if err == nil {
+			// Use git numstat data for accurate counting
+			for filepath, stats := range numstatData {
+				// Check if file should be tracked
+				if !a.shouldTrackFile(filepath) {
+					continue
+				}
+				
+				addedLines := stats[0]
+				if isAIAuthor {
+					result.AILines += addedLines
+				} else {
+					result.HumanLines += addedLines
+				}
+			}
+			
+			// Calculate total lines from current checkpoint
+			for _, file := range after.Files {
+				result.TotalLines += len(file.Lines)
+			}
+			
+			if result.TotalLines > 0 {
+				result.Percentage = float64(result.AILines) / float64(result.AILines + result.HumanLines) * 100
+			}
+			
+			return result, nil
+		}
+		// Fall back to line-by-line comparison if git numstat fails
+	}
+
+	// Original implementation (fallback)
 	for path, afterFile := range after.Files {
 		beforeFile, exists := before.Files[path]
 		if !exists {
@@ -116,8 +152,8 @@ func (a *Analyzer) compareFiles(before, after FileContent, isAIAuthor bool) File
 		Path: after.Path,
 	}
 
-	// For now, just count the difference in total lines
-	// This is a simplified approach that assumes lines are only added, not modified
+	// Simple fallback when git numstat is not available
+	// Only count net additions
 	lineDiff := len(after.Lines) - len(before.Lines)
 	
 	if lineDiff > 0 {
@@ -129,6 +165,77 @@ func (a *Analyzer) compareFiles(before, after FileContent, isAIAuthor bool) File
 	}
 
 	return stats
+}
+
+// getGitNumstat runs git diff --numstat between two commits
+func (a *Analyzer) getGitNumstat(fromCommit, toCommit string) (map[string][2]int, error) {
+	// Result: map[filepath] -> [added_lines, deleted_lines]
+	result := make(map[string][2]int)
+	
+	cmd := exec.Command("git", "diff", "--numstat", fromCommit, toCommit)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to run git diff --numstat: %w", err)
+	}
+	
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		
+		// Format: "added\tdeleted\tfilepath"
+		parts := strings.Fields(line)
+		if len(parts) < 3 {
+			continue
+		}
+		
+		added, err := strconv.Atoi(parts[0])
+		if err != nil {
+			continue // Skip binary files which show "-"
+		}
+		
+		deleted, err := strconv.Atoi(parts[1])
+		if err != nil {
+			continue
+		}
+		
+		// Handle renames: "path1 => path2" becomes just "path2"
+		filepath := strings.Join(parts[2:], " ")
+		if idx := strings.Index(filepath, " => "); idx != -1 {
+			filepath = filepath[idx+4:]
+		}
+		
+		result[filepath] = [2]int{added, deleted}
+	}
+	
+	return result, nil
+}
+
+// shouldTrackFile checks if a file should be tracked based on config
+func (a *Analyzer) shouldTrackFile(filepath string) bool {
+	// Check extension
+	hasValidExt := false
+	for _, ext := range a.config.TrackedExtensions {
+		if strings.HasSuffix(filepath, ext) {
+			hasValidExt = true
+			break
+		}
+	}
+	
+	if !hasValidExt {
+		return false
+	}
+	
+	// Check exclusion patterns
+	for _, pattern := range a.config.ExcludePatterns {
+		// Simple pattern matching (can be improved with glob)
+		if strings.Contains(filepath, pattern) {
+			return false
+		}
+	}
+	
+	return true
 }
 
 func (a *Analyzer) IsAIAuthor(author string) bool {
