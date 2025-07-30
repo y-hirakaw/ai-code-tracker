@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/y-hirakawa/ai-code-tracker/internal/tracker"
+	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
 
 type MetricsStorage struct {

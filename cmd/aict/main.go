@@ -11,14 +11,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/y-hirakawa/ai-code-tracker/internal/git"
-	"github.com/y-hirakawa/ai-code-tracker/internal/storage"
-	"github.com/y-hirakawa/ai-code-tracker/internal/templates"
-	"github.com/y-hirakawa/ai-code-tracker/internal/tracker"
+	"github.com/y-hirakaw/ai-code-tracker/internal/git"
+	"github.com/y-hirakaw/ai-code-tracker/internal/storage"
+	"github.com/y-hirakaw/ai-code-tracker/internal/templates"
+	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
 
 const (
-	version        = "0.3.3"
+	version        = "0.3.4"
 	defaultBaseDir = ".ai_code_tracking"
 )
 
