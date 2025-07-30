@@ -22,10 +22,10 @@ cd ai-code-tracker
 # ビルド
 go build -o bin/aict ./cmd/aict
 
-# 初期化（フックファイルも自動作成）
+# 初期化（設定とフックファイルを作成）
 ./bin/aict init
 
-# Git post-commitフック設定
+# フック設定（Claude CodeとGit連携を有効化）
 ./bin/aict setup-hooks
 ```
 
@@ -44,13 +44,13 @@ go build -o bin/aict ./cmd/aict
 
 ### 3. 自動使用（Claude Code連携）
 
-`aict init`実行後、Claude Codeでファイルを編集すると自動的に追跡されます：
+`aict setup-hooks`実行後、Claude Codeでファイルを編集すると自動的に追跡されます：
 
 1. **PreToolUse**: Claude編集前に人間状態を記録
 2. **PostToolUse**: Claude編集後にAI状態を記録  
 3. **Post-commit**: コミット時にメトリクス保存
 
-フックファイルは`.ai_code_tracking/hooks/`に自動作成されます。
+フックファイルは`.ai_code_tracking/hooks/`に作成され、既存設定は保護されます。
 
 ## 📊 出力例
 
@@ -82,7 +82,7 @@ Last Updated: 2025-07-30 16:04:08
 
 ## 🔧 Claude Codeフック
 
-`aict init`により`.claude/settings.json`が自動作成されます：
+`aict setup-hooks`により`.claude/settings.json`が作成されます（既存設定は保護）：
 
 ```json
 {
@@ -142,9 +142,9 @@ ai-code-tracker/
 
 ## 🔄 ワークフロー
 
-1. **初期化**: `aict init`でプロジェクト設定
-2. **フック設定**: `aict setup-hooks`で自動追跡有効化
-3. **開発**: Claude Codeで通常通り開発
+1. **初期化**: `aict init`でプロジェクト設定とファイル作成
+2. **フック設定**: `aict setup-hooks`でClaude CodeとGit連携を有効化
+3. **開発**: Claude Codeで通常通り開発（自動追跡）
 4. **監視**: `aict report`で進捗確認
 5. **調整**: 目標達成に向けた開発戦略調整
 

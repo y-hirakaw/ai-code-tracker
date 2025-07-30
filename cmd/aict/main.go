@@ -70,23 +70,16 @@ func handleInit() {
 		}
 	}
 
-	// Create hook scripts
+	// Create hook scripts only
 	if err := createHookFiles(baseDir); err != nil {
 		fmt.Printf("Warning: Could not create hook files: %v\n", err)
 	} else {
 		fmt.Println("✓ Hook scripts created in .ai_code_tracking/hooks/")
 	}
 
-	// Create Claude settings file
-	if err := createClaudeSettings(); err != nil {
-		fmt.Printf("Warning: Could not create Claude settings: %v\n", err)
-	} else {
-		fmt.Println("✓ Claude Code hook configuration created")
-	}
-
 	fmt.Println("AI Code Tracker initialized successfully!")
 	fmt.Printf("Configuration saved to %s/config.json\n", baseDir)
-	fmt.Println("Run 'aict setup-hooks' to install Git post-commit hook.")
+	fmt.Println("Run 'aict setup-hooks' to enable automatic tracking with Claude Code and Git.")
 }
 
 func handleTrack() {
@@ -216,29 +209,22 @@ func countTotalLines(checkpoint *tracker.Checkpoint) int {
 }
 
 func handleSetupHooks() {
-	fmt.Println("Setting up Git post-commit hook...")
+	fmt.Println("Setting up AI Code Tracker hooks...")
 	
-	// Copy Git post-commit hook from .ai_code_tracking/hooks/
-	hookSource := filepath.Join(defaultBaseDir, "hooks", "post-commit")
-	hookDest := ".git/hooks/post-commit"
-	
-	if err := copyFile(hookSource, hookDest); err != nil {
-		fmt.Printf("Error: Could not setup Git post-commit hook: %v\n", err)
-		fmt.Println("Make sure to run 'aict init' first to create hook files.")
+	// Setup Git post-commit hook
+	if err := setupGitHook(); err != nil {
+		fmt.Printf("Error setting up Git post-commit hook: %v\n", err)
 		os.Exit(1)
 	}
 	
-	// Make it executable
-	if err := os.Chmod(hookDest, 0755); err != nil {
-		fmt.Printf("Warning: Could not make post-commit hook executable: %v\n", err)
-	} else {
-		fmt.Println("✓ Git post-commit hook installed")
+	// Setup Claude Code hooks
+	if err := setupClaudeHooks(); err != nil {
+		fmt.Printf("Error setting up Claude Code hooks: %v\n", err)
+		os.Exit(1)
 	}
 	
-	fmt.Println("✓ Claude Code hooks are configured in .claude/settings.json")
-	fmt.Println("✓ Hook scripts are available in .ai_code_tracking/hooks/")
 	fmt.Println()
-	fmt.Println("Hook setup complete! Claude Code will now automatically track AI vs Human contributions.")
+	fmt.Println("✓ Hook setup complete! Claude Code will now automatically track AI vs Human contributions.")
 }
 
 func createHookFiles(baseDir string) error {
@@ -268,14 +254,58 @@ func createHookFiles(baseDir string) error {
 	return nil
 }
 
-func createClaudeSettings() error {
+func setupGitHook() error {
+	// Copy Git post-commit hook from .ai_code_tracking/hooks/
+	hookSource := filepath.Join(defaultBaseDir, "hooks", "post-commit")
+	hookDest := ".git/hooks/post-commit"
+	
+	// Check if Git post-commit hook already exists
+	if _, err := os.Stat(hookDest); err == nil {
+		fmt.Printf("Warning: Git post-commit hook already exists at %s\n", hookDest)
+		fmt.Println("Please manually integrate the AI Code Tracker hook or backup existing hook.")
+		return fmt.Errorf("existing Git hook found")
+	}
+	
+	if err := copyFile(hookSource, hookDest); err != nil {
+		fmt.Println("Make sure to run 'aict init' first to create hook files.")
+		return err
+	}
+	
+	// Make it executable
+	if err := os.Chmod(hookDest, 0755); err != nil {
+		fmt.Printf("Warning: Could not make post-commit hook executable: %v\n", err)
+	} else {
+		fmt.Println("✓ Git post-commit hook installed")
+	}
+	
+	return nil
+}
+
+func setupClaudeHooks() error {
 	claudeDir := ".claude"
+	settingsPath := filepath.Join(claudeDir, "settings.json")
+	
+	// Check if Claude settings already exist
+	if _, err := os.Stat(settingsPath); err == nil {
+		fmt.Printf("Warning: Claude settings already exist at %s\n", settingsPath)
+		fmt.Println("Please manually add AI Code Tracker hooks to your existing settings.")
+		fmt.Println("Add the following hooks to your .claude/settings.json:")
+		fmt.Println(templates.ClaudeSettingsJSON)
+		return nil
+	}
+	
 	if err := os.MkdirAll(claudeDir, 0755); err != nil {
 		return err
 	}
-
-	settingsPath := filepath.Join(claudeDir, "settings.json")
-	return os.WriteFile(settingsPath, []byte(templates.ClaudeSettingsJSON), 0644)
+	
+	if err := os.WriteFile(settingsPath, []byte(templates.ClaudeSettingsJSON), 0644); err != nil {
+		return err
+	}
+	
+	fmt.Println("✓ Claude Code hook configuration created")
+	fmt.Println("✓ Hook scripts are available in .ai_code_tracking/hooks/")
+	
+	return nil
 }
 
 func copyFile(src, dst string) error {
