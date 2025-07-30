@@ -21,3 +21,16 @@ func Add(a, b int) int {
 func Multiply(a, b int) int {
 	return a * b
 }
+
+// Division function for simplified JSONL testing
+func Divide(a, b int) int {
+	if b == 0 {
+		return 0
+	}
+	return a / b
+}
+
+// New function to test simplified format
+func TestSimplified() {
+	fmt.Println("Testing simplified JSONL format")
+}

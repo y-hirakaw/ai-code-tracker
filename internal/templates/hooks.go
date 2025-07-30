@@ -85,6 +85,34 @@ echo "AI Code Tracker: Current status:" >&2
 # Exit successfully
 exit 0`
 
+// PreCommitHook template for Git pre-commit hook
+const PreCommitHook = `#!/bin/bash
+
+# AI Code Tracker - Git Pre-Commit Hook
+# Records current state before commit
+
+set -e
+
+# Get project directory
+PROJECT_DIR="$(git rev-parse --show-toplevel)"
+AICT_BIN="$PROJECT_DIR/bin/aict"
+
+# Check if aict binary exists
+if [[ ! -f "$AICT_BIN" ]]; then
+    exit 0
+fi
+
+# Check if AI Code Tracker is initialized
+if [[ ! -d "$PROJECT_DIR/.ai_code_tracking" ]]; then
+    exit 0
+fi
+
+# Record current state as human contribution
+# This captures any uncommitted changes as human work
+"$AICT_BIN" track -author human >/dev/null 2>&1
+
+exit 0`
+
 // PostCommitHook template for Git post-commit hook
 const PostCommitHook = `#!/bin/bash
 
@@ -132,6 +160,9 @@ if [[ -f "$METRICS_FILE" ]]; then
        "$METRICS_FILE" > "$ARCHIVE_FILE"
     echo "AI Code Tracker: Metrics archived to $ARCHIVE_FILE" >&2
 fi
+
+# Reset baseline after commit (silently)
+"$AICT_BIN" reset-baseline >/dev/null 2>&1
 
 exit 0`
 

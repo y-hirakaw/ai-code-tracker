@@ -43,6 +43,11 @@ func main() {
 			fmt.Printf("Error: %v\n", err)
 			os.Exit(1)
 		}
+	case "reset-baseline":
+		if err := handleResetBaseline(); err != nil {
+			fmt.Printf("Error: %v\n", err)
+			os.Exit(1)
+		}
 	case "version", "--version", "-v":
 		fmt.Printf("AI Code Tracker (aict) version %s\n", version)
 	default:
@@ -52,6 +57,58 @@ func main() {
 	}
 }
 
+// handleResetBaseline resets the baseline without user confirmation (for hooks)
+func handleResetBaseline() error {
+	baseDir := defaultBaseDir
+	
+	// Check if initialized
+	if _, err := os.Stat(baseDir); os.IsNotExist(err) {
+		return nil // Not initialized, silently exit
+	}
+	
+	// Initialize metrics storage
+	metricsStorage := storage.NewMetricsStorage(baseDir)
+	
+	// Create new baseline checkpoint
+	config, err := storage.NewMetricsStorage(baseDir).LoadConfig()
+	if err != nil {
+		return fmt.Errorf("error loading config: %v", err)
+	}
+	
+	checkpointManager := tracker.NewCheckpointManager(baseDir)
+	baselineCheckpoint, err := checkpointManager.CreateCheckpoint("baseline", config.TrackedExtensions)
+	if err != nil {
+		return fmt.Errorf("error creating baseline checkpoint: %v", err)
+	}
+	
+	// Count baseline lines
+	baselineLines := 0
+	for _, file := range baselineCheckpoint.Files {
+		baselineLines += len(file.Lines)
+	}
+	
+	// Reset metrics with new baseline
+	resetMetrics := &tracker.AnalysisResult{
+		TotalLines:    baselineLines,
+		BaselineLines: baselineLines,
+		AILines:       0,
+		HumanLines:    0,
+		Percentage:    0.0,
+		LastUpdated:   time.Now(),
+	}
+	
+	if err := metricsStorage.SaveMetrics(resetMetrics); err != nil {
+		return fmt.Errorf("error resetting metrics: %v", err)
+	}
+	
+	// Save baseline checkpoint
+	baselineCheckpoint.ID = "baseline_" + baselineCheckpoint.ID
+	if err := checkpointManager.SaveCheckpoint(baselineCheckpoint); err != nil {
+		return fmt.Errorf("error saving baseline checkpoint: %v", err)
+	}
+	
+	return nil
+}
 
 func handleInit() {
 	baseDir := defaultBaseDir
@@ -74,14 +131,28 @@ func handleInit() {
 		os.Exit(1)
 	}
 
+	// Create baseline checkpoint from current codebase
+	checkpointMgr := tracker.NewCheckpointManager(baseDir)
+	baselineCheckpoint, err := checkpointMgr.CreateCheckpoint("baseline", config.TrackedExtensions)
+	if err != nil {
+		fmt.Printf("Error creating baseline checkpoint: %v\n", err)
+		os.Exit(1)
+	}
 	
-	// Initialize metrics
+	if err := checkpointMgr.SaveCheckpoint(baselineCheckpoint); err != nil {
+		fmt.Printf("Error saving baseline checkpoint: %v\n", err)
+		os.Exit(1)
+	}
+	
+	// Initialize metrics with baseline
+	baselineLines := countTotalLines(baselineCheckpoint)
 	initialMetrics := &tracker.AnalysisResult{
-		TotalLines:  0,
-		AILines:     0,
-		HumanLines:  0,
-		Percentage:  0.0,
-		LastUpdated: time.Now(),
+		TotalLines:    baselineLines,
+		BaselineLines: baselineLines,
+		AILines:       0,
+		HumanLines:    0,
+		Percentage:    0.0,
+		LastUpdated:   time.Now(),
 	}
 	
 	if err := metricsStorage.SaveMetrics(initialMetrics); err != nil {
@@ -107,12 +178,13 @@ func handleInit() {
 
 	fmt.Println("AI Code Tracker initialized successfully!")
 	fmt.Printf("Configuration saved to %s/config.json\n", baseDir)
-	fmt.Println("✓ Metrics initialized for tracking")
+	fmt.Printf("✓ Baseline checkpoint created (%d lines)\n", baselineLines)
+	fmt.Println("✓ Metrics initialized for tracking changes from baseline")
 	fmt.Println()
 	fmt.Println("Next step:")
 	fmt.Println("Run 'aict setup-hooks' to enable automatic tracking with Claude Code and Git")
 	fmt.Println()
-	fmt.Println("Now you can start tracking AI vs Human code contributions.")
+	fmt.Println("From now on, only code changes from this baseline will be tracked.")
 }
 
 func handleTrack() {
@@ -150,77 +222,89 @@ func handleTrack() {
 	fmt.Printf("✓ Checkpoint recorded for author: %s\n", *author)
 }
 
-// updateMetricsFromRecords updates metrics based on JSONL records
-func updateMetricsFromRecords(baseDir string) error {
-	// Load configuration
-	metricsStorage := storage.NewMetricsStorage(baseDir)
-	config, err := metricsStorage.LoadConfig()
+	// Get all checkpoints to find the previous one
+	allCheckpoints, err := checkpointMgr.GetLatestCheckpoints("*", 100)
 	if err != nil {
-		return fmt.Errorf("error loading config: %w", err)
+		fmt.Printf("Error getting checkpoints: %v\n", err)
+		os.Exit(1)
 	}
 
-	// Read all records
-	recorder := tracker.NewCheckpointRecorder(baseDir)
-	records, err := recorder.ReadAllRecords()
-	if err != nil {
-		return fmt.Errorf("error reading records: %w", err)
+	// Find baseline checkpoint and previous checkpoint
+	var baselineCheckpoint *tracker.Checkpoint
+	var previousCheckpoint *tracker.Checkpoint
+	
+	for i := len(allCheckpoints) - 1; i >= 0; i-- {
+		if allCheckpoints[i].ID != checkpoint.ID {
+			if allCheckpoints[i].Author == "baseline" {
+				baselineCheckpoint = allCheckpoints[i]
+			} else if previousCheckpoint == nil {
+				previousCheckpoint = allCheckpoints[i]
+			}
+		}
 	}
 
-	// Analyze records
+	if baselineCheckpoint == nil {
+		fmt.Println("Error: No baseline checkpoint found. Please run 'aict init' first.")
+		os.Exit(1)
+	}
+
+	if previousCheckpoint == nil {
+		// First tracking after baseline - compare against baseline
+		previousCheckpoint = baselineCheckpoint
+	}
+
+	// Analyze diff between previous and current checkpoint
 	analyzer := tracker.NewAnalyzer(config)
-	result, err := analyzer.AnalyzeRecords(records)
+	result, err := analyzer.AnalyzeCheckpoints(previousCheckpoint, checkpoint)
 	if err != nil {
-		return fmt.Errorf("error analyzing records: %w", err)
+		fmt.Printf("Error analyzing checkpoints: %v\n", err)
+		os.Exit(1)
 	}
 
-	// Update total lines
-	result.TotalLines = result.AILines + result.HumanLines
+	// Add changes to current metrics
+	currentMetrics.AILines += result.AILines
+	currentMetrics.HumanLines += result.HumanLines
+	
+	// Update total lines (baseline + changes)
+	currentMetrics.TotalLines = countTotalLines(checkpoint)
+	currentMetrics.LastUpdated = result.LastUpdated
 
-	// Save updated metrics
-	return metricsStorage.SaveMetrics(result)
+	// Calculate percentage based on added lines only (excluding baseline)
+	addedLines := currentMetrics.AILines + currentMetrics.HumanLines
+	if addedLines > 0 {
+		currentMetrics.Percentage = float64(currentMetrics.AILines) / float64(addedLines) * 100
+	} else {
+		currentMetrics.Percentage = 0.0
+	}
+
+	if err := metricsStorage.SaveMetrics(currentMetrics); err != nil {
+		fmt.Printf("Error saving metrics: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("Checkpoint saved and metrics updated!")
+	analyzer2 := tracker.NewAnalyzer(config)
+	fmt.Println(analyzer2.GenerateReport(currentMetrics))
 }
 
 func handleReport() {
 	baseDir := defaultBaseDir
-	
-	// Check if initialized
-	if _, err := os.Stat(baseDir); os.IsNotExist(err) {
-		fmt.Printf("Error: AI Code Tracker not initialized. Run 'aict init' first.\n")
-		os.Exit(1)
-	}
-
-	// Load configuration
 	metricsStorage := storage.NewMetricsStorage(baseDir)
+	
 	config, err := metricsStorage.LoadConfig()
 	if err != nil {
 		fmt.Printf("Error loading config: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Try to read JSONL records first
-	recorder := tracker.NewCheckpointRecorder(baseDir)
-	records, err := recorder.ReadAllRecords()
-	if err == nil && len(records) > 0 {
-		// Use JSONL data
-		analyzer := tracker.NewAnalyzer(config)
-		
-		report, err := analyzer.GenerateReportFromRecords(records, 0)
-		if err != nil {
-			fmt.Printf("Error generating report: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Print(report)
-	} else {
-		// Fallback to legacy metrics
-		metrics, err := metricsStorage.LoadMetrics()
-		if err != nil {
-			fmt.Printf("Error loading metrics: %v\n", err)
-			os.Exit(1)
-		}
-
-		analyzer := tracker.NewAnalyzer(config)
-		fmt.Println(analyzer.GenerateReport(metrics))
+	metrics, err := metricsStorage.LoadMetrics()
+	if err != nil {
+		fmt.Printf("Error loading metrics: %v\n", err)
+		os.Exit(1)
 	}
+
+	analyzer := tracker.NewAnalyzer(config)
+	fmt.Println(analyzer.GenerateReport(metrics))
 }
 
 func countTotalLines(checkpoint *tracker.Checkpoint) int {
@@ -453,11 +537,12 @@ func handleReset() error {
 	
 	// Reset metrics to zero
 	resetMetrics := &tracker.AnalysisResult{
-		TotalLines:  0,
-		AILines:     0,
-		HumanLines:  0,
-		Percentage:  0.0,
-		LastUpdated: time.Now(),
+		TotalLines:    0,
+		BaselineLines: 0,
+		AILines:       0,
+		HumanLines:    0,
+		Percentage:    0.0,
+		LastUpdated:   time.Now(),
 	}
 	
 	if err := metricsStorage.SaveMetrics(resetMetrics); err != nil {

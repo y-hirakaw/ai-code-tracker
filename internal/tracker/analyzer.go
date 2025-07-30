@@ -24,7 +24,60 @@ func (a *Analyzer) AnalyzeCheckpoints(before, after *Checkpoint) (*AnalysisResul
 
 	isAIAuthor := a.IsAIAuthor(after.Author)
 
-	// Try to use git numstat for accurate line counting
+	// Try to use numstat data from checkpoints for accurate counting
+	if before.NumstatData != nil && after.NumstatData != nil {
+		for filepath, afterStats := range after.NumstatData {
+			// Check if file should be tracked
+			if !a.shouldTrackFile(filepath) {
+				continue
+			}
+			
+			beforeStats, existed := before.NumstatData[filepath]
+			if !existed {
+				beforeStats = [2]int{0, 0} // File didn't exist in previous checkpoint
+			}
+			
+			// Calculate the difference in added lines between checkpoints
+			addedLinesDiff := afterStats[0] - beforeStats[0]
+			
+			if addedLinesDiff > 0 {
+				if isAIAuthor {
+					result.AILines += addedLinesDiff
+				} else {
+					result.HumanLines += addedLinesDiff
+				}
+			}
+		}
+		
+		// Check for new files in after that weren't in before
+		for filepath, afterStats := range after.NumstatData {
+			if !a.shouldTrackFile(filepath) {
+				continue
+			}
+			
+			if _, existed := before.NumstatData[filepath]; !existed {
+				// New file
+				if isAIAuthor {
+					result.AILines += afterStats[0]
+				} else {
+					result.HumanLines += afterStats[0]
+				}
+			}
+		}
+		
+		// Calculate total lines from current checkpoint
+		for _, file := range after.Files {
+			result.TotalLines += len(file.Lines)
+		}
+		
+		if result.AILines+result.HumanLines > 0 {
+			result.Percentage = float64(result.AILines) / float64(result.AILines + result.HumanLines) * 100
+		}
+		
+		return result, nil
+	}
+
+	// Fall back to commit-based or file-based comparison
 	if before.CommitHash != "" && after.CommitHash != "" {
 		numstatData, err := a.getGitNumstat(before.CommitHash, after.CommitHash)
 		if err == nil {
@@ -48,7 +101,7 @@ func (a *Analyzer) AnalyzeCheckpoints(before, after *Checkpoint) (*AnalysisResul
 				result.TotalLines += len(file.Lines)
 			}
 			
-			if result.TotalLines > 0 {
+			if result.AILines+result.HumanLines > 0 {
 				result.Percentage = float64(result.AILines) / float64(result.AILines + result.HumanLines) * 100
 			}
 			
@@ -269,7 +322,6 @@ func (a *Analyzer) GenerateReport(result *AnalysisResult) string {
 
 	report := fmt.Sprintf(`AI Code Tracking Report
 ======================
-Total Lines: %d (including %d baseline)
 Added Lines: %d
   AI Lines: %d (%.1f%%)
   Human Lines: %d (%.1f%%)
@@ -279,7 +331,6 @@ Progress: %.1f%%
 
 Last Updated: %s
 `,
-		result.TotalLines, result.BaselineLines,
 		addedLines,
 		result.AILines, result.Percentage,
 		result.HumanLines, humanPercentage,

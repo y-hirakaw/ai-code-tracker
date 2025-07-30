@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -24,10 +25,11 @@ func NewCheckpointManager(baseDir string) *CheckpointManager {
 
 func (cm *CheckpointManager) CreateCheckpoint(author string, extensions []string) (*Checkpoint, error) {
 	checkpoint := &Checkpoint{
-		ID:        cm.generateID(),
-		Timestamp: time.Now(),
-		Author:    author,
-		Files:     make(map[string]FileContent),
+		ID:          cm.generateID(),
+		Timestamp:   time.Now(),
+		Author:      author,
+		Files:       make(map[string]FileContent),
+		NumstatData: make(map[string][2]int),
 	}
 
 	// Try to get current commit hash
@@ -35,6 +37,12 @@ func (cm *CheckpointManager) CreateCheckpoint(author string, extensions []string
 	output, err := cmd.Output()
 	if err == nil {
 		checkpoint.CommitHash = strings.TrimSpace(string(output))
+	}
+
+	// Collect numstat data (diff from HEAD)
+	if err := cm.collectNumstatData(checkpoint); err != nil {
+		// Continue even if numstat fails (might not be a git repo)
+		fmt.Printf("Warning: Could not collect numstat data: %v\n", err)
 	}
 
 	err = cm.scanCodeFiles(".", extensions, checkpoint)
@@ -106,6 +114,48 @@ func (cm *CheckpointManager) GetLatestCheckpoints(author string, count int) ([]*
 	}
 
 	return checkpoints, nil
+}
+
+// collectNumstatData collects current git diff --numstat data from HEAD
+func (cm *CheckpointManager) collectNumstatData(checkpoint *Checkpoint) error {
+	cmd := exec.Command("git", "diff", "HEAD", "--numstat")
+	output, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to run git diff --numstat: %w", err)
+	}
+
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+
+		// Format: "added\tdeleted\tfilepath"
+		parts := strings.Fields(line)
+		if len(parts) < 3 {
+			continue
+		}
+
+		added, err := strconv.Atoi(parts[0])
+		if err != nil {
+			continue // Skip binary files which show "-"
+		}
+
+		deleted, err := strconv.Atoi(parts[1])
+		if err != nil {
+			continue
+		}
+
+		// Handle renames: "path1 => path2" becomes just "path2"
+		filepath := strings.Join(parts[2:], " ")
+		if idx := strings.Index(filepath, " => "); idx != -1 {
+			filepath = filepath[idx+4:]
+		}
+
+		checkpoint.NumstatData[filepath] = [2]int{added, deleted}
+	}
+
+	return nil
 }
 
 func (cm *CheckpointManager) scanCodeFiles(root string, extensions []string, checkpoint *Checkpoint) error {
