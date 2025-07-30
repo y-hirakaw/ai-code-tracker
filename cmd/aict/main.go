@@ -29,6 +29,8 @@ func main() {
 		handleTrack()
 	case "report":
 		handleReport()
+	case "setup-hooks":
+		handleSetupHooks()
 	default:
 		fmt.Printf("Unknown command: %s\n", command)
 		printUsage()
@@ -196,6 +198,44 @@ func countTotalLines(checkpoint *tracker.Checkpoint) int {
 	return total
 }
 
+func handleSetupHooks() {
+	fmt.Println("Setting up Claude Code hooks and Git post-commit hook...")
+	
+	// Copy Git post-commit hook
+	if err := copyFile("hooks/post-commit", ".git/hooks/post-commit"); err != nil {
+		fmt.Printf("Warning: Could not setup Git post-commit hook: %v\n", err)
+	} else {
+		fmt.Println("✓ Git post-commit hook installed")
+	}
+	
+	// Make it executable
+	if err := os.Chmod(".git/hooks/post-commit", 0755); err != nil {
+		fmt.Printf("Warning: Could not make post-commit hook executable: %v\n", err)
+	}
+	
+	fmt.Println("✓ Claude Code hooks are configured in .claude/settings.json")
+	fmt.Println("✓ Hook scripts are available in hooks/")
+	fmt.Println()
+	fmt.Println("Hook setup complete! Claude Code will now automatically track AI vs Human contributions.")
+}
+
+func copyFile(src, dst string) error {
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	destFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	_, err = destFile.ReadFrom(sourceFile)
+	return err
+}
+
 func printUsage() {
 	fmt.Println("AI Code Tracker (aict) - Track AI vs Human code contributions")
 	fmt.Println()
@@ -203,6 +243,7 @@ func printUsage() {
 	fmt.Println("  aict init                    Initialize tracking in current directory")
 	fmt.Println("  aict track -author <name>    Create a checkpoint for the specified author")
 	fmt.Println("  aict report                  Show current tracking metrics")
+	fmt.Println("  aict setup-hooks             Setup Claude Code and Git hooks for automatic tracking")
 }
 
 func getGitUserName() string {
