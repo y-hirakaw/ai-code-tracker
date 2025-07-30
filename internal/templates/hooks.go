@@ -10,11 +10,15 @@ set -e
 
 # Get project directory
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
-AICT_BIN="$PROJECT_DIR/bin/aict"
 
-# Check if aict binary exists
-if [[ ! -f "$AICT_BIN" ]]; then
-    echo "Warning: AI Code Tracker not found at $AICT_BIN" >&2
+# Try to find aict binary (in order of preference)
+if command -v aict >/dev/null 2>&1; then
+    AICT_BIN="aict"
+elif [[ -f "$PROJECT_DIR/bin/aict" ]]; then
+    AICT_BIN="$PROJECT_DIR/bin/aict"
+else
+    echo "Warning: AI Code Tracker (aict) not found in PATH or $PROJECT_DIR/bin/aict" >&2
+    echo "Please install aict: go install github.com/y-hirakaw/ai-code-tracker/cmd/aict@latest" >&2
     exit 0
 fi
 
@@ -50,11 +54,15 @@ set -e
 
 # Get project directory
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
-AICT_BIN="$PROJECT_DIR/bin/aict"
 
-# Check if aict binary exists
-if [[ ! -f "$AICT_BIN" ]]; then
-    echo "Warning: AI Code Tracker not found at $AICT_BIN" >&2
+# Try to find aict binary (in order of preference)
+if command -v aict >/dev/null 2>&1; then
+    AICT_BIN="aict"
+elif [[ -f "$PROJECT_DIR/bin/aict" ]]; then
+    AICT_BIN="$PROJECT_DIR/bin/aict"
+else
+    echo "Warning: AI Code Tracker (aict) not found in PATH or $PROJECT_DIR/bin/aict" >&2
+    echo "Please install aict: go install github.com/y-hirakaw/ai-code-tracker/cmd/aict@latest" >&2
     exit 0
 fi
 
@@ -123,10 +131,14 @@ set -e
 
 # Get project directory (Git hook doesn't have CLAUDE_PROJECT_DIR)
 PROJECT_DIR="$(git rev-parse --show-toplevel)"
-AICT_BIN="$PROJECT_DIR/bin/aict"
 
-# Check if aict binary exists
-if [[ ! -f "$AICT_BIN" ]]; then
+# Try to find aict binary (in order of preference)
+if command -v aict >/dev/null 2>&1; then
+    AICT_BIN="aict"
+elif [[ -f "$PROJECT_DIR/bin/aict" ]]; then
+    AICT_BIN="$PROJECT_DIR/bin/aict"
+else
+    # Silently exit if aict not found (post-commit hook should not be noisy)
     exit 0
 fi
 
@@ -160,9 +172,6 @@ if [[ -f "$METRICS_FILE" ]]; then
        "$METRICS_FILE" > "$ARCHIVE_FILE"
     echo "AI Code Tracker: Metrics archived to $ARCHIVE_FILE" >&2
 fi
-
-# Reset baseline after commit (silently)
-"$AICT_BIN" reset-baseline >/dev/null 2>&1
 
 exit 0`
 

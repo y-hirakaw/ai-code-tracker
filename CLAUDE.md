@@ -28,16 +28,18 @@ ai-code-tracker/
 │   ├── storage/           # Data persistence
 │   │   ├── json.go        # JSON serialization
 │   │   └── metrics.go     # Metrics management
-│   └── git/               # Git integration
-│       └── diff.go        # Git diff processing
-├── hooks/
-│   ├── aict-pre-tool-use.sh   # Claude Code Pre hook
-│   ├── aict-post-tool-use.sh  # Claude Code Post hook
-│   └── post-commit             # Git post-commit hook
+│   ├── git/               # Git integration
+│   │   └── diff.go        # Git diff processing
+│   └── templates/         # Hook templates
+│       └── hooks.go       # Embedded hook scripts
 ├── .claude-code/
 │   └── config.json        # Claude Code configuration
-└── .ai_code_tracking/     # AI tracking data directory
+└── .ai_code_tracking/     # AI tracking data directory (created by 'aict init')
     ├── config.json        # Tracking configuration
+    ├── hooks/             # Generated hook scripts
+    │   ├── pre-tool-use.sh
+    │   ├── post-tool-use.sh
+    │   └── post-commit
     ├── checkpoints/       # Code snapshots
     └── metrics/           # Tracking metrics
 ```

@@ -1,4 +1,4 @@
-# AI Code Tracker (AICT) v0.3.5
+# AI Code Tracker (AICT) v0.3.6
 
 A Go-based CLI tool for tracking the proportion of AI-generated versus human-written code with **ultra-lightweight JSONL storage**, integrated with Claude Code and Git.
 
