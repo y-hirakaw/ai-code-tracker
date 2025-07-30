@@ -17,6 +17,17 @@ A Go-based CLI tool for tracking the proportion of AI-generated versus human-wri
 
 ### 1. Installation
 
+#### Option A: Direct Install (Recommended)
+```bash
+# Install directly from GitHub repository
+go install github.com/y-hirakaw/ai-code-tracker/cmd/aict@latest
+
+# Make sure GOPATH/bin is in your PATH
+export PATH=$PATH:$(go env GOPATH)/bin
+# Add to your shell profile: echo 'export PATH=$PATH:$(go env GOPATH)/bin' >> ~/.bashrc
+```
+
+#### Option B: Build from Source
 ```bash
 # Clone and build AI Code Tracker
 git clone https://github.com/y-hirakaw/ai-code-tracker.git
@@ -35,7 +46,7 @@ export PATH=$PATH:$(pwd)/bin
 cd /path/to/your-project
 
 # Initialize AI Code Tracker (creates .ai_code_tracking/ directory)
-aict init  # or /path/to/ai-code-tracker/bin/aict init
+aict init
 
 # Setup hooks for automatic tracking with Claude Code and Git
 aict setup-hooks
