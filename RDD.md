@@ -164,10 +164,20 @@ aict reset                     # 途中でベースラインをリセット（�
 - [x] 既存GitフックとClaude設定の安全な統合
 
 #### 📋 今後の拡張予定
-- [ ] config設定コマンド
-- [ ] より詳細なレポート機能
-- [ ] 複数AIツール対応
-- [ ] Web UI追加
+
+##### 🔥 優先実装項目
+- [ ] **期間指定レポート機能** - 直近N日/週/月のAI/人間割合分析
+  - `aict report --since "2 weeks ago"`
+  - `aict report --from 2025-01-01 --to 2025-01-15`
+  - `aict report --last 14d`
+  - 時系列での進捗変化グラフ表示
+  - 期間別統計（日次、週次、月次集計）
+  
+##### 📋 中期実装予定
+- [ ] config設定コマンド（`aict config set/get`）
+- [ ] より詳細なレポート機能（ファイル別、プロジェクト別）
+- [ ] 複数AIツール対応（GitHub Copilot、Cursor等）
+- [ ] Web UI追加（ブラウザベース統計表示）
 
 ### 4.3 主要な型定義（実装済み）
 
@@ -290,14 +300,87 @@ go build -o bin/aict ./cmd/aict
 - ✅ Git post-commitフック
 - ✅ インタラクティブマージ機能
 
-### 中期（フェーズ3）
+### 短期（フェーズ3）- 🔥 優先実装
+- [ ] **期間指定レポート機能**
+  - CLI期間オプション実装（--since, --from/--to, --last）
+  - アーカイブデータの時系列フィルタリング
+  - 期間別統計計算エンジン
+  - 進捗変化の可視化（ASCII グラフ）
+  
+### 中期（フェーズ4）
 - [ ] 設定管理コマンド拡張（config update等）
 - [ ] 複数AIツール対応（GitHub Copilot、Cursor等）
-- [ ] より詳細なレポート（ファイル別、時系列分析）
-- [ ] Web UI追加
+- [ ] より詳細なレポート（ファイル別、プロジェクト別分析）
+- [ ] Web UI追加（時系列グラフ表示）
 
-### 長期（フェーズ4）
+### 長期（フェーズ5）
 - [ ] チーム分析機能
 - [ ] プロジェクト比較
 - [ ] API提供
 - [ ] CI/CD統合
+
+## 10. 期間指定機能の実装設計（フェーズ3優先項目）
+
+### 10.1 要件定義
+
+**背景**: 現在の実装では累積データのみ表示可能。実用的な分析のため、「直近2週間のAI/人間割合」等の期間指定レポートが必要。
+
+**主要ユースケース**:
+- 直近N日間での開発パターン分析
+- 月次/週次での進捗レポート生成
+- 特定期間でのチーム貢献度評価
+
+### 10.2 新CLIコマンド仕様
+
+```bash
+# 期間指定オプション
+aict report --since "2 weeks ago"     # 相対期間指定
+aict report --since "2025-01-01"      # 絶対日付指定
+aict report --from 2025-01-01 --to 2025-01-15  # 期間範囲指定
+aict report --last 7d                 # 直近N日指定
+aict report --last 2w                 # 直近N週指定
+aict report --last 1m                 # 直近N月指定
+
+# 出力形式オプション
+aict report --since "1 week ago" --format table   # テーブル表示
+aict report --since "1 week ago" --format graph   # ASCII グラフ
+aict report --since "1 week ago" --format json    # JSON出力
+```
+
+### 10.3 実装計画
+
+#### 10.3.1 データ構造拡張
+```go
+// 期間フィルタリング用の新しい型
+type TimeRange struct {
+    From time.Time `json:"from"`
+    To   time.Time `json:"to"`
+}
+
+type PeriodReport struct {
+    Range       TimeRange       `json:"range"`
+    TotalLines  int            `json:"total_lines"`
+    AILines     int            `json:"ai_lines"`
+    HumanLines  int            `json:"human_lines"`
+    Percentage  float64        `json:"percentage"`
+    DailyStats  []DailyStat    `json:"daily_stats"`
+}
+
+type DailyStat struct {
+    Date       time.Time `json:"date"`
+    AILines    int       `json:"ai_lines"`
+    HumanLines int       `json:"human_lines"`
+}
+```
+
+#### 10.3.2 新機能モジュール
+- `internal/period/parser.go` - 期間文字列パース機能
+- `internal/period/filter.go` - チェックポイント期間フィルタリング
+- `internal/period/analyzer.go` - 期間別統計計算
+- `internal/reports/formatter.go` - 複数フォーマット出力対応
+
+### 10.4 実装優先順位
+1. **Phase 3.1**: 基本的な期間フィルタリング（--since, --from/--to）
+2. **Phase 3.2**: 相対期間指定（--last Nd/Nw/Nm）
+3. **Phase 3.3**: 複数出力フォーマット（table, graph, json）
+4. **Phase 3.4**: 日次/週次統計とトレンド分析

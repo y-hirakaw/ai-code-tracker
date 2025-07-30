@@ -33,3 +33,6 @@ go.work.sum
 
 .DS_Store
 .claude/workspace/
+
+# AI Code Tracker data (user-specific tracking data)
+.ai_code_tracking/
