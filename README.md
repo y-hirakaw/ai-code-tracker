@@ -74,15 +74,15 @@ Hook files are created in `.ai_code_tracking/hooks/` with confirmation prompts f
 ```
 AI Code Tracking Report
 ======================
-Total Lines: 817 (including 803 baseline)
-Added Lines: 14
-  AI Lines: 14 (100.0%)
-  Human Lines: 0 (0.0%)
+Total Lines: 1472 (including 1284 baseline)
+Added Lines: 505
+  AI Lines: 236 (46.7%)
+  Human Lines: 269 (53.3%)
 
 Target: 80.0% AI code
-Progress: 125.0%
+Progress: 58.4%
 
-Last Updated: 2025-07-30 16:04:08
+Last Updated: 2025-07-30 17:24:59
 ```
 
 ## ⚙️ Configuration
