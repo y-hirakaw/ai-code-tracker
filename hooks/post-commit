@@ -7,10 +7,14 @@ set -e
 
 # Get project directory (Git hook doesn't have CLAUDE_PROJECT_DIR)
 PROJECT_DIR="$(git rev-parse --show-toplevel)"
-AICT_BIN="$PROJECT_DIR/bin/aict"
 
-# Check if aict binary exists
-if [[ ! -f "$AICT_BIN" ]]; then
+# Try to find aict binary (in order of preference)
+if command -v aict >/dev/null 2>&1; then
+    AICT_BIN="aict"
+elif [[ -f "$PROJECT_DIR/bin/aict" ]]; then
+    AICT_BIN="$PROJECT_DIR/bin/aict"
+else
+    # Silently exit if aict not found (post-commit hook should not be noisy)
     exit 0
 fi
 

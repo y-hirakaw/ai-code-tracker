@@ -7,11 +7,15 @@ set -e
 
 # Get project directory
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
-AICT_BIN="$PROJECT_DIR/bin/aict"
 
-# Check if aict binary exists
-if [[ ! -f "$AICT_BIN" ]]; then
-    echo "Warning: AI Code Tracker not found at $AICT_BIN" >&2
+# Try to find aict binary (in order of preference)
+if command -v aict >/dev/null 2>&1; then
+    AICT_BIN="aict"
+elif [[ -f "$PROJECT_DIR/bin/aict" ]]; then
+    AICT_BIN="$PROJECT_DIR/bin/aict"
+else
+    echo "Warning: AI Code Tracker (aict) not found in PATH or $PROJECT_DIR/bin/aict" >&2
+    echo "Please install aict: go install github.com/y-hirakaw/ai-code-tracker/cmd/aict@latest" >&2
     exit 0
 fi
 
