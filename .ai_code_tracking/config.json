@@ -1,0 +1,24 @@
+{
+  "target_ai_percentage": 80,
+  "tracked_extensions": [
+    ".go",
+    ".py",
+    ".js",
+    ".ts",
+    ".java",
+    ".cpp",
+    ".c",
+    ".h",
+    ".rs",
+    ".swift"
+  ],
+  "exclude_patterns": [
+    "*_test.go",
+    "*.test.js",
+    "*.spec.ts",
+    "*_generated.go"
+  ],
+  "author_mappings": {
+    "y-hirakaw\n": "human"
+  }
+}

@@ -32,8 +32,12 @@ ai-code-tracker/
 │   ├── aict-pre-tool-use.sh   # Claude Code Pre hook
 │   ├── aict-post-tool-use.sh  # Claude Code Post hook
 │   └── post-commit             # Git post-commit hook
-└── .claude-code/
-    └── config.json        # Claude Code configuration
+├── .claude-code/
+│   └── config.json        # Claude Code configuration
+└── .ai_code_tracking/     # AI tracking data directory
+    ├── config.json        # Tracking configuration
+    ├── checkpoints/       # Code snapshots
+    └── metrics/           # Tracking metrics
 ```
 
 ## Development Commands
@@ -67,7 +71,7 @@ go mod tidy
 
 ## Configuration
 
-The system will use `.ai_tracking/config.json` for configuration:
+The system will use `.ai_code_tracking/config.json` for configuration:
 - Target AI percentage (default: 80%)
 - File extensions to track (code files only)
 - Exclude patterns (test files, generated files)
