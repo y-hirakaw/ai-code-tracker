@@ -15,11 +15,12 @@ type FileContent struct {
 }
 
 type AnalysisResult struct {
-	TotalLines  int     `json:"total_lines"`
-	AILines     int     `json:"ai_lines"`
-	HumanLines  int     `json:"human_lines"`
-	Percentage  float64 `json:"percentage"`
-	LastUpdated time.Time `json:"last_updated"`
+	TotalLines    int     `json:"total_lines"`
+	BaselineLines int     `json:"baseline_lines"`
+	AILines       int     `json:"ai_lines"`
+	HumanLines    int     `json:"human_lines"`
+	Percentage    float64 `json:"percentage"`
+	LastUpdated   time.Time `json:"last_updated"`
 }
 
 type FileStats struct {

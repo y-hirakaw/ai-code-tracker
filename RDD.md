@@ -8,9 +8,11 @@ AI（Claude Code等）と人間が書いたコードの割合を正確に追跡�
 ### 1.2 主要機能
 - Claude Codeのフックと連携した自動的なコード変更追跡
 - Git post-commitフックによる自動分析
+- **ベースライン機能**: 既存コードベースを基準点として設定し、そこからの変更のみを追跡
+- **リセット機能**: 追跡メトリクスをゼロリセットし、現在のコードベースを新しいベースラインとして設定
 - インタラクティブな既存設定マージ機能
 - JSON形式でのデータ保存
-- リアルタイムの進捗表示と目標達成率の可視化
+- リアルタイムの進捗表示と目標達成率の可視化（追加された行のみベース）
 
 ### 1.3 技術スタック
 - 実装言語: Go
@@ -111,12 +113,15 @@ ai-code-tracker/
 ```json
 {
   "total_lines": 817,
+  "baseline_lines": 803,
   "ai_lines": 14,
-  "human_lines": 803,
-  "percentage": 1.7135862913096693,
+  "human_lines": 0,
+  "percentage": 100.0,
   "last_updated": "2025-07-30T15:52:30.252106+09:00"
 }
 ```
+
+**重要**: `percentage`はベースラインを除いた追加行（`ai_lines + human_lines`）に対するAI行の割合を示します。
 
 ## 4. 実装仕様（現在の状況）
 
@@ -124,16 +129,18 @@ ai-code-tracker/
 
 ```bash
 # 基本コマンド（実装済み）
-aict init                      # プロジェクト初期化・フックファイル作成
+aict init                      # プロジェクト初期化・ベースライン作成・フックファイル作成
 aict setup-hooks               # Claude Code・Git フック設定
 aict track -author <name>      # チェックポイント作成（手動）
-aict report                    # レポート表示
+aict report                    # レポート表示（ベースラインからの変更を表示）
+aict reset                     # メトリクスリセット・現在状態を新ベースラインに設定
 
 # 使用例
-aict init                      # 設定とファイル作成
+aict init                      # 設定とベースライン作成（既存コードは計測対象外）
 aict setup-hooks               # フック連携設定
 aict track -author human       # 人間のチェックポイント
 aict track -author claude      # AIのチェックポイント
+aict reset                     # 途中でベースラインをリセット（確認プロンプト付き）
 ```
 
 ### 4.2 実装済み機能
@@ -143,7 +150,9 @@ aict track -author claude      # AIのチェックポイント
 - [x] コア機能実装（checkpoint.go, analyzer.go, types.go）
 - [x] Git統合（diff.go）
 - [x] ストレージ層（json.go, metrics.go）
-- [x] CLI実装（init, track, reportコマンド）
+- [x] CLI実装（init, track, report, resetコマンド）
+- [x] **ベースライン機能実装**: 既存コードを基準点として設定、追加分のみ追跡
+- [x] **リセット機能実装**: メトリクスクリア・新ベースライン設定（確認プロンプト付き）
 - [x] 基本的な動作確認とテスト
 - [x] メトリクスの累積ロジック修正
 - [x] ディレクトリ名を.ai_code_trackingに変更
@@ -177,11 +186,12 @@ type FileContent struct {
 }
 
 type AnalysisResult struct {
-    TotalLines  int     `json:"total_lines"`
-    AILines     int     `json:"ai_lines"`
-    HumanLines  int     `json:"human_lines"`
-    Percentage  float64 `json:"percentage"`
-    LastUpdated time.Time `json:"last_updated"`
+    TotalLines    int       `json:"total_lines"`
+    BaselineLines int       `json:"baseline_lines"`
+    AILines       int       `json:"ai_lines"`
+    HumanLines    int       `json:"human_lines"`
+    Percentage    float64   `json:"percentage"`
+    LastUpdated   time.Time `json:"last_updated"`
 }
 
 type Config struct {
@@ -199,15 +209,18 @@ type Config struct {
 ```
 AI Code Tracking Report
 ======================
-Total Lines: 817
-AI Lines: 14 (1.7%)
-Human Lines: 803 (98.3%)
+Total Lines: 817 (including 803 baseline)
+Added Lines: 14
+  AI Lines: 14 (100.0%)
+  Human Lines: 0 (0.0%)
 
 Target: 80.0% AI code
-Progress: 2.1%
+Progress: 125.0%
 
 Last Updated: 2025-07-30 15:52:30
 ```
+
+**変更点**: ベースライン分を明示し、追加された行のみでAI/人間の割合を計算表示
 
 ### 5.2 インタラクティブ設定マージ
 
@@ -235,19 +248,22 @@ Do you want to merge AI Code Tracker hooks? (y/N): y
 # 1. ビルド
 go build -o bin/aict ./cmd/aict
 
-# 2. 初期化（設定とフックファイル作成）
-./bin/aict init
+# 2. 初期化（設定、ベースライン作成、フックファイル作成）
+./bin/aict init                   # 既存コードを基準点（ベースライン）として設定
 
 # 3. フック設定（Claude CodeとGit連携）
 ./bin/aict setup-hooks
 
 # 4. 自動追跡開始
-# Claude Codeで編集すると自動的に追跡される
+# Claude Codeで編集すると自動的に追跡される（ベースラインからの差分のみ）
 
 # 5. 手動追跡（必要に応じて）
-./bin/aict track -author human    # 人間のベースライン
+./bin/aict track -author human    # 人間の追加編集
 ./bin/aict track -author claude   # AI編集後
-./bin/aict report                 # レポート表示
+./bin/aict report                 # レポート表示（ベースラインを除く）
+
+# 6. 途中でベースラインをリセット（必要に応じて）
+./bin/aict reset                  # 確認プロンプト付きで現在状態を新ベースラインに
 ```
 
 ## 8. 検証結果
@@ -259,12 +275,13 @@ go build -o bin/aict ./cmd/aict
 - **設定管理**: 拡張子フィルタリングと除外パターン
 - **レポート生成**: 目標達成率の可視化
 
-**テスト結果例**:
-- 初期: 人間 801行
-- AI追加: 人間 801行、AI 14行、合計 815行
-- 人間追加: 人間 803行、AI 14行、合計 817行
+**テスト結果例**（ベースライン機能適用後）:
+- ベースライン: 803行（計測対象外）
+- AI追加: 14行追加（AI 100%）
+- 人間追加: 0行追加（Human 0%）
+- 合計: 817行（ベースライン803行 + 追加14行）
 
-目標値（80% AIコード）に対する進捗率: 2.1%
+目標値（80% AIコード）に対する進捗率: 125%（追加分のみで計算）
 
 ## 9. 今後の拡張計画
 

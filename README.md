@@ -5,8 +5,10 @@ A Go-based CLI tool for tracking the proportion of AI-generated versus human-wri
 ## 🎯 Features
 
 - **Automatic Tracking**: Integrated with Claude Code hooks for automatic edit recording
+- **Baseline System**: Track only changes from initialization point, excluding existing codebase
+- **Reset Capability**: Start fresh tracking from any point with confirmation prompts
 - **Accurate Analysis**: Precise line counting through checkpoint-based differential analysis  
-- **Real-time Reporting**: Target achievement rate and detailed statistics display
+- **Real-time Reporting**: Target achievement rate based on added lines only
 - **Configurable**: Customizable tracked file extensions and exclusion patterns
 - **Lightweight**: Efficient data storage in JSON format
 
@@ -22,7 +24,7 @@ cd ai-code-tracker
 # Build
 go build -o bin/aict ./cmd/aict
 
-# Initialize (creates configuration and hook files)
+# Initialize (creates configuration, baseline, and hook files)
 ./bin/aict init
 
 # Setup hooks (enables Claude Code and Git integration)
@@ -38,8 +40,11 @@ go build -o bin/aict ./cmd/aict
 # Record AI code state  
 ./bin/aict track -author claude
 
-# Display current statistics
+# Display current statistics (baseline excluded)
 ./bin/aict report
+
+# Reset tracking from current state (with confirmation)
+./bin/aict reset
 ```
 
 ### 3. Automatic Usage (Claude Code Integration)
@@ -57,12 +62,13 @@ Hook files are created in `.ai_code_tracking/hooks/` with confirmation prompts f
 ```
 AI Code Tracking Report
 ======================
-Total Lines: 817
-AI Lines: 14 (1.7%)
-Human Lines: 803 (98.3%)
+Total Lines: 817 (including 803 baseline)
+Added Lines: 14
+  AI Lines: 14 (100.0%)
+  Human Lines: 0 (0.0%)
 
 Target: 80.0% AI code
-Progress: 2.1%
+Progress: 125.0%
 
 Last Updated: 2025-07-30 16:04:08
 ```
@@ -158,13 +164,24 @@ Do you want to merge AI Code Tracker hooks? (y/N): y
 - **Git Hook Merge**: Appends AICT functionality to existing hooks
 - **Claude Settings Merge**: Adds hooks section to existing configuration
 
+## 📋 Commands
+
+| Command | Description |
+|---------|-------------|
+| `aict init` | Initialize tracking with baseline from existing codebase |
+| `aict setup-hooks` | Setup Claude Code and Git hooks (with merge confirmation) |
+| `aict track -author <name>` | Create manual checkpoint |
+| `aict report` | Display current metrics (baseline excluded) |
+| `aict reset` | Reset metrics and create new baseline (with confirmation) |
+
 ## 🔄 Workflow
 
-1. **Initialize**: `aict init` creates project configuration and files
+1. **Initialize**: `aict init` creates baseline from existing code (excluded from metrics)
 2. **Setup Hooks**: `aict setup-hooks` enables Claude Code and Git integration
-3. **Develop**: Code normally with Claude Code (automatic tracking)
-4. **Monitor**: `aict report` to check progress
-5. **Adjust**: Modify development strategy to achieve targets
+3. **Develop**: Code normally with Claude Code (tracks only changes from baseline)
+4. **Monitor**: `aict report` to check progress on added lines only
+5. **Reset**: `aict reset` to start fresh tracking from current state (optional)
+6. **Adjust**: Modify development strategy to achieve targets
 
 ## 🛠️ Technical Specifications
 
@@ -177,10 +194,11 @@ Do you want to merge AI Code Tracker hooks? (y/N): y
 ## 📈 Metrics
 
 Tracked indicators:
-- Total line count
-- AI-generated lines and percentage
-- Human-written lines and percentage
-- Target achievement rate
+- Total line count (including baseline)
+- Baseline line count (excluded from metrics)
+- AI-generated lines and percentage (of added lines)
+- Human-written lines and percentage (of added lines)
+- Target achievement rate (based on added lines only)
 - Last update timestamp
 
 ## 🔒 Security

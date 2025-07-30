@@ -154,20 +154,28 @@ func (a *Analyzer) GenerateReport(result *AnalysisResult) string {
 		progress = 100
 	}
 
+	addedLines := result.AILines + result.HumanLines
+	humanPercentage := 0.0
+	if addedLines > 0 {
+		humanPercentage = float64(result.HumanLines) / float64(addedLines) * 100
+	}
+
 	report := fmt.Sprintf(`AI Code Tracking Report
 ======================
-Total Lines: %d
-AI Lines: %d (%.1f%%)
-Human Lines: %d (%.1f%%)
+Total Lines: %d (including %d baseline)
+Added Lines: %d
+  AI Lines: %d (%.1f%%)
+  Human Lines: %d (%.1f%%)
 
 Target: %.1f%% AI code
 Progress: %.1f%%
 
 Last Updated: %s
 `,
-		result.TotalLines,
+		result.TotalLines, result.BaselineLines,
+		addedLines,
 		result.AILines, result.Percentage,
-		result.HumanLines, 100-result.Percentage,
+		result.HumanLines, humanPercentage,
 		a.config.TargetAIPercentage,
 		progress,
 		result.LastUpdated.Format("2006-01-02 15:04:05"))

@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/y-hirakawa/ai-code-tracker/internal/git"
 	"github.com/y-hirakawa/ai-code-tracker/internal/storage"
@@ -36,6 +37,11 @@ func main() {
 		handleReport()
 	case "setup-hooks":
 		handleSetupHooks()
+	case "reset":
+		if err := handleReset(); err != nil {
+			fmt.Printf("Error: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Printf("Unknown command: %s\n", command)
 		printUsage()
@@ -64,6 +70,35 @@ func handleInit() {
 		os.Exit(1)
 	}
 
+	// Create baseline checkpoint from current codebase
+	checkpointMgr := tracker.NewCheckpointManager(baseDir)
+	baselineCheckpoint, err := checkpointMgr.CreateCheckpoint("baseline", config.TrackedExtensions)
+	if err != nil {
+		fmt.Printf("Error creating baseline checkpoint: %v\n", err)
+		os.Exit(1)
+	}
+	
+	if err := checkpointMgr.SaveCheckpoint(baselineCheckpoint); err != nil {
+		fmt.Printf("Error saving baseline checkpoint: %v\n", err)
+		os.Exit(1)
+	}
+	
+	// Initialize metrics with baseline
+	baselineLines := countTotalLines(baselineCheckpoint)
+	initialMetrics := &tracker.AnalysisResult{
+		TotalLines:    baselineLines,
+		BaselineLines: baselineLines,
+		AILines:       0,
+		HumanLines:    0,
+		Percentage:    0.0,
+		LastUpdated:   time.Now(),
+	}
+	
+	if err := metricsStorage.SaveMetrics(initialMetrics); err != nil {
+		fmt.Printf("Error initializing metrics: %v\n", err)
+		os.Exit(1)
+	}
+
 	gitAnalyzer := git.NewDiffAnalyzer()
 	if gitAnalyzer.IsGitRepository() {
 		userName := getGitUserName()
@@ -82,7 +117,13 @@ func handleInit() {
 
 	fmt.Println("AI Code Tracker initialized successfully!")
 	fmt.Printf("Configuration saved to %s/config.json\n", baseDir)
-	fmt.Println("Run 'aict setup-hooks' to enable automatic tracking with Claude Code and Git.")
+	fmt.Printf("✓ Baseline checkpoint created (%d lines)\n", baselineLines)
+	fmt.Println("✓ Metrics initialized for tracking changes from baseline")
+	fmt.Println()
+	fmt.Println("Next step:")
+	fmt.Println("Run 'aict setup-hooks' to enable automatic tracking with Claude Code and Git")
+	fmt.Println()
+	fmt.Println("From now on, only code changes from this baseline will be tracked.")
 }
 
 func handleTrack() {
@@ -131,46 +172,52 @@ func handleTrack() {
 		os.Exit(1)
 	}
 
-	// Find the last checkpoint before this one
+	// Find baseline checkpoint and previous checkpoint
+	var baselineCheckpoint *tracker.Checkpoint
 	var previousCheckpoint *tracker.Checkpoint
+	
 	for i := len(allCheckpoints) - 1; i >= 0; i-- {
 		if allCheckpoints[i].ID != checkpoint.ID {
-			previousCheckpoint = allCheckpoints[i]
-			break
+			if allCheckpoints[i].Author == "baseline" {
+				baselineCheckpoint = allCheckpoints[i]
+			} else if previousCheckpoint == nil {
+				previousCheckpoint = allCheckpoints[i]
+			}
 		}
+	}
+
+	if baselineCheckpoint == nil {
+		fmt.Println("Error: No baseline checkpoint found. Please run 'aict init' first.")
+		os.Exit(1)
 	}
 
 	if previousCheckpoint == nil {
-		// First checkpoint - all lines are from this author
-		if analyzer := tracker.NewAnalyzer(config); analyzer.IsAIAuthor(*author) {
-			currentMetrics.AILines = countTotalLines(checkpoint)
-			currentMetrics.TotalLines = currentMetrics.AILines
-		} else {
-			currentMetrics.HumanLines = countTotalLines(checkpoint)
-			currentMetrics.TotalLines = currentMetrics.HumanLines
-		}
-		currentMetrics.LastUpdated = checkpoint.Timestamp
-	} else {
-		// Analyze diff between previous and current checkpoint
-		analyzer := tracker.NewAnalyzer(config)
-		result, err := analyzer.AnalyzeCheckpoints(previousCheckpoint, checkpoint)
-		if err != nil {
-			fmt.Printf("Error analyzing checkpoints: %v\n", err)
-			os.Exit(1)
-		}
-
-		// Add to current metrics
-		currentMetrics.AILines += result.AILines
-		currentMetrics.HumanLines += result.HumanLines
-		// Recalculate total lines from the latest checkpoint
-		currentMetrics.TotalLines = countTotalLines(checkpoint)
-		// Ensure human lines = total - AI lines
-		currentMetrics.HumanLines = currentMetrics.TotalLines - currentMetrics.AILines
-		currentMetrics.LastUpdated = result.LastUpdated
+		// First tracking after baseline - compare against baseline
+		previousCheckpoint = baselineCheckpoint
 	}
 
-	if currentMetrics.TotalLines > 0 {
-		currentMetrics.Percentage = float64(currentMetrics.AILines) / float64(currentMetrics.TotalLines) * 100
+	// Analyze diff between previous and current checkpoint
+	analyzer := tracker.NewAnalyzer(config)
+	result, err := analyzer.AnalyzeCheckpoints(previousCheckpoint, checkpoint)
+	if err != nil {
+		fmt.Printf("Error analyzing checkpoints: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Add changes to current metrics
+	currentMetrics.AILines += result.AILines
+	currentMetrics.HumanLines += result.HumanLines
+	
+	// Update total lines (baseline + changes)
+	currentMetrics.TotalLines = countTotalLines(checkpoint)
+	currentMetrics.LastUpdated = result.LastUpdated
+
+	// Calculate percentage based on added lines only (excluding baseline)
+	addedLines := currentMetrics.AILines + currentMetrics.HumanLines
+	if addedLines > 0 {
+		currentMetrics.Percentage = float64(currentMetrics.AILines) / float64(addedLines) * 100
+	} else {
+		currentMetrics.Percentage = 0.0
 	}
 
 	if err := metricsStorage.SaveMetrics(currentMetrics); err != nil {
@@ -179,8 +226,8 @@ func handleTrack() {
 	}
 
 	fmt.Println("Checkpoint saved and metrics updated!")
-	analyzer := tracker.NewAnalyzer(config)
-	fmt.Println(analyzer.GenerateReport(currentMetrics))
+	analyzer2 := tracker.NewAnalyzer(config)
+	fmt.Println(analyzer2.GenerateReport(currentMetrics))
 }
 
 func handleReport() {
@@ -395,6 +442,53 @@ func mergeClaudeSettings(settingsPath string) error {
 	return os.WriteFile(settingsPath, mergedContent, 0644)
 }
 
+func handleReset() error {
+	baseDir := defaultBaseDir
+	
+	fmt.Print("This will reset all tracking metrics to zero and set current codebase as baseline. Continue? (y/N): ")
+	reader := bufio.NewReader(os.Stdin)
+	response, _ := reader.ReadString('\n')
+	response = strings.TrimSpace(strings.ToLower(response))
+	
+	if response != "y" && response != "yes" {
+		fmt.Println("Reset cancelled.")
+		return nil
+	}
+	
+	metricsStorage := storage.NewMetricsStorage(baseDir)
+	
+	// Reset metrics to zero
+	resetMetrics := &tracker.AnalysisResult{
+		TotalLines:    0,
+		BaselineLines: 0,
+		AILines:       0,
+		HumanLines:    0,
+		Percentage:    0.0,
+		LastUpdated:   time.Now(),
+	}
+	
+	if err := metricsStorage.SaveMetrics(resetMetrics); err != nil {
+		return fmt.Errorf("error resetting metrics: %v", err)
+	}
+	
+	// Clear all checkpoints
+	checkpointsDir := filepath.Join(baseDir, "checkpoints")
+	if err := os.RemoveAll(checkpointsDir); err != nil {
+		return fmt.Errorf("error clearing checkpoints: %v", err)
+	}
+	if err := os.MkdirAll(checkpointsDir, 0755); err != nil {
+		return fmt.Errorf("error recreating checkpoints directory: %v", err)
+	}
+	
+	fmt.Println("✓ Metrics reset to zero")
+	fmt.Println("✓ All checkpoints cleared")
+	fmt.Println()
+	fmt.Println("AI Code Tracker has been reset.")
+	fmt.Println("Next step: Run 'aict init' to create a new baseline from current codebase.")
+	
+	return nil
+}
+
 func copyFile(src, dst string) error {
 	sourceFile, err := os.Open(src)
 	if err != nil {
@@ -420,6 +514,7 @@ func printUsage() {
 	fmt.Println("  aict track -author <name>    Create a checkpoint for the specified author")
 	fmt.Println("  aict report                  Show current tracking metrics")
 	fmt.Println("  aict setup-hooks             Setup Claude Code and Git hooks for automatic tracking")
+	fmt.Println("  aict reset                   Reset metrics to start tracking from current codebase state")
 }
 
 func getGitUserName() string {
