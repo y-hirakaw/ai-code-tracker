@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -322,9 +323,8 @@ func TestMergeGitHook(t *testing.T) {
 	}
 }
 
-func TestMergeClaudeSettingsStructural(t *testing.T) {
-	// Test the structural aspects we can verify without triggering the panic
-	tmpDir := filepath.Join(os.TempDir(), "test-merge-claude-structural")
+func TestMergeClaudeSettings(t *testing.T) {
+	tmpDir := filepath.Join(os.TempDir(), "test-merge-claude-settings")
 	err := os.MkdirAll(tmpDir, 0755)
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
@@ -347,6 +347,93 @@ func TestMergeClaudeSettingsStructural(t *testing.T) {
 	err = mergeClaudeSettings(invalidFile)
 	if err == nil {
 		t.Error("Expected error when merging invalid JSON")
+	}
+
+	// Test successful merge with object-style hooks
+	validFile := filepath.Join(tmpDir, "valid.json")
+	existingSettings := map[string]interface{}{
+		"existing": "value",
+		"hooks": map[string]interface{}{
+			"ExistingHook": "existing_value",
+		},
+	}
+	existingData, _ := json.MarshalIndent(existingSettings, "", "  ")
+	err = os.WriteFile(validFile, existingData, 0644)
+	if err != nil {
+		t.Fatalf("Failed to create valid JSON file: %v", err)
+	}
+
+	err = mergeClaudeSettings(validFile)
+	if err != nil {
+		t.Fatalf("Failed to merge valid settings: %v", err)
+	}
+
+	// Verify merged settings
+	mergedData, err := os.ReadFile(validFile)
+	if err != nil {
+		t.Fatalf("Failed to read merged settings: %v", err)
+	}
+
+	var merged map[string]interface{}
+	err = json.Unmarshal(mergedData, &merged)
+	if err != nil {
+		t.Fatalf("Failed to parse merged settings: %v", err)
+	}
+
+	// Check that existing value is preserved
+	if merged["existing"] != "value" {
+		t.Error("Merged settings should preserve existing values")
+	}
+
+	// Check that hooks were merged
+	hooks, exists := merged["hooks"].(map[string]interface{})
+	if !exists {
+		t.Error("Merged settings should contain hooks object")
+	}
+
+	// Should have both existing and new hooks
+	if hooks["ExistingHook"] != "existing_value" {
+		t.Error("Should preserve existing hooks")
+	}
+
+	if _, hasPreTool := hooks["PreToolUse"]; !hasPreTool {
+		t.Error("Should add PreToolUse hooks from AICT")
+	}
+
+	if _, hasPostTool := hooks["PostToolUse"]; !hasPostTool {
+		t.Error("Should add PostToolUse hooks from AICT")
+	}
+
+	// Test with no existing hooks
+	noHooksFile := filepath.Join(tmpDir, "no-hooks.json")
+	noHooksSettings := map[string]interface{}{
+		"other": "setting",
+	}
+	noHooksData, _ := json.MarshalIndent(noHooksSettings, "", "  ")
+	err = os.WriteFile(noHooksFile, noHooksData, 0644)
+	if err != nil {
+		t.Fatalf("Failed to create no-hooks file: %v", err)
+	}
+
+	err = mergeClaudeSettings(noHooksFile)
+	if err != nil {
+		t.Fatalf("Failed to merge settings with no existing hooks: %v", err)
+	}
+
+	// Verify AICT hooks were added
+	mergedNoHooksData, err := os.ReadFile(noHooksFile)
+	if err != nil {
+		t.Fatalf("Failed to read merged no-hooks settings: %v", err)
+	}
+
+	var mergedNoHooks map[string]interface{}
+	err = json.Unmarshal(mergedNoHooksData, &mergedNoHooks)
+	if err != nil {
+		t.Fatalf("Failed to parse merged no-hooks settings: %v", err)
+	}
+
+	if _, hasHooks := mergedNoHooks["hooks"]; !hasHooks {
+		t.Error("Should add hooks to settings without existing hooks")
 	}
 }
 

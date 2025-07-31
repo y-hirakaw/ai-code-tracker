@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	version        = "0.3.6"
+	version        = "0.3.7"
 	defaultBaseDir = ".ai_code_tracking"
 )
 
@@ -417,15 +417,22 @@ func mergeClaudeSettings(settingsPath string) error {
 		return fmt.Errorf("failed to parse AICT settings: %v", err)
 	}
 	
-	// Merge hooks
-	existingHooks, hasHooks := existingSettings["hooks"].([]interface{})
-	if !hasHooks {
-		existingHooks = []interface{}{}
+	// Merge hooks - handle both object and array formats
+	aictHooks, ok := aictSettings["hooks"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("AICT settings hooks format is invalid")
 	}
 	
-	aictHooks := aictSettings["hooks"].([]interface{})
-	mergedHooks := append(existingHooks, aictHooks...)
-	existingSettings["hooks"] = mergedHooks
+	// Check if existing hooks is an object or array
+	if existingHooksObj, isObj := existingSettings["hooks"].(map[string]interface{}); isObj {
+		// Merge object-style hooks
+		for key, value := range aictHooks {
+			existingHooksObj[key] = value
+		}
+	} else {
+		// If existing hooks is array or doesn't exist, replace with AICT hooks
+		existingSettings["hooks"] = aictHooks
+	}
 	
 	// Write merged settings
 	mergedContent, err := json.MarshalIndent(existingSettings, "", "  ")

@@ -36,3 +36,6 @@ go.work.sum
 
 # AI Code Tracker data (user-specific tracking data)
 .ai_code_tracking/
+
+# Test demo project
+test/demo-project/
