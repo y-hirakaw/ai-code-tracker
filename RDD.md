@@ -9,6 +9,7 @@ AI（Claude Code等）と人間が書いたコードの割合を正確に追跡�
 - Claude Codeのフックと連携した自動的なコード変更追跡
 - Git pre/post-commitフックによる自動分析
 - **超軽量JSONL形式**: チェックポイント1つあたり約100バイトで大規模プロジェクトに対応
+- **期間指定レポート機能**: 直近N日/週/月の詳細分析と複数出力フォーマット対応
 - **シンプルなアーキテクチャ**: ベースライン概念を廃止し、差分追跡のみに集中
 - インタラクティブな既存設定マージ機能
 - 高速な差分計算とリアルタイム進捗表示
@@ -27,20 +28,27 @@ AI（Claude Code等）と人間が書いたコードの割合を正確に追跡�
 ai-code-tracker/
 ├── cmd/
 │   └── aict/              # メインCLIツール
-│       └── main.go
+│       ├── main.go        # メインエントリーポイント
+│       ├── handlers.go    # 期間指定レポート機能
+│       └── handlers_test.go
 ├── internal/
 │   ├── tracker/           # コア追跡ロジック
 │   │   ├── checkpoint.go  # チェックポイント管理
 │   │   ├── analyzer.go    # 分析ロジック
 │   │   └── types.go       # 型定義
+│   ├── period/            # 期間指定機能（v0.4.0新規追加）
+│   │   ├── analyzer.go    # 期間別分析
+│   │   ├── filter.go      # 時間範囲フィルタリング
+│   │   ├── formatter.go   # 複数出力フォーマット
+│   │   ├── parser.go      # 期間パース機能
+│   │   └── types.go       # 期間関連型定義
 │   ├── storage/           # データ永続化
 │   │   ├── json.go        # JSONシリアライゼーション
 │   │   └── metrics.go     # メトリクス管理
-│   └── git/               # Git連携
-│       └── diff.go        # Git diff処理
-├── internal/
-│   └── templates/          # フックテンプレート
-│       └── hooks.go        # 埋め込みテンプレート
+│   ├── git/               # Git連携
+│   │   └── diff.go        # Git diff処理
+│   └── templates/         # フックテンプレート
+│       └── hooks.go       # 埋め込みテンプレート
 ├── .claude/
 │   └── settings.json      # Claude Code設定
 └── .ai_code_tracking/     # AI追跡データディレクトリ
@@ -89,13 +97,15 @@ ai-code-tracker/
     ".go", ".py", ".js", ".ts", ".java", ".cpp", ".c", ".h", ".rs", ".swift"
   ],
   "exclude_patterns": [
-    "*_test.go", "*.test.js", "*.spec.ts", "*_generated.go"
+    "*_generated.go"
   ],
   "author_mappings": {
     "y-hirakaw": "human"
   }
 }
 ```
+
+**v0.4.0での変更点**: テストファイル（`*_test.go`, `*.test.js`, `*.spec.ts`）を追跡対象に含めるため、除外パターンから削除
 
 ### 3.2 チェックポイントJSON形式（実装済み）
 
@@ -128,7 +138,7 @@ ai-code-tracker/
 
 **重要**: `percentage`はベースラインを除いた追加行（`ai_lines + human_lines`）に対するAI行の割合を示します。
 
-## 4. 実装仕様（現在の状況）
+## 4. 実装仕様（現在の状況 - v0.4.0）
 
 ### 4.1 実装済みCLIコマンド
 
@@ -137,20 +147,33 @@ ai-code-tracker/
 aict init                      # プロジェクト初期化・ベースライン作成・フックファイル作成
 aict setup-hooks               # Claude Code・Git フック設定
 aict track -author <name>      # チェックポイント作成（手動）
-aict report                    # レポート表示（ベースラインからの変更を表示）
+aict report [options]          # レポート表示（期間指定対応）
 aict reset                     # メトリクスリセット・現在状態を新ベースラインに設定
+aict version                   # バージョン情報表示
+aict help                      # ヘルプ表示
+
+# 期間指定レポートオプション（v0.4.0新機能）
+aict report --since "2 weeks ago"             # 相対期間指定
+aict report --from 2025-01-01 --to 2025-01-15 # 期間範囲指定
+aict report --last 7d                         # 直近N日指定
+aict report --last 2w                         # 直近N週指定
+aict report --last 1m                         # 直近N月指定
+aict report --format table                    # テーブル形式（デフォルト）
+aict report --format graph                    # ASCII グラフ形式
+aict report --format json                     # JSON形式
 
 # 使用例
 aict init                      # 設定とベースライン作成（既存コードは計測対象外）
 aict setup-hooks               # フック連携設定
 aict track -author human       # 人間のチェックポイント
 aict track -author claude      # AIのチェックポイント
+aict report --last 1w --format graph  # 直近1週間をグラフ表示
 aict reset                     # 途中でベースラインをリセット（確認プロンプト付き）
 ```
 
 ### 4.2 実装済み機能
 
-#### ✅ 完了済み
+#### ✅ 完了済み（v0.4.0時点）
 - [x] プロジェクト基盤構築（go.mod、ディレクトリ構造）
 - [x] コア機能実装（checkpoint.go, analyzer.go, types.go）
 - [x] Git統合（diff.go）
@@ -170,24 +193,30 @@ aict reset                     # 途中でベースラインをリセット（�
 - [x] **超軽量JSONL形式実装**: チェックポイント記録を約100バイトに軽量化
 - [x] **tracked_extensionsフィルタリング**: 設定された拡張子のみを追跡対象に
 - [x] **スマートスキップ機能**: 対象外ファイルのみの変更時は記録をスキップして効率化
+- [x] **期間指定レポート機能完全実装（v0.4.0）**:
+  - CLI期間オプション（--since, --from/--to, --last）
+  - 複数出力フォーマット（table, graph, json）
+  - 日次統計とトレンド分析
+  - ASCII グラフ可視化と進捗バー
+  - 時間範囲パース機能（相対・絶対日付対応）
+- [x] **テストカバレッジ大幅向上**: internal/period パッケージ 89.3%
+- [x] **テストファイル追跡対応**: テストコードも正当なコードとして追跡
+- [x] **コード品質向上**: ハンドラー分離、エラーハンドリング統一
 
 #### 📋 今後の拡張予定
 
-##### 🔥 優先実装項目
-- [ ] **期間指定レポート機能** - 直近N日/週/月のAI/人間割合分析
-  - `aict report --since "2 weeks ago"`
-  - `aict report --from 2025-01-01 --to 2025-01-15`
-  - `aict report --last 14d`
-  - 時系列での進捗変化グラフ表示
-  - 期間別統計（日次、週次、月次集計）
-  
-##### 📋 中期実装予定
+##### 📋 中期実装予定（フェーズ4）
 - [ ] config設定コマンド（`aict config set/get`）
 - [ ] より詳細なレポート機能（ファイル別、プロジェクト別）
 - [ ] 複数AIツール対応（GitHub Copilot、Cursor等）
 - [ ] Web UI追加（ブラウザベース統計表示）
 
-### 4.3 主要な型定義（v0.3.1実装済み）
+##### 📋 長期実装予定（フェーズ5）
+- [ ] チーム分析機能
+- [ ] プロジェクト比較
+- [ ] API提供
+
+### 4.3 主要な型定義（v0.4.0実装済み）
 
 ```go
 // internal/tracker/types.go
@@ -228,6 +257,42 @@ type Config struct {
 }
 ```
 
+```go
+// internal/period/types.go (v0.4.0新規追加)
+
+// TimeRange represents a time range for filtering
+type TimeRange struct {
+    From time.Time `json:"from"`
+    To   time.Time `json:"to"`
+}
+
+// PeriodReport contains statistics for a specific time period
+type PeriodReport struct {
+    Range       TimeRange   `json:"range"`
+    TotalLines  int         `json:"total_lines"`
+    AILines     int         `json:"ai_lines"`
+    HumanLines  int         `json:"human_lines"`
+    Percentage  float64     `json:"percentage"`
+    DailyStats  []DailyStat `json:"daily_stats,omitempty"`
+}
+
+// DailyStat represents daily aggregated statistics
+type DailyStat struct {
+    Date       time.Time `json:"date"`
+    AILines    int       `json:"ai_lines"`
+    HumanLines int       `json:"human_lines"`
+}
+
+// ReportFormat defines output format options
+type ReportFormat string
+
+const (
+    FormatTable ReportFormat = "table"
+    FormatGraph ReportFormat = "graph"
+    FormatJSON  ReportFormat = "json"
+)
+```
+
 ## 5. UI/UX設計（実装済み）
 
 ### 5.1 現在の進捗表示
@@ -235,20 +300,77 @@ type Config struct {
 ```
 AI Code Tracking Report
 ======================
-Total Lines: 817 (including 803 baseline)
-Added Lines: 14
-  AI Lines: 14 (100.0%)
+Added Lines: 395
+  AI Lines: 395 (100.0%)
   Human Lines: 0 (0.0%)
 
 Target: 80.0% AI code
-Progress: 125.0%
+Progress: 100.0%
 
-Last Updated: 2025-07-30 15:52:30
+Last Updated: 2025-07-31 23:09:14
 ```
 
-**変更点**: ベースライン分を明示し、追加された行のみでAI/人間の割合を計算表示
+### 5.2 期間指定レポート表示（v0.4.0新機能）
 
-### 5.2 インタラクティブ設定マージ
+#### テーブル形式
+```
+AI Code Tracking Report (Period)
+=================================
+Period: 2025-07-24 22:56:33 to 2025-07-31 22:56:33
+Total Lines: 100
+  AI Lines: 70 (70.0%)
+  Human Lines: 30 (30.0%)
+
+Target: 80.0% AI code
+Progress: 87.5%
+
+Daily Breakdown:
+Date       | AI Lines | Human Lines | AI %
+-----------+----------+-------------+------
+2025-07-30 |       35 |          15 | 70.0
+2025-07-31 |       35 |          15 | 70.0
+```
+
+#### グラフ形式
+```
+AI vs Human Code Contributions (Period)
+========================================
+Period: 2025-07-30 to 2025-07-31
+
+Daily AI Percentage Trend:
+07-30 [███████████████████████████████████████████████   ] 70.0% (35/50)
+07-31 [███████████████████████████████████████████████   ] 70.0% (35/50)
+
+Target [████████████████████████████████████████          ] 80.0%
+```
+
+#### JSON形式
+```json
+{
+  "range": {
+    "from": "2025-07-24T22:56:33.055731+09:00",
+    "to": "2025-07-31T22:56:33.055731+09:00"
+  },
+  "total_lines": 100,
+  "ai_lines": 70,
+  "human_lines": 30,
+  "percentage": 70,
+  "daily_stats": [
+    {
+      "date": "2025-07-30T00:00:00Z",
+      "ai_lines": 35,
+      "human_lines": 15
+    },
+    {
+      "date": "2025-07-31T00:00:00Z",
+      "ai_lines": 35,
+      "human_lines": 15
+    }
+  ]
+}
+```
+
+### 5.3 インタラクティブ設定マージ
 
 ```
 $ aict setup-hooks
@@ -263,10 +385,11 @@ Do you want to merge AI Code Tracker hooks? (y/N): y
 
 ## 6. パフォーマンス（実装済み）
 
-- チェックポイント記録: 高速（JSON形式）
-- 分析処理: リアルタイム
+- チェックポイント記録: 高速（JSONL形式、約100バイト/レコード）
+- 分析処理: リアルタイム（期間指定対応）
 - メモリ使用量: 軽量
 - ファイルサイズ: 効率的
+- テストカバレッジ: 89.3%（period パッケージ）
 
 ## 7. セットアップ手順（実装済み）
 
@@ -286,9 +409,13 @@ go build -o bin/aict ./cmd/aict
 # 5. 手動追跡（必要に応じて）
 ./bin/aict track -author human    # 人間の追加編集
 ./bin/aict track -author claude   # AI編集後
-./bin/aict report                 # レポート表示（ベースラインを除く）
 
-# 6. 途中でベースラインをリセット（必要に応じて）
+# 6. レポート表示（期間指定対応）
+./bin/aict report                 # 基本レポート表示
+./bin/aict report --last 1w       # 直近1週間
+./bin/aict report --last 1w --format graph  # グラフ表示
+
+# 7. 途中でベースラインをリセット（必要に応じて）
 ./bin/aict reset                  # 確認プロンプト付きで現在状態を新ベースラインに
 ```
 
@@ -300,111 +427,74 @@ go build -o bin/aict ./cmd/aict
 - **リアルタイム更新**: チェックポイント間の差分を適切に計算
 - **設定管理**: 拡張子フィルタリングと除外パターン
 - **レポート生成**: 目標達成率の可視化
+- **期間指定機能**: 柔軟な時間範囲での分析（v0.4.0）
+- **複数出力フォーマット**: table/graph/json対応（v0.4.0）
+- **テストファイル追跡**: テストコードも含めた包括的な追跡（v0.4.0）
 
-**テスト結果例**（ベースライン機能適用後）:
-- ベースライン: 803行（計測対象外）
-- AI追加: 14行追加（AI 100%）
-- 人間追加: 0行追加（Human 0%）
-- 合計: 817行（ベースライン803行 + 追加14行）
+**テスト結果例**（v0.4.0時点）:
+- 総追加行数: 395行（AI 100%）
+- テストファイル含む: 包括的なコード貢献度測定
+- 期間指定: 直近1週間で詳細分析可能
+- 可視化: ASCII グラフで進捗確認
 
-目標値（80% AIコード）に対する進捗率: 125%（追加分のみで計算）
+目標値（80% AIコード）に対する進捗率: 125%（期間指定で柔軟に分析可能）
 
-## 9. 今後の拡張計画
+## 9. 開発フェーズと実装状況
 
-### 短期（フェーズ2）- ✅ 完了
+### フェーズ1 - ✅ 完了（v0.3.0まで）
+- ✅ 基盤システム構築
+- ✅ 基本追跡機能
+- ✅ JSONL軽量化
+
+### フェーズ2 - ✅ 完了（v0.3.7まで）
 - ✅ Claude Codeフック統合
 - ✅ Git post-commitフック
 - ✅ インタラクティブマージ機能
 
-### 短期（フェーズ3）- 🔥 優先実装
-- [ ] **期間指定レポート機能**
-  - CLI期間オプション実装（--since, --from/--to, --last）
-  - アーカイブデータの時系列フィルタリング
-  - 期間別統計計算エンジン
-  - 進捗変化の可視化（ASCII グラフ）
-- [ ] **コード品質向上（リファクタリング）**
-  - main.go の関数分割（500行超のモノリス構造改善）
-  - CLIコマンドハンドラーの独立化
-  - エラーハンドリングの統一化
-  - テストカバレッジ向上（期間機能と並行実装）
-  
-### 中期（フェーズ4）
+### フェーズ3 - ✅ 完了（v0.4.0）
+- ✅ **期間指定レポート機能**
+  - ✅ CLI期間オプション実装（--since, --from/--to, --last）
+  - ✅ アーカイブデータの時系列フィルタリング
+  - ✅ 期間別統計計算エンジン
+  - ✅ 進捗変化の可視化（ASCII グラフ）
+- ✅ **コード品質向上（リファクタリング）**
+  - ✅ CLIコマンドハンドラーの独立化（handlers.go）
+  - ✅ エラーハンドリングの統一化
+  - ✅ テストカバレッジ向上（89.3%）
+  - ✅ テストファイル追跡対応
+
+### フェーズ4 - 📋 計画中
 - [ ] 設定管理コマンド拡張（config update等）
 - [ ] 複数AIツール対応（GitHub Copilot、Cursor等）
 - [ ] より詳細なレポート（ファイル別、プロジェクト別分析）
 - [ ] Web UI追加（時系列グラフ表示）
 
-### 長期（フェーズ5）
+### フェーズ5 - 📋 長期計画
 - [ ] チーム分析機能
 - [ ] プロジェクト比較
 - [ ] API提供
 
-## 10. 期間指定機能の実装設計（フェーズ3優先項目）
+## 10. バージョン履歴
 
-### 10.1 要件定義
+### v0.4.0（2025-07-31）- 期間指定レポート機能
+- **Major Features Added**:
+  - 期間指定レポート機能（--since, --from/--to, --last）
+  - 複数出力フォーマット（table, graph, json）
+  - 日次統計とトレンド分析
+  - ASCII グラフ可視化と進捗バー
+- **Implementation Details**:
+  - 新規 internal/period/ パッケージ
+  - handlers.go によるCLI機能拡張
+  - 89.3%のテストカバレッジ達成
+  - テストファイル追跡対応
 
-**背景**: 現在の実装では累積データのみ表示可能。実用的な分析のため、「直近2週間のAI/人間割合」等の期間指定レポートが必要。
+### v0.3.7（2025-07-30）- バグ修正とテスト拡充
+- mergeClaudeSettings の重要なバグ修正
+- テストカバレッジ大幅向上
+- リファクタリング安全性の向上
 
-**主要ユースケース**:
-- 直近N日間での開発パターン分析
-- 月次/週次での進捗レポート生成
-- 特定期間でのチーム貢献度評価
+### v0.3.6（2025-07-30）- 構造最適化
+- 廃止されたhooksディレクトリの削除
+- テンプレート構造の更新
 
-### 10.2 新CLIコマンド仕様
-
-```bash
-# 期間指定オプション
-aict report --since "2 weeks ago"     # 相対期間指定
-aict report --since "2025-01-01"      # 絶対日付指定
-aict report --from 2025-01-01 --to 2025-01-15  # 期間範囲指定
-aict report --last 7d                 # 直近N日指定
-aict report --last 2w                 # 直近N週指定
-aict report --last 1m                 # 直近N月指定
-
-# 出力形式オプション
-aict report --since "1 week ago" --format table   # テーブル表示
-aict report --since "1 week ago" --format graph   # ASCII グラフ
-aict report --since "1 week ago" --format json    # JSON出力
-```
-
-### 10.3 実装計画
-
-#### 10.3.1 データ構造拡張
-```go
-// 期間フィルタリング用の新しい型
-type TimeRange struct {
-    From time.Time `json:"from"`
-    To   time.Time `json:"to"`
-}
-
-type PeriodReport struct {
-    Range       TimeRange       `json:"range"`
-    TotalLines  int            `json:"total_lines"`
-    AILines     int            `json:"ai_lines"`
-    HumanLines  int            `json:"human_lines"`
-    Percentage  float64        `json:"percentage"`
-    DailyStats  []DailyStat    `json:"daily_stats"`
-}
-
-type DailyStat struct {
-    Date       time.Time `json:"date"`
-    AILines    int       `json:"ai_lines"`
-    HumanLines int       `json:"human_lines"`
-}
-```
-
-#### 10.3.2 新機能モジュール
-- `internal/period/parser.go` - 期間文字列パース機能
-- `internal/period/filter.go` - チェックポイント期間フィルタリング
-- `internal/period/analyzer.go` - 期間別統計計算
-- `internal/reports/formatter.go` - 複数フォーマット出力対応
-
-### 10.4 実装優先順位
-1. **Phase 3.1**: 基本的な期間フィルタリング（--since, --from/--to）
-2. **Phase 3.2**: 相対期間指定（--last Nd/Nw/Nm）
-3. **Phase 3.3**: 複数出力フォーマット（table, graph, json）
-4. **Phase 3.4**: 日次/週次統計とトレンド分析
-
-### 10.5 スマートスキップ機能（実装済み）
-- 対象外ファイルのみの変更時は記録をスキップ
-- 前回レコードと同じ値の場合は重複記録を防止
+**現在のステータス**: **v0.4.0で期間指定機能が完全実装され、プロダクション環境で実用可能な状態**
