@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/y-hirakaw/ai-code-tracker/internal/period"
 	"github.com/y-hirakaw/ai-code-tracker/internal/storage"
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
@@ -405,5 +406,177 @@ func TestHandleResetLogic(t *testing.T) {
 
 	if len(files) != 0 {
 		t.Error("Checkpoints directory should be empty after reset")
+	}
+}
+
+// Tests for new period functionality
+
+func TestReportOptions(t *testing.T) {
+	// Test ReportOptions struct creation
+	opts := &ReportOptions{
+		Since:  "2 weeks ago",
+		Format: "table",
+	}
+	
+	if opts.Since != "2 weeks ago" {
+		t.Errorf("Expected Since to be '2 weeks ago', got %s", opts.Since)
+	}
+	
+	if opts.Format != "table" {
+		t.Errorf("Expected Format to be 'table', got %s", opts.Format)
+	}
+}
+
+// Mock data for testing period functionality
+func createMockRecords() []tracker.CheckpointRecord {
+	now := time.Now()
+	return []tracker.CheckpointRecord{
+		{
+			Timestamp: now.Add(-2 * time.Hour),
+			Author:    "human",
+			Added:     10,
+			Deleted:   0,
+		},
+		{
+			Timestamp: now.Add(-1 * time.Hour),
+			Author:    "claude",
+			Added:     20,
+			Deleted:   0,
+		},
+		{
+			Timestamp: now.Add(-30 * time.Minute),
+			Author:    "human",
+			Added:     5,
+			Deleted:   0,
+		},
+	}
+}
+
+func createMockConfig() *tracker.Config {
+	return &tracker.Config{
+		TargetAIPercentage: 80.0,
+		TrackedExtensions:  []string{".go", ".py", ".js"},
+		ExcludePatterns:    []string{"*_test.go"},
+		AuthorMappings:     map[string]string{"user": "human"},
+	}
+}
+
+func TestPeriodAnalysisFlow(t *testing.T) {
+	// Test the period analysis flow that would be used in handlePeriodReport
+	records := createMockRecords()
+	config := createMockConfig()
+	
+	// Test with --last option
+	timeRange, err := period.ParseLastDuration("1d")
+	if err != nil {
+		t.Fatalf("Failed to parse last duration: %v", err)
+	}
+	
+	analyzer := period.NewAnalyzer(config)
+	report, err := analyzer.AnalyzePeriod(records, timeRange)
+	if err != nil {
+		t.Fatalf("Failed to analyze period: %v", err)
+	}
+	
+	// Should include all records from the last day
+	expectedTotal := 10 + 20 + 5 // all records within 1 day
+	if report.TotalLines != expectedTotal {
+		t.Errorf("Expected total lines %d, got %d", expectedTotal, report.TotalLines)
+	}
+	
+	// Test formatting
+	formatter := period.NewFormatter(config.TargetAIPercentage)
+	
+	tableOutput, err := formatter.Format(report, period.FormatTable)
+	if err != nil {
+		t.Fatalf("Failed to format as table: %v", err)
+	}
+	
+	if len(tableOutput) == 0 {
+		t.Error("Table output should not be empty")
+	}
+	
+	jsonOutput, err := formatter.Format(report, period.FormatJSON)
+	if err != nil {
+		t.Fatalf("Failed to format as JSON: %v", err)
+	}
+	
+	if len(jsonOutput) == 0 {
+		t.Error("JSON output should not be empty")
+	}
+	
+	graphOutput, err := formatter.Format(report, period.FormatGraph)
+	if err != nil {
+		t.Fatalf("Failed to format as graph: %v", err)
+	}
+	
+	if len(graphOutput) == 0 {
+		t.Error("Graph output should not be empty")
+	}
+}
+
+func TestTimeRangeParsing(t *testing.T) {
+	// Test parsing functionality that would be used in handlePeriodReport
+	
+	// Test --last option
+	lastRange, err := period.ParseLastDuration("7d")
+	if err != nil {
+		t.Fatalf("Failed to parse last duration: %v", err)
+	}
+	
+	expectedDuration := 7 * 24 * time.Hour
+	actualDuration := lastRange.To.Sub(lastRange.From)
+	
+	if actualDuration != expectedDuration {
+		t.Errorf("Expected duration %v, got %v", expectedDuration, actualDuration)
+	}
+	
+	// Test --since option
+	sinceRange, err := period.ParseTimeRange("2025-01-01")
+	if err != nil {
+		t.Fatalf("Failed to parse since time: %v", err)
+	}
+	
+	expectedYear := 2025
+	if sinceRange.From.Year() != expectedYear {
+		t.Errorf("Expected year %d, got %d", expectedYear, sinceRange.From.Year())
+	}
+	
+	// Test --from/--to options
+	fromToRange, err := period.ParseFromTo("2025-01-01", "2025-01-02")
+	if err != nil {
+		t.Fatalf("Failed to parse from/to range: %v", err)
+	}
+	
+	if fromToRange.From.Year() != 2025 || fromToRange.To.Year() != 2025 {
+		t.Error("From/To range should be in 2025")
+	}
+	
+	if fromToRange.From.Month() != 1 || fromToRange.To.Month() != 1 {
+		t.Error("From/To range should be in January")
+	}
+	
+	if fromToRange.From.Day() != 1 || fromToRange.To.Day() != 2 {
+		t.Error("From should be day 1, To should be day 2")
+	}
+}
+
+func TestFilteringFunctionality(t *testing.T) {
+	// Test filtering functionality used in period reports
+	records := createMockRecords()
+	
+	now := time.Now()
+	timeRange := &period.TimeRange{
+		From: now.Add(-90 * time.Minute), // Last 90 minutes
+		To:   now,
+	}
+	
+	filtered := period.FilterRecordsInclusive(records, timeRange)
+	
+	// Should include records from the last 90 minutes
+	// This should be the claude record (1 hour ago) and human record (30 min ago)
+	expectedCount := 2
+	if len(filtered) != expectedCount {
+		t.Errorf("Expected %d filtered records, got %d", expectedCount, len(filtered))
 	}
 }

@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	version        = "0.3.7"
+	version        = "0.4.0"
 	defaultBaseDir = ".ai_code_tracking"
 )
 
@@ -35,7 +35,7 @@ func main() {
 	case "track":
 		handleTrack()
 	case "report":
-		handleReport()
+		handleReportWithOptions()
 	case "setup-hooks":
 		handleSetupHooks()
 	case "reset":
@@ -45,6 +45,8 @@ func main() {
 		}
 	case "version", "--version", "-v":
 		fmt.Printf("AI Code Tracker (aict) version %s\n", version)
+	case "help", "--help", "-h":
+		printUsage()
 	default:
 		fmt.Printf("Unknown command: %s\n", command)
 		printUsage()
@@ -180,48 +182,6 @@ func updateMetricsFromRecords(baseDir string) error {
 	return metricsStorage.SaveMetrics(result)
 }
 
-func handleReport() {
-	baseDir := defaultBaseDir
-	
-	// Check if initialized
-	if _, err := os.Stat(baseDir); os.IsNotExist(err) {
-		fmt.Printf("Error: AI Code Tracker not initialized. Run 'aict init' first.\n")
-		os.Exit(1)
-	}
-
-	// Load configuration
-	metricsStorage := storage.NewMetricsStorage(baseDir)
-	config, err := metricsStorage.LoadConfig()
-	if err != nil {
-		fmt.Printf("Error loading config: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Try to read JSONL records first
-	recorder := tracker.NewCheckpointRecorder(baseDir)
-	records, err := recorder.ReadAllRecords()
-	if err == nil && len(records) > 0 {
-		// Use JSONL data
-		analyzer := tracker.NewAnalyzer(config)
-		
-		report, err := analyzer.GenerateReportFromRecords(records, 0)
-		if err != nil {
-			fmt.Printf("Error generating report: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Print(report)
-	} else {
-		// Fallback to legacy metrics
-		metrics, err := metricsStorage.LoadMetrics()
-		if err != nil {
-			fmt.Printf("Error loading metrics: %v\n", err)
-			os.Exit(1)
-		}
-
-		analyzer := tracker.NewAnalyzer(config)
-		fmt.Println(analyzer.GenerateReport(metrics))
-	}
-}
 
 func countTotalLines(checkpoint *tracker.Checkpoint) int {
 	total := 0
@@ -512,7 +472,11 @@ func printUsage() {
 	fmt.Println("Usage:")
 	fmt.Println("  aict init                    Initialize tracking in current directory")
 	fmt.Println("  aict track -author <name>    Create a checkpoint for the specified author")
-	fmt.Println("  aict report                  Show current tracking metrics")
+	fmt.Println("  aict report [options]        Show tracking metrics")
+	fmt.Println("    --since <date>             Show report since date/time")
+	fmt.Println("    --from <date> --to <date>  Show report for date range")
+	fmt.Println("    --last <duration>          Show report for last N days/weeks/months (e.g., '7d', '2w', '1m')")
+	fmt.Println("    --format <format>          Output format: table, graph, json (default: table)")
 	fmt.Println("  aict setup-hooks             Setup Claude Code and Git hooks for automatic tracking")
 	fmt.Println("  aict reset                   Reset metrics to start tracking from current codebase state")
 	fmt.Println("  aict version                 Show version information")

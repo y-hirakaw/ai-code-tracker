@@ -2,6 +2,7 @@ package tracker
 
 import (
 	"fmt"
+	"time"
 )
 
 // AnalyzeRecords analyzes checkpoint records to generate metrics
@@ -95,4 +96,18 @@ Last Updated: %s
 func (a *Analyzer) GetFileStatsFromRecords(records []CheckpointRecord) []FileStats {
 	// Return empty slice since we no longer track per-file data
 	return []FileStats{}
+}
+
+// AnalyzeRecordsInPeriod analyzes records within a specific time period
+func (a *Analyzer) AnalyzeRecordsInPeriod(records []CheckpointRecord, from, to time.Time) (*AnalysisResult, error) {
+	// Filter records by time range
+	filtered := make([]CheckpointRecord, 0, len(records))
+	for _, record := range records {
+		if (record.Timestamp.Equal(from) || record.Timestamp.After(from)) &&
+		   (record.Timestamp.Equal(to) || record.Timestamp.Before(to)) {
+			filtered = append(filtered, record)
+		}
+	}
+	
+	return a.AnalyzeRecords(filtered)
 }

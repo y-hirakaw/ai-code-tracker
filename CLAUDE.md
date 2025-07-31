@@ -105,6 +105,10 @@ When implementing:
 - Performance tests for large repositories
 - Test coverage target: 80%+
 
+## AICT使用時の注意事項
+
+**重要**: `aict track`でコード変更を記録するには、設定された拡張子（`.go`, `.py`, `.js`等）のファイルを編集する必要があります。マークダウンファイルやテキストファイルのみの変更では記録されません。
+
 ## バージョン更新手順
 
 新しいバージョンをリリースする際は以下の手順に従ってください：
@@ -173,3 +177,7 @@ go install github.com/y-hirakaw/ai-code-tracker/cmd/aict@v[バージョン]
 - 新機能追加の場合はマイナーバージョンを上げる
 - バグ修正の場合はパッチバージョンを上げる
 - Go Module Proxy のキャッシュ更新には時間がかかる場合がある
+
+# markdown(.md)ファイルの編集について
+
+* MCPサーバーの`mcp-file-editor`を使って編集すること
