@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -47,6 +48,8 @@ func main() {
 		fmt.Printf("AI Code Tracker (aict) version %s\n", version)
 	case "help", "--help", "-h":
 		printUsage()
+	case "config":
+		handleConfig()
 	default:
 		fmt.Printf("Unknown command: %s\n", command)
 		printUsage()
@@ -478,6 +481,7 @@ func printUsage() {
 	fmt.Println("    --last <duration>          Show report for last N days/weeks/months (e.g., '7d', '2w', '1m')")
 	fmt.Println("    --format <format>          Output format: table, graph, json (default: table)")
 	fmt.Println("  aict setup-hooks             Setup Claude Code and Git hooks for automatic tracking")
+	fmt.Println("  aict config                  View and edit configuration settings")
 	fmt.Println("  aict reset                   Reset metrics to start tracking from current codebase state")
 	fmt.Println("  aict version                 Show version information")
 }
@@ -489,4 +493,76 @@ func getGitUserName() string {
 		return ""
 	}
 	return string(output)
+}
+
+func handleConfig() {
+	baseDir := defaultBaseDir
+	configPath := filepath.Join(baseDir, "config.json")
+	
+	// Check if initialized
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		fmt.Printf("Error: AI Code Tracker not initialized. Run 'aict init' first.\n")
+		os.Exit(1)
+	}
+	
+	// Display configuration explanation
+	fmt.Println("AI Code Tracker Configuration")
+	fmt.Println("=============================")
+	fmt.Println()
+	fmt.Println("Configuration Fields:")
+	fmt.Println("  target_ai_percentage   - Target percentage of AI-generated code (default: 80.0)")
+	fmt.Println("  tracked_extensions     - File extensions to track (e.g., .go, .py, .js)")
+	fmt.Println("  exclude_patterns       - Patterns to exclude from tracking (e.g., *_generated.go)")
+	fmt.Println("  author_mappings        - Map git usernames to 'human' or 'ai' categories")
+	fmt.Println()
+	fmt.Printf("Opening config file: %s\n", configPath)
+	fmt.Println()
+	
+	// Determine editor
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		// Fallback editors by platform
+		switch runtime.GOOS {
+		case "windows":
+			editor = "notepad"
+		case "darwin":
+			// Try common macOS editors
+			if _, err := exec.LookPath("code"); err == nil {
+				editor = "code"
+			} else if _, err := exec.LookPath("vim"); err == nil {
+				editor = "vim"
+			} else {
+				editor = "open -e" // TextEdit
+			}
+		default:
+			// Linux/Unix
+			if _, err := exec.LookPath("vim"); err == nil {
+				editor = "vim"
+			} else if _, err := exec.LookPath("nano"); err == nil {
+				editor = "nano"
+			} else {
+				editor = "vi"
+			}
+		}
+	}
+	
+	// Open editor
+	var cmd *exec.Cmd
+	if strings.Contains(editor, " ") {
+		// Handle commands with arguments (like "open -e")
+		parts := strings.Fields(editor)
+		cmd = exec.Command(parts[0], append(parts[1:], configPath)...)
+	} else {
+		cmd = exec.Command(editor, configPath)
+	}
+	
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("Error opening editor: %v\n", err)
+		fmt.Printf("You can manually edit the file at: %s\n", configPath)
+		os.Exit(1)
+	}
 }
