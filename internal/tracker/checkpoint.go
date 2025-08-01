@@ -94,7 +94,7 @@ func (cm *CheckpointManager) GetLatestCheckpoints(author string, count int) ([]*
 	} else {
 		pattern = filepath.Join(checkpointDir, fmt.Sprintf("%s_*.json", author))
 	}
-	
+
 	files, err := filepath.Glob(pattern)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list checkpoints: %w", err)

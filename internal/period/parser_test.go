@@ -22,19 +22,19 @@ func TestParseLastDuration(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.input, func(t *testing.T) {
 			timeRange, err := ParseLastDuration(test.input)
-			
+
 			if test.hasError {
 				if err == nil {
 					t.Errorf("Expected error for input %s, but got none", test.input)
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Errorf("Unexpected error for input %s: %v", test.input, err)
 				return
 			}
-			
+
 			actualDuration := timeRange.To.Sub(timeRange.From)
 			if actualDuration != test.expected {
 				t.Errorf("Expected duration %v, got %v", test.expected, actualDuration)
@@ -58,11 +58,11 @@ func TestParseTimeRange(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.input, func(t *testing.T) {
 			_, err := ParseTimeRange(test.input)
-			
+
 			if test.hasError && err == nil {
 				t.Errorf("Expected error for input %s, but got none", test.input)
 			}
-			
+
 			if !test.hasError && err != nil {
 				t.Errorf("Unexpected error for input %s: %v", test.input, err)
 			}
@@ -85,11 +85,11 @@ func TestParseFromTo(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.from+"_to_"+test.to, func(t *testing.T) {
 			_, err := ParseFromTo(test.from, test.to)
-			
+
 			if test.hasError && err == nil {
 				t.Errorf("Expected error for range %s to %s, but got none", test.from, test.to)
 			}
-			
+
 			if !test.hasError && err != nil {
 				t.Errorf("Unexpected error for range %s to %s: %v", test.from, test.to, err)
 			}

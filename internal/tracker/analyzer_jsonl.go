@@ -22,7 +22,7 @@ func (a *Analyzer) AnalyzeRecords(records []CheckpointRecord) (*AnalysisResult, 
 
 		// Calculate differences between consecutive records
 		diff := a.calculateRecordDiff(beforeRecord, afterRecord)
-		
+
 		// Accumulate changes based on author
 		isAIAuthor := a.IsAIAuthor(afterRecord.Author)
 		if isAIAuthor {
@@ -104,10 +104,10 @@ func (a *Analyzer) AnalyzeRecordsInPeriod(records []CheckpointRecord, from, to t
 	filtered := make([]CheckpointRecord, 0, len(records))
 	for _, record := range records {
 		if (record.Timestamp.Equal(from) || record.Timestamp.After(from)) &&
-		   (record.Timestamp.Equal(to) || record.Timestamp.Before(to)) {
+			(record.Timestamp.Equal(to) || record.Timestamp.Before(to)) {
 			filtered = append(filtered, record)
 		}
 	}
-	
+
 	return a.AnalyzeRecords(filtered)
 }

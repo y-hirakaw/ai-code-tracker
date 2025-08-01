@@ -29,7 +29,7 @@ func TestHandleResetCore(t *testing.T) {
 	// Initialize storage with some data
 	baseDir := ".ai_code_tracking"
 	metricsStorage := storage.NewMetricsStorage(baseDir)
-	
+
 	// Create config
 	config := &tracker.Config{
 		TargetAIPercentage: 80.0,
@@ -76,11 +76,11 @@ func TestHandleResetCore(t *testing.T) {
 		Percentage:  0.0,
 		LastUpdated: time.Now(),
 	}
-	
+
 	if err := metricsStorage.SaveMetrics(resetMetrics); err != nil {
 		t.Fatalf("Failed to reset metrics: %v", err)
 	}
-	
+
 	// Clear all checkpoints
 	if err := os.RemoveAll(checkpointsDir); err != nil {
 		t.Fatalf("Failed to clear checkpoints: %v", err)
@@ -138,9 +138,9 @@ func TestUserInputValidation(t *testing.T) {
 		// Simulate the input processing logic from handleReset
 		response := strings.TrimSpace(strings.ToLower(test.input))
 		shouldProceed := (response == "y" || response == "yes")
-		
+
 		if shouldProceed != test.expected {
-			t.Errorf("%s: input '%s' -> expected %v, got %v", 
+			t.Errorf("%s: input '%s' -> expected %v, got %v",
 				test.desc, test.input, test.expected, shouldProceed)
 		}
 	}
@@ -168,9 +168,9 @@ func TestSetupHooksUserInputLogic(t *testing.T) {
 		// This is the logic from setupSingleGitHook and setupClaudeHooks
 		response := strings.TrimSpace(strings.ToLower(test.input))
 		shouldProceed := (response == "y" || response == "yes")
-		
+
 		if shouldProceed != test.expected {
-			t.Errorf("%s: input '%s' -> expected %v, got %v", 
+			t.Errorf("%s: input '%s' -> expected %v, got %v",
 				test.desc, test.input, test.expected, shouldProceed)
 		}
 	}
@@ -195,7 +195,7 @@ func TestFileOperationsRobustness(t *testing.T) {
 	// Test copying to invalid destination
 	sourceFile := filepath.Join(tmpDir, "source.txt")
 	os.WriteFile(sourceFile, []byte("test content"), 0644)
-	
+
 	err = copyFile(sourceFile, "/invalid/destination/path.txt")
 	if err == nil {
 		t.Error("Expected error when copying to invalid destination")

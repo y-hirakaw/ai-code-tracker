@@ -167,7 +167,7 @@ func TestInvalidJSONHandling(t *testing.T) {
 
 	// Test CheckpointRecorder with malformed JSONL
 	recorder := NewCheckpointRecorder(tmpDir)
-	
+
 	// Create malformed JSONL file
 	checkpointsFile := filepath.Join(tmpDir, "checkpoints.jsonl")
 	malformedContent := "valid json line\n{invalid json}\nanother valid line\n"

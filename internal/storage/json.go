@@ -19,7 +19,7 @@ func NewJSONStorage(baseDir string) *JSONStorage {
 
 func (js *JSONStorage) Save(filename string, data interface{}) error {
 	filePath := filepath.Join(js.baseDir, filename)
-	
+
 	dir := filepath.Dir(filePath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
@@ -39,7 +39,7 @@ func (js *JSONStorage) Save(filename string, data interface{}) error {
 
 func (js *JSONStorage) Load(filename string, data interface{}) error {
 	filePath := filepath.Join(js.baseDir, filename)
-	
+
 	fileData, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to read file: %w", err)

@@ -41,8 +41,8 @@ func TestIsAIAuthor(t *testing.T) {
 		{"Bot User", true},
 		{"human-developer", false},
 		{"John Doe", false},
-		{"GPT Assistant", true},  // Mapped to "ai"
-		{"Human Dev", false},     // Mapped to "human"
+		{"GPT Assistant", true}, // Mapped to "ai"
+		{"Human Dev", false},    // Mapped to "human"
 	}
 
 	for _, test := range tests {
@@ -68,13 +68,13 @@ func TestShouldTrackFile(t *testing.T) {
 		{"main.go", true},
 		{"src/app.js", true},
 		{"lib/helper.py", true},
-		{"test/main_test.go", false},      // Contains "test"
-		{"vendor/lib/code.go", false},      // Contains "vendor"
-		{"code_generated.go", false},       // Contains "_generated"
-		{"README.md", false},               // Wrong extension
-		{"config.json", false},             // Wrong extension
+		{"test/main_test.go", false},  // Contains "test"
+		{"vendor/lib/code.go", false}, // Contains "vendor"
+		{"code_generated.go", false},  // Contains "_generated"
+		{"README.md", false},          // Wrong extension
+		{"config.json", false},        // Wrong extension
 		{"src/valid.go", true},
-		{"src/test_file.go", false},        // Contains "test"
+		{"src/test_file.go", false}, // Contains "test"
 	}
 
 	for _, test := range tests {
@@ -170,8 +170,8 @@ func TestAnalyzeCheckpoints(t *testing.T) {
 			},
 		},
 		NumstatData: map[string][2]int{
-			"main.go":   {5, 2},  // 3 lines added (5-2)
-			"helper.go": {2, 0},  // 2 lines added (new file)
+			"main.go":   {5, 2}, // 3 lines added (5-2)
+			"helper.go": {2, 0}, // 2 lines added (new file)
 		},
 	}
 

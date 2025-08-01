@@ -54,11 +54,11 @@ func TestShouldTrackFileRecorder(t *testing.T) {
 		{"main.go", true},
 		{"app.js", true},
 		{"script.py", true},
-		{"main_test.go", false},      // Matches exclude pattern
-		{"lib.go", true},              // Doesn't match exclude pattern on basename
-		{"app.min.js", false},         // Matches exclude pattern
-		{"README.md", false},          // Not tracked extension
-		{"config.json", false},        // Not tracked extension
+		{"main_test.go", false}, // Matches exclude pattern
+		{"lib.go", true},        // Doesn't match exclude pattern on basename
+		{"app.min.js", false},   // Matches exclude pattern
+		{"README.md", false},    // Not tracked extension
+		{"config.json", false},  // Not tracked extension
 	}
 
 	for _, test := range tests {

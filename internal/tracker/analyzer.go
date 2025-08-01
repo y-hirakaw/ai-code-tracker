@@ -31,15 +31,15 @@ func (a *Analyzer) AnalyzeCheckpoints(before, after *Checkpoint) (*AnalysisResul
 			if !a.shouldTrackFile(filepath) {
 				continue
 			}
-			
+
 			beforeStats, existed := before.NumstatData[filepath]
 			if !existed {
 				beforeStats = [2]int{0, 0} // File didn't exist in previous checkpoint
 			}
-			
+
 			// Calculate the difference in added lines between checkpoints
 			addedLinesDiff := afterStats[0] - beforeStats[0]
-			
+
 			if addedLinesDiff > 0 {
 				if isAIAuthor {
 					result.AILines += addedLinesDiff
@@ -48,13 +48,13 @@ func (a *Analyzer) AnalyzeCheckpoints(before, after *Checkpoint) (*AnalysisResul
 				}
 			}
 		}
-		
+
 		// Check for new files in after that weren't in before
 		for filepath, afterStats := range after.NumstatData {
 			if !a.shouldTrackFile(filepath) {
 				continue
 			}
-			
+
 			if _, existed := before.NumstatData[filepath]; !existed {
 				// New file
 				if isAIAuthor {
@@ -64,16 +64,16 @@ func (a *Analyzer) AnalyzeCheckpoints(before, after *Checkpoint) (*AnalysisResul
 				}
 			}
 		}
-		
+
 		// Calculate total lines from current checkpoint
 		for _, file := range after.Files {
 			result.TotalLines += len(file.Lines)
 		}
-		
+
 		if result.AILines+result.HumanLines > 0 {
-			result.Percentage = float64(result.AILines) / float64(result.AILines + result.HumanLines) * 100
+			result.Percentage = float64(result.AILines) / float64(result.AILines+result.HumanLines) * 100
 		}
-		
+
 		return result, nil
 	}
 
@@ -87,7 +87,7 @@ func (a *Analyzer) AnalyzeCheckpoints(before, after *Checkpoint) (*AnalysisResul
 				if !a.shouldTrackFile(filepath) {
 					continue
 				}
-				
+
 				addedLines := stats[0]
 				if isAIAuthor {
 					result.AILines += addedLines
@@ -95,16 +95,16 @@ func (a *Analyzer) AnalyzeCheckpoints(before, after *Checkpoint) (*AnalysisResul
 					result.HumanLines += addedLines
 				}
 			}
-			
+
 			// Calculate total lines from current checkpoint
 			for _, file := range after.Files {
 				result.TotalLines += len(file.Lines)
 			}
-			
+
 			if result.AILines+result.HumanLines > 0 {
-				result.Percentage = float64(result.AILines) / float64(result.AILines + result.HumanLines) * 100
+				result.Percentage = float64(result.AILines) / float64(result.AILines+result.HumanLines) * 100
 			}
-			
+
 			return result, nil
 		}
 		// Fall back to line-by-line comparison if git numstat fails
@@ -181,22 +181,22 @@ func (a *Analyzer) AnalyzeFromGitDiff(diff string, currentMetrics *AnalysisResul
 
 func (a *Analyzer) GetFileStats(checkpoint *Checkpoint) []FileStats {
 	stats := make([]FileStats, 0, len(checkpoint.Files))
-	
+
 	for path, file := range checkpoint.Files {
 		stat := FileStats{
 			Path:       path,
 			TotalLines: len(file.Lines),
 		}
-		
+
 		if a.IsAIAuthor(checkpoint.Author) {
 			stat.AILines = len(file.Lines)
 		} else {
 			stat.HumanLines = len(file.Lines)
 		}
-		
+
 		stats = append(stats, stat)
 	}
-	
+
 	return stats
 }
 
@@ -208,7 +208,7 @@ func (a *Analyzer) compareFiles(before, after FileContent, isAIAuthor bool) File
 	// Simple fallback when git numstat is not available
 	// Only count net additions
 	lineDiff := len(after.Lines) - len(before.Lines)
-	
+
 	if lineDiff > 0 {
 		if isAIAuthor {
 			stats.AILines = lineDiff
@@ -224,44 +224,44 @@ func (a *Analyzer) compareFiles(before, after FileContent, isAIAuthor bool) File
 func (a *Analyzer) getGitNumstat(fromCommit, toCommit string) (map[string][2]int, error) {
 	// Result: map[filepath] -> [added_lines, deleted_lines]
 	result := make(map[string][2]int)
-	
+
 	cmd := exec.Command("git", "diff", "--numstat", fromCommit, toCommit)
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to run git diff --numstat: %w", err)
 	}
-	
+
 	lines := strings.Split(string(output), "\n")
 	for _, line := range lines {
 		if line == "" {
 			continue
 		}
-		
+
 		// Format: "added\tdeleted\tfilepath"
 		parts := strings.Fields(line)
 		if len(parts) < 3 {
 			continue
 		}
-		
+
 		added, err := strconv.Atoi(parts[0])
 		if err != nil {
 			continue // Skip binary files which show "-"
 		}
-		
+
 		deleted, err := strconv.Atoi(parts[1])
 		if err != nil {
 			continue
 		}
-		
+
 		// Handle renames: "path1 => path2" becomes just "path2"
 		filepath := strings.Join(parts[2:], " ")
 		if idx := strings.Index(filepath, " => "); idx != -1 {
 			filepath = filepath[idx+4:]
 		}
-		
+
 		result[filepath] = [2]int{added, deleted}
 	}
-	
+
 	return result, nil
 }
 
@@ -275,11 +275,11 @@ func (a *Analyzer) shouldTrackFile(filepath string) bool {
 			break
 		}
 	}
-	
+
 	if !hasValidExt {
 		return false
 	}
-	
+
 	// Check exclusion patterns
 	for _, pattern := range a.config.ExcludePatterns {
 		// Simple pattern matching (can be improved with glob)
@@ -287,24 +287,24 @@ func (a *Analyzer) shouldTrackFile(filepath string) bool {
 			return false
 		}
 	}
-	
+
 	return true
 }
 
 func (a *Analyzer) IsAIAuthor(author string) bool {
 	aiAuthors := []string{"claude", "ai", "assistant", "bot"}
 	authorLower := strings.ToLower(author)
-	
+
 	if mapping, exists := a.config.AuthorMappings[author]; exists {
 		authorLower = strings.ToLower(mapping)
 	}
-	
+
 	for _, aiAuthor := range aiAuthors {
 		if strings.Contains(authorLower, aiAuthor) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 

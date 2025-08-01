@@ -87,7 +87,7 @@ func (cr *CheckpointRecorder) collectNumstatData() (map[string][2]int, error) {
 
 	result := make(map[string][2]int)
 	lines := strings.Split(string(output), "\n")
-	
+
 	for _, line := range lines {
 		if line == "" {
 			continue
@@ -124,7 +124,7 @@ func (cr *CheckpointRecorder) collectNumstatData() (map[string][2]int, error) {
 // appendRecord appends a checkpoint record to the JSONL file
 func (cr *CheckpointRecorder) appendRecord(record CheckpointRecord) error {
 	checkpointsFile := filepath.Join(cr.baseDir, "checkpoints.jsonl")
-	
+
 	// Ensure directory exists
 	if err := os.MkdirAll(cr.baseDir, 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
@@ -157,7 +157,7 @@ func (cr *CheckpointRecorder) appendRecord(record CheckpointRecord) error {
 // ReadAllRecords reads all checkpoint records from JSONL file
 func (cr *CheckpointRecorder) ReadAllRecords() ([]CheckpointRecord, error) {
 	checkpointsFile := filepath.Join(cr.baseDir, "checkpoints.jsonl")
-	
+
 	file, err := os.Open(checkpointsFile)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -169,7 +169,7 @@ func (cr *CheckpointRecorder) ReadAllRecords() ([]CheckpointRecord, error) {
 
 	var records []CheckpointRecord
 	scanner := bufio.NewScanner(file)
-	
+
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
@@ -234,18 +234,18 @@ func (cr *CheckpointRecorder) shouldTrackFile(filePath string, config *Config) b
 			break
 		}
 	}
-	
+
 	if !tracked {
 		return false
 	}
-	
+
 	// Check exclude patterns
 	for _, pattern := range config.ExcludePatterns {
 		if matched, _ := filepath.Match(pattern, filepath.Base(filePath)); matched {
 			return false
 		}
 	}
-	
+
 	return true
 }
 
@@ -255,11 +255,11 @@ func (cr *CheckpointRecorder) getLastRecord() (*CheckpointRecord, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if len(records) == 0 {
 		return nil, nil // No records exist
 	}
-	
+
 	return &records[0], nil
 }
 

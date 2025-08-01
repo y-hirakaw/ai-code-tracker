@@ -176,9 +176,9 @@ func TestClaudeSettingsJSON(t *testing.T) {
 
 func TestHookScriptStructure(t *testing.T) {
 	hooks := []struct {
-		name         string
-		content      string
-		checkStderr  bool
+		name        string
+		content     string
+		checkStderr bool
 	}{
 		{"PreToolUseHook", PreToolUseHook, true},
 		{"PostToolUseHook", PostToolUseHook, true},
@@ -231,9 +231,9 @@ func TestHookBinaryPaths(t *testing.T) {
 func TestHookInitialization(t *testing.T) {
 	// Test that appropriate hooks check for initialization
 	hooks := []struct {
-		name         string
-		content      string
-		shouldCheck  bool
+		name        string
+		content     string
+		shouldCheck bool
 	}{
 		{"PreToolUseHook", PreToolUseHook, true},
 		{"PreCommitHook", PreCommitHook, true},

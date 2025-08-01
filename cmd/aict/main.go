@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	version        = "0.4.0"
+	version        = "0.5.0"
 	defaultBaseDir = ".ai_code_tracking"
 )
 
@@ -57,10 +57,9 @@ func main() {
 	}
 }
 
-
 func handleInit() {
 	baseDir := defaultBaseDir
-	
+
 	if err := os.MkdirAll(baseDir, 0755); err != nil {
 		fmt.Printf("Error creating tracking directory: %v\n", err)
 		os.Exit(1)
@@ -79,7 +78,6 @@ func handleInit() {
 		os.Exit(1)
 	}
 
-	
 	// Initialize metrics
 	initialMetrics := &tracker.AnalysisResult{
 		TotalLines:  0,
@@ -88,7 +86,7 @@ func handleInit() {
 		Percentage:  0.0,
 		LastUpdated: time.Now(),
 	}
-	
+
 	if err := metricsStorage.SaveMetrics(initialMetrics); err != nil {
 		fmt.Printf("Error initializing metrics: %v\n", err)
 		os.Exit(1)
@@ -132,7 +130,7 @@ func handleTrack() {
 	}
 
 	baseDir := defaultBaseDir
-	
+
 	// Check if initialized
 	if _, err := os.Stat(baseDir); os.IsNotExist(err) {
 		fmt.Printf("Error: AI Code Tracker not initialized. Run 'aict init' first.\n")
@@ -185,7 +183,6 @@ func updateMetricsFromRecords(baseDir string) error {
 	return metricsStorage.SaveMetrics(result)
 }
 
-
 func countTotalLines(checkpoint *tracker.Checkpoint) int {
 	total := 0
 	for _, file := range checkpoint.Files {
@@ -196,19 +193,19 @@ func countTotalLines(checkpoint *tracker.Checkpoint) int {
 
 func handleSetupHooks() {
 	fmt.Println("Setting up AI Code Tracker hooks...")
-	
+
 	// Setup Git post-commit hook
 	if err := setupGitHook(); err != nil {
 		fmt.Printf("Error setting up Git post-commit hook: %v\n", err)
 		os.Exit(1)
 	}
-	
+
 	// Setup Claude Code hooks
 	if err := setupClaudeHooks(); err != nil {
 		fmt.Printf("Error setting up Claude Code hooks: %v\n", err)
 		os.Exit(1)
 	}
-	
+
 	fmt.Println()
 	fmt.Println("✓ Hook setup complete! Claude Code will now automatically track AI vs Human contributions.")
 }
@@ -249,19 +246,19 @@ func setupGitHook() error {
 	// Setup pre-commit hook
 	preCommitSource := filepath.Join(defaultBaseDir, "hooks", "pre-commit")
 	preCommitDest := ".git/hooks/pre-commit"
-	
+
 	if err := setupSingleGitHook(preCommitSource, preCommitDest, "pre-commit"); err != nil {
 		return err
 	}
-	
+
 	// Setup post-commit hook
 	postCommitSource := filepath.Join(defaultBaseDir, "hooks", "post-commit")
 	postCommitDest := ".git/hooks/post-commit"
-	
+
 	if err := setupSingleGitHook(postCommitSource, postCommitDest, "post-commit"); err != nil {
 		return err
 	}
-	
+
 	return nil
 }
 
@@ -270,16 +267,16 @@ func setupSingleGitHook(hookSource, hookDest, hookName string) error {
 	if _, err := os.Stat(hookDest); err == nil {
 		fmt.Printf("Warning: Git %s hook already exists at %s\n", hookName, hookDest)
 		fmt.Print("Do you want to merge AI Code Tracker functionality? (y/N): ")
-		
+
 		reader := bufio.NewReader(os.Stdin)
 		response, _ := reader.ReadString('\n')
 		response = strings.TrimSpace(strings.ToLower(response))
-		
+
 		if response != "y" && response != "yes" {
 			fmt.Println("Git hook setup cancelled. Please manually integrate the AI Code Tracker hook.")
 			return fmt.Errorf("user cancelled Git hook setup")
 		}
-		
+
 		// Merge with existing hook
 		if err := mergeGitHook(hookSource, hookDest); err != nil {
 			return err
@@ -293,34 +290,34 @@ func setupSingleGitHook(hookSource, hookDest, hookName string) error {
 		}
 		fmt.Println("✓ Git post-commit hook installed")
 	}
-	
+
 	// Make it executable
 	if err := os.Chmod(hookDest, 0755); err != nil {
 		fmt.Printf("Warning: Could not make post-commit hook executable: %v\n", err)
 	}
-	
+
 	return nil
 }
 
 func setupClaudeHooks() error {
 	claudeDir := ".claude"
 	settingsPath := filepath.Join(claudeDir, "settings.json")
-	
+
 	// Check if Claude settings already exist
 	if _, err := os.Stat(settingsPath); err == nil {
 		fmt.Printf("Warning: Claude settings already exist at %s\n", settingsPath)
 		fmt.Print("Do you want to merge AI Code Tracker hooks? (y/N): ")
-		
+
 		reader := bufio.NewReader(os.Stdin)
 		response, _ := reader.ReadString('\n')
 		response = strings.TrimSpace(strings.ToLower(response))
-		
+
 		if response != "y" && response != "yes" {
 			fmt.Println("Claude hook setup cancelled. Please manually add the following hooks:")
 			fmt.Println(templates.ClaudeSettingsJSON)
 			return nil
 		}
-		
+
 		// Merge with existing settings
 		if err := mergeClaudeSettings(settingsPath); err != nil {
 			return err
@@ -331,13 +328,13 @@ func setupClaudeHooks() error {
 		if err := os.MkdirAll(claudeDir, 0755); err != nil {
 			return err
 		}
-		
+
 		if err := os.WriteFile(settingsPath, []byte(templates.ClaudeSettingsJSON), 0644); err != nil {
 			return err
 		}
 		fmt.Println("✓ Claude Code hook configuration created")
 	}
-	
+
 	fmt.Println("✓ Hook scripts are available in .ai_code_tracking/hooks/")
 	return nil
 }
@@ -348,16 +345,16 @@ func mergeGitHook(hookSource, hookDest string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	// Read AI Code Tracker hook
 	aictContent, err := os.ReadFile(hookSource)
 	if err != nil {
 		return err
 	}
-	
+
 	// Create merged content
 	mergedContent := string(existingContent) + "\n\n# AI Code Tracker\n" + string(aictContent)
-	
+
 	// Write merged hook
 	return os.WriteFile(hookDest, []byte(mergedContent), 0755)
 }
@@ -368,24 +365,24 @@ func mergeClaudeSettings(settingsPath string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	var existingSettings map[string]interface{}
 	if err := json.Unmarshal(existingContent, &existingSettings); err != nil {
 		return fmt.Errorf("failed to parse existing settings: %v", err)
 	}
-	
+
 	// Parse AI Code Tracker settings
 	var aictSettings map[string]interface{}
 	if err := json.Unmarshal([]byte(templates.ClaudeSettingsJSON), &aictSettings); err != nil {
 		return fmt.Errorf("failed to parse AICT settings: %v", err)
 	}
-	
+
 	// Merge hooks - handle both object and array formats
 	aictHooks, ok := aictSettings["hooks"].(map[string]interface{})
 	if !ok {
 		return fmt.Errorf("AICT settings hooks format is invalid")
 	}
-	
+
 	// Check if existing hooks is an object or array
 	if existingHooksObj, isObj := existingSettings["hooks"].(map[string]interface{}); isObj {
 		// Merge object-style hooks
@@ -396,31 +393,31 @@ func mergeClaudeSettings(settingsPath string) error {
 		// If existing hooks is array or doesn't exist, replace with AICT hooks
 		existingSettings["hooks"] = aictHooks
 	}
-	
+
 	// Write merged settings
 	mergedContent, err := json.MarshalIndent(existingSettings, "", "  ")
 	if err != nil {
 		return err
 	}
-	
+
 	return os.WriteFile(settingsPath, mergedContent, 0644)
 }
 
 func handleReset() error {
 	baseDir := defaultBaseDir
-	
+
 	fmt.Print("This will reset all tracking metrics to zero and set current codebase as baseline. Continue? (y/N): ")
 	reader := bufio.NewReader(os.Stdin)
 	response, _ := reader.ReadString('\n')
 	response = strings.TrimSpace(strings.ToLower(response))
-	
+
 	if response != "y" && response != "yes" {
 		fmt.Println("Reset cancelled.")
 		return nil
 	}
-	
+
 	metricsStorage := storage.NewMetricsStorage(baseDir)
-	
+
 	// Reset metrics to zero
 	resetMetrics := &tracker.AnalysisResult{
 		TotalLines:  0,
@@ -429,11 +426,11 @@ func handleReset() error {
 		Percentage:  0.0,
 		LastUpdated: time.Now(),
 	}
-	
+
 	if err := metricsStorage.SaveMetrics(resetMetrics); err != nil {
 		return fmt.Errorf("error resetting metrics: %v", err)
 	}
-	
+
 	// Clear all checkpoints
 	checkpointsDir := filepath.Join(baseDir, "checkpoints")
 	if err := os.RemoveAll(checkpointsDir); err != nil {
@@ -442,13 +439,13 @@ func handleReset() error {
 	if err := os.MkdirAll(checkpointsDir, 0755); err != nil {
 		return fmt.Errorf("error recreating checkpoints directory: %v", err)
 	}
-	
+
 	fmt.Println("✓ Metrics reset to zero")
 	fmt.Println("✓ All checkpoints cleared")
 	fmt.Println()
 	fmt.Println("AI Code Tracker has been reset.")
 	fmt.Println("Next step: Run 'aict init' to create a new baseline from current codebase.")
-	
+
 	return nil
 }
 
@@ -498,13 +495,13 @@ func getGitUserName() string {
 func handleConfig() {
 	baseDir := defaultBaseDir
 	configPath := filepath.Join(baseDir, "config.json")
-	
+
 	// Check if initialized
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		fmt.Printf("Error: AI Code Tracker not initialized. Run 'aict init' first.\n")
 		os.Exit(1)
 	}
-	
+
 	// Display configuration explanation
 	fmt.Println("AI Code Tracker Configuration")
 	fmt.Println("=============================")
@@ -517,7 +514,7 @@ func handleConfig() {
 	fmt.Println()
 	fmt.Printf("Opening config file: %s\n", configPath)
 	fmt.Println()
-	
+
 	// Determine editor
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
@@ -545,7 +542,7 @@ func handleConfig() {
 			}
 		}
 	}
-	
+
 	// Open editor
 	var cmd *exec.Cmd
 	if strings.Contains(editor, " ") {
@@ -555,11 +552,11 @@ func handleConfig() {
 	} else {
 		cmd = exec.Command(editor, configPath)
 	}
-	
+
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	
+
 	if err := cmd.Run(); err != nil {
 		fmt.Printf("Error opening editor: %v\n", err)
 		fmt.Printf("You can manually edit the file at: %s\n", configPath)

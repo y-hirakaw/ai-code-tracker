@@ -213,8 +213,8 @@ func TestAnalyzeRecordsWithAuthorMapping(t *testing.T) {
 	config := &Config{
 		TargetAIPercentage: 80.0,
 		AuthorMappings: map[string]string{
-			"GPT Bot":      "ai",
-			"Developer 1":  "human",
+			"GPT Bot":     "ai",
+			"Developer 1": "human",
 		},
 	}
 

@@ -24,24 +24,24 @@ type ReportOptions struct {
 // handleReportWithOptions handles the report command with period options
 func handleReportWithOptions() {
 	fs := flag.NewFlagSet("report", flag.ExitOnError)
-	
+
 	opts := &ReportOptions{}
 	fs.StringVar(&opts.Since, "since", "", "Show report since this date/time")
 	fs.StringVar(&opts.From, "from", "", "Start date for report range")
 	fs.StringVar(&opts.To, "to", "", "End date for report range")
 	fs.StringVar(&opts.Last, "last", "", "Show report for last N days/weeks/months (e.g., '7d', '2w', '1m')")
 	fs.StringVar(&opts.Format, "format", "table", "Output format: table, graph, json")
-	
+
 	fs.Parse(os.Args[2:])
-	
+
 	baseDir := defaultBaseDir
-	
+
 	// Check if initialized
 	if _, err := os.Stat(baseDir); os.IsNotExist(err) {
 		fmt.Printf("Error: AI Code Tracker not initialized. Run 'aict init' first.\n")
 		os.Exit(1)
 	}
-	
+
 	// Load configuration
 	metricsStorage := storage.NewMetricsStorage(baseDir)
 	config, err := metricsStorage.LoadConfig()
@@ -49,7 +49,7 @@ func handleReportWithOptions() {
 		fmt.Printf("Error loading config: %v\n", err)
 		os.Exit(1)
 	}
-	
+
 	// Read JSONL records
 	recorder := tracker.NewCheckpointRecorder(baseDir)
 	records, err := recorder.ReadAllRecords()
@@ -57,13 +57,13 @@ func handleReportWithOptions() {
 		fmt.Printf("Error reading records: %v\n", err)
 		os.Exit(1)
 	}
-	
+
 	// Check if period options are specified
 	if opts.Since != "" || opts.From != "" || opts.Last != "" {
 		handlePeriodReport(records, config, opts)
 		return
 	}
-	
+
 	// Default report (existing functionality)
 	if len(records) > 0 {
 		analyzer := tracker.NewAnalyzer(config)
@@ -80,7 +80,7 @@ func handleReportWithOptions() {
 			fmt.Printf("Error loading metrics: %v\n", err)
 			os.Exit(1)
 		}
-		
+
 		analyzer := tracker.NewAnalyzer(config)
 		fmt.Println(analyzer.GenerateReport(metrics))
 	}
@@ -90,7 +90,7 @@ func handleReportWithOptions() {
 func handlePeriodReport(records []tracker.CheckpointRecord, config *tracker.Config, opts *ReportOptions) {
 	var timeRange *period.TimeRange
 	var err error
-	
+
 	// Parse time range based on options
 	if opts.Last != "" {
 		timeRange, err = period.ParseLastDuration(opts.Last)
@@ -125,7 +125,7 @@ func handlePeriodReport(records []tracker.CheckpointRecord, config *tracker.Conf
 		fmt.Printf("Error: Please specify a time range using --since, --from/--to, or --last\n")
 		os.Exit(1)
 	}
-	
+
 	// Analyze period
 	analyzer := period.NewAnalyzer(config)
 	report, err := analyzer.AnalyzePeriod(records, timeRange)
@@ -133,16 +133,16 @@ func handlePeriodReport(records []tracker.CheckpointRecord, config *tracker.Conf
 		fmt.Printf("Error analyzing period: %v\n", err)
 		os.Exit(1)
 	}
-	
+
 	// Format output
 	format := period.ReportFormat(strings.ToLower(opts.Format))
 	formatter := period.NewFormatter(config.TargetAIPercentage)
-	
+
 	output, err := formatter.Format(report, format)
 	if err != nil {
 		fmt.Printf("Error formatting report: %v\n", err)
 		os.Exit(1)
 	}
-	
+
 	fmt.Print(output)
 }

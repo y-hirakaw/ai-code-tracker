@@ -31,7 +31,7 @@ func TestHandleInitSuccess(t *testing.T) {
 
 	// Test handleInit by simulating its behavior
 	baseDir := defaultBaseDir
-	
+
 	// Create directory
 	if err := os.MkdirAll(baseDir, 0755); err != nil {
 		t.Fatalf("Failed to create tracking directory: %v", err)
@@ -58,7 +58,7 @@ func TestHandleInitSuccess(t *testing.T) {
 		Percentage:  0.0,
 		LastUpdated: time.Now(),
 	}
-	
+
 	if err := metricsStorage.SaveMetrics(initialMetrics); err != nil {
 		t.Fatalf("Failed to initialize metrics: %v", err)
 	}
@@ -167,7 +167,7 @@ func TestUpdateMetricsFromRecordsIntegration(t *testing.T) {
 	}
 
 	if metrics.TotalLines != metrics.AILines+metrics.HumanLines {
-		t.Errorf("TotalLines should equal AILines + HumanLines, got %d != %d + %d", 
+		t.Errorf("TotalLines should equal AILines + HumanLines, got %d != %d + %d",
 			metrics.TotalLines, metrics.AILines, metrics.HumanLines)
 	}
 }
@@ -191,7 +191,7 @@ func TestSetupSingleGitHookNewHook(t *testing.T) {
 
 	// Test setupSingleGitHook with new hook (no existing hook)
 	hookDest := filepath.Join(tmpDir, "dest-hook")
-	
+
 	err = setupSingleGitHook(hookSource, hookDest, "test")
 	if err != nil {
 		t.Fatalf("Failed to setup single git hook: %v", err)
@@ -284,7 +284,7 @@ func TestMergeGitHookErrors(t *testing.T) {
 	// Test with non-existent source
 	hookDest := filepath.Join(tmpDir, "dest-hook")
 	os.WriteFile(hookDest, []byte("existing"), 0755)
-	
+
 	err := mergeGitHook("nonexistent", hookDest)
 	if err == nil {
 		t.Error("Expected error when merging with non-existent source")
@@ -293,7 +293,7 @@ func TestMergeGitHookErrors(t *testing.T) {
 	// Test with non-existent destination
 	hookSource := filepath.Join(tmpDir, "source-hook")
 	os.WriteFile(hookSource, []byte("source"), 0755)
-	
+
 	err = mergeGitHook(hookSource, "nonexistent")
 	if err == nil {
 		t.Error("Expected error when merging to non-existent destination")
@@ -314,7 +314,7 @@ func TestMergeClaudeSettingsErrors(t *testing.T) {
 	// Test with invalid JSON
 	invalidFile := filepath.Join(tmpDir, "invalid.json")
 	os.WriteFile(invalidFile, []byte("invalid json"), 0644)
-	
+
 	err = mergeClaudeSettings(invalidFile)
 	if err == nil {
 		t.Error("Expected error when merging invalid JSON")
@@ -340,7 +340,7 @@ func TestHandleResetLogic(t *testing.T) {
 
 	// Initialize storage with some data
 	metricsStorage := storage.NewMetricsStorage(tmpDir)
-	
+
 	// Create initial metrics
 	initialMetrics := &tracker.AnalysisResult{
 		TotalLines:  100,
@@ -375,11 +375,11 @@ func TestHandleResetLogic(t *testing.T) {
 		Percentage:  0.0,
 		LastUpdated: time.Now(),
 	}
-	
+
 	if err := metricsStorage.SaveMetrics(resetMetrics); err != nil {
 		t.Fatalf("Failed to reset metrics: %v", err)
 	}
-	
+
 	// Clear all checkpoints
 	if err := os.RemoveAll(checkpointsDir); err != nil {
 		t.Fatalf("Failed to clear checkpoints: %v", err)
@@ -417,11 +417,11 @@ func TestReportOptions(t *testing.T) {
 		Since:  "2 weeks ago",
 		Format: "table",
 	}
-	
+
 	if opts.Since != "2 weeks ago" {
 		t.Errorf("Expected Since to be '2 weeks ago', got %s", opts.Since)
 	}
-	
+
 	if opts.Format != "table" {
 		t.Errorf("Expected Format to be 'table', got %s", opts.Format)
 	}
@@ -465,51 +465,51 @@ func TestPeriodAnalysisFlow(t *testing.T) {
 	// Test the period analysis flow that would be used in handlePeriodReport
 	records := createMockRecords()
 	config := createMockConfig()
-	
+
 	// Test with --last option
 	timeRange, err := period.ParseLastDuration("1d")
 	if err != nil {
 		t.Fatalf("Failed to parse last duration: %v", err)
 	}
-	
+
 	analyzer := period.NewAnalyzer(config)
 	report, err := analyzer.AnalyzePeriod(records, timeRange)
 	if err != nil {
 		t.Fatalf("Failed to analyze period: %v", err)
 	}
-	
+
 	// Should include all records from the last day
 	expectedTotal := 10 + 20 + 5 // all records within 1 day
 	if report.TotalLines != expectedTotal {
 		t.Errorf("Expected total lines %d, got %d", expectedTotal, report.TotalLines)
 	}
-	
+
 	// Test formatting
 	formatter := period.NewFormatter(config.TargetAIPercentage)
-	
+
 	tableOutput, err := formatter.Format(report, period.FormatTable)
 	if err != nil {
 		t.Fatalf("Failed to format as table: %v", err)
 	}
-	
+
 	if len(tableOutput) == 0 {
 		t.Error("Table output should not be empty")
 	}
-	
+
 	jsonOutput, err := formatter.Format(report, period.FormatJSON)
 	if err != nil {
 		t.Fatalf("Failed to format as JSON: %v", err)
 	}
-	
+
 	if len(jsonOutput) == 0 {
 		t.Error("JSON output should not be empty")
 	}
-	
+
 	graphOutput, err := formatter.Format(report, period.FormatGraph)
 	if err != nil {
 		t.Fatalf("Failed to format as graph: %v", err)
 	}
-	
+
 	if len(graphOutput) == 0 {
 		t.Error("Graph output should not be empty")
 	}
@@ -517,45 +517,45 @@ func TestPeriodAnalysisFlow(t *testing.T) {
 
 func TestTimeRangeParsing(t *testing.T) {
 	// Test parsing functionality that would be used in handlePeriodReport
-	
+
 	// Test --last option
 	lastRange, err := period.ParseLastDuration("7d")
 	if err != nil {
 		t.Fatalf("Failed to parse last duration: %v", err)
 	}
-	
+
 	expectedDuration := 7 * 24 * time.Hour
 	actualDuration := lastRange.To.Sub(lastRange.From)
-	
+
 	if actualDuration != expectedDuration {
 		t.Errorf("Expected duration %v, got %v", expectedDuration, actualDuration)
 	}
-	
+
 	// Test --since option
 	sinceRange, err := period.ParseTimeRange("2025-01-01")
 	if err != nil {
 		t.Fatalf("Failed to parse since time: %v", err)
 	}
-	
+
 	expectedYear := 2025
 	if sinceRange.From.Year() != expectedYear {
 		t.Errorf("Expected year %d, got %d", expectedYear, sinceRange.From.Year())
 	}
-	
+
 	// Test --from/--to options
 	fromToRange, err := period.ParseFromTo("2025-01-01", "2025-01-02")
 	if err != nil {
 		t.Fatalf("Failed to parse from/to range: %v", err)
 	}
-	
+
 	if fromToRange.From.Year() != 2025 || fromToRange.To.Year() != 2025 {
 		t.Error("From/To range should be in 2025")
 	}
-	
+
 	if fromToRange.From.Month() != 1 || fromToRange.To.Month() != 1 {
 		t.Error("From/To range should be in January")
 	}
-	
+
 	if fromToRange.From.Day() != 1 || fromToRange.To.Day() != 2 {
 		t.Error("From should be day 1, To should be day 2")
 	}
@@ -564,15 +564,15 @@ func TestTimeRangeParsing(t *testing.T) {
 func TestFilteringFunctionality(t *testing.T) {
 	// Test filtering functionality used in period reports
 	records := createMockRecords()
-	
+
 	now := time.Now()
 	timeRange := &period.TimeRange{
 		From: now.Add(-90 * time.Minute), // Last 90 minutes
 		To:   now,
 	}
-	
+
 	filtered := period.FilterRecordsInclusive(records, timeRange)
-	
+
 	// Should include records from the last 90 minutes
 	// This should be the claude record (1 hour ago) and human record (30 min ago)
 	expectedCount := 2

@@ -54,17 +54,17 @@ func TestEndToEndWorkflow(t *testing.T) {
 		Percentage:  0.0,
 		LastUpdated: time.Now(),
 	}
-	
+
 	if err := metricsStorage.SaveMetrics(initialMetrics); err != nil {
 		t.Fatalf("Failed to initialize metrics: %v", err)
 	}
 
 	// Step 2: Create some test files
 	testFiles := map[string]string{
-		"main.go":    "package main\n\nfunc main() {\n\tprintln(\"Hello, World!\")\n}",
-		"helper.py":  "def helper():\n    return \"help\"",
-		"app.js":     "console.log('Hello from JS');",
-		"test.txt":   "This should be ignored",
+		"main.go":      "package main\n\nfunc main() {\n\tprintln(\"Hello, World!\")\n}",
+		"helper.py":    "def helper():\n    return \"help\"",
+		"app.js":       "console.log('Hello from JS');",
+		"test.txt":     "This should be ignored",
 		"main_test.go": "package main\n\nfunc TestMain(t *testing.T) {\n\t// test\n}",
 	}
 
@@ -272,13 +272,13 @@ func TestConcurrentAccess(t *testing.T) {
 
 	// Test concurrent checkpoint recording
 	recorder := tracker.NewCheckpointRecorder(tmpDir)
-	
+
 	// Create multiple goroutines that record checkpoints
 	done := make(chan bool, 5)
 	for i := 0; i < 5; i++ {
 		go func(id int) {
 			defer func() { done <- true }()
-			
+
 			// Each goroutine records a checkpoint
 			authorName := "author" + string(rune('A'+id))
 			err := recorder.RecordCheckpoint(authorName)

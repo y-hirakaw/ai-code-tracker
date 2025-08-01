@@ -177,7 +177,7 @@ func TestGetGitUserName(t *testing.T) {
 		userName := getGitUserName()
 		// userName might be empty if git is not configured
 		_ = userName
-		
+
 		// Test that the function returns a string (possibly empty)
 		// Note: getGitUserName doesn't trim, so we'll just check it doesn't panic
 		_ = userName
@@ -267,7 +267,7 @@ func TestCopyFileErrors(t *testing.T) {
 	// Test with invalid destination
 	sourceFile := filepath.Join(tmpDir, "source.txt")
 	os.WriteFile(sourceFile, []byte("test"), 0644)
-	
+
 	err = copyFile(sourceFile, "/invalid/path/dest.txt")
 	if err == nil {
 		t.Error("Expected error when copying to invalid destination")
@@ -436,4 +436,3 @@ func TestMergeClaudeSettings(t *testing.T) {
 		t.Error("Should add hooks to settings without existing hooks")
 	}
 }
-

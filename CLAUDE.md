@@ -177,7 +177,3 @@ go install github.com/y-hirakaw/ai-code-tracker/cmd/aict@v[バージョン]
 - 新機能追加の場合はマイナーバージョンを上げる
 - バグ修正の場合はパッチバージョンを上げる
 - Go Module Proxy のキャッシュ更新には時間がかかる場合がある
-
-# markdown(.md)ファイルの編集について
-
-* MCPサーバーの`mcp-file-editor`を使って編集すること

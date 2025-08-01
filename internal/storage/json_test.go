@@ -28,8 +28,8 @@ func TestSaveAndLoad(t *testing.T) {
 
 	// Test data structure
 	type TestData struct {
-		Name  string `json:"name"`
-		Value int    `json:"value"`
+		Name  string   `json:"name"`
+		Value int      `json:"value"`
 		Items []string `json:"items"`
 	}
 

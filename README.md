@@ -1,4 +1,4 @@
-# AI Code Tracker (AICT) v0.4.0
+# AI Code Tracker (AICT) v0.5.0
 
 A Go-based CLI tool for tracking the proportion of AI-generated versus human-written code with **ultra-lightweight JSONL storage**, integrated with Claude Code and Git.
 
@@ -6,7 +6,7 @@ A Go-based CLI tool for tracking the proportion of AI-generated versus human-wri
 
 - **Ultra-Lightweight**: JSONL format reduces storage by 70%+ (~100 bytes per record)
 - **Period-Specified Reports**: Analyze AI/Human ratios for specific time ranges (--since, --last, --from/--to)
-- **Multiple Output Formats**: Table, ASCII graph, and JSON output formats
+- **Multiple Output Formats**: Table, ASCII graph, JSON, and **CSV** output formats
 - **Automatic Tracking**: Integrated with Claude Code hooks for automatic edit recording
 - **Simple Architecture**: No baseline concept - pure differential tracking
 - **Accurate Analysis**: Git numstat-based precise line counting
@@ -70,12 +70,13 @@ aict track -author claude
 # Display current statistics (baseline excluded)
 aict report
 
-# Period-specified reports (v0.4.0 new features)
+# Period-specified reports (v0.4.0+ features)
 aict report --last 7d                    # Last 7 days
 aict report --since "2 weeks ago"        # Since 2 weeks ago
 aict report --from 2025-01-01 --to 2025-01-15  # Date range
 aict report --last 1w --format graph     # ASCII graph format
 aict report --last 1m --format json      # JSON format
+aict report --last 1w --format csv       # CSV format (v0.5.0 new!)
 
 # Reset tracking from current state (with confirmation)
 aict reset
@@ -137,6 +138,14 @@ Daily AI Percentage Trend:
 Target [████████████████████████████████████████          ] 80.0%
 ```
 
+### CSV Output (NEW in v0.5.0!)
+```csv
+Date,AI_Lines,Human_Lines,Total_Lines,AI_Percentage,Human_Percentage,Target_Percentage,Progress
+2025-07-30,1458,1209,2667,54.7,45.3,80.0,68.3
+2025-07-31,580,0,580,100.0,0.0,80.0,125.0
+2025-08-01,227,0,227,100.0,0.0,80.0,125.0
+```
+
 **JSONL Record Format** (ultra-lightweight):
 ```json
 {"timestamp":"2025-07-31T23:09:14+09:00","author":"claude","added":395,"deleted":271}
@@ -185,10 +194,10 @@ ai-code-tracker/
 ├── bin/aict                   # CLI executable
 ├── cmd/aict/
 │   ├── main.go               # CLI entry point
-│   └── handlers.go           # Period report handlers (v0.4.0)
+│   └── handlers.go           # Period report handlers (v0.4.0+)
 ├── internal/
 │   ├── tracker/              # Core tracking logic
-│   ├── period/               # Period analysis (v0.4.0)
+│   ├── period/               # Period analysis (v0.4.0+)
 │   ├── storage/              # Data persistence
 │   └── git/                  # Git integration
 ├── .claude/
@@ -251,9 +260,11 @@ Do you want to merge AI Code Tracker hooks? (y/N): y
 | `aict report --from DATE --to DATE` | Show report for date range |
 | `aict report --format graph` | Show ASCII graph format |
 | `aict report --format json` | Show JSON format |
+| `aict report --format csv` | Show CSV format (NEW in v0.5.0!) |
 | `aict reset` | Reset metrics and create new baseline (with confirmation) |
 | `aict version` | Show version information |
 | `aict help` | Show help information |
+| `aict config` | Show configuration |
 
 ## 🔄 Workflow
 
@@ -261,9 +272,10 @@ Do you want to merge AI Code Tracker hooks? (y/N): y
 2. **Setup Hooks**: `aict setup-hooks` enables Claude Code and Git integration
 3. **Develop**: Code normally with Claude Code (tracks only changes from baseline)
 4. **Monitor**: `aict report` to check progress on added lines only
-5. **Analyze**: Use period reports (`--last 1w`, `--format graph`) for detailed analysis
-6. **Reset**: `aict reset` to start fresh tracking from current state (optional)
-7. **Adjust**: Modify development strategy to achieve targets
+5. **Analyze**: Use period reports (`--last 1w`, `--format csv`) for detailed analysis
+6. **Export**: Use CSV format for Excel/Google Sheets analysis
+7. **Reset**: `aict reset` to start fresh tracking from current state (optional)
+8. **Adjust**: Modify development strategy to achieve targets
 
 ## 🛠️ Technical Specifications
 
@@ -271,6 +283,7 @@ Do you want to merge AI Code Tracker hooks? (y/N): y
 - **Dependencies**: Standard library only
 - **Data Format**: Ultra-lightweight JSONL (~100 bytes per record)
 - **Period Analysis**: Flexible time range filtering with multiple output formats
+- **Export Formats**: Table, Graph, JSON, CSV (v0.5.0+)
 - **Hooks**: Claude Code hooks, Git post-commit
 - **Supported Platforms**: macOS, Linux, Windows
 - **Smart Features**: Tracked file extension filtering, Smart skip for efficiency
@@ -284,8 +297,9 @@ Tracked indicators:
 - AI-generated lines and percentage (of added lines)
 - Human-written lines and percentage (of added lines)
 - Target achievement rate (based on added lines only)
-- Daily breakdown with trend analysis (v0.4.0)
+- Daily breakdown with trend analysis (v0.4.0+)
 - Period-specific statistics with multiple time ranges
+- CSV export for external analysis (v0.5.0+)
 - Last update timestamp
 
 ## 🔒 Security

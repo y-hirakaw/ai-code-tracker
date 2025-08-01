@@ -42,8 +42,8 @@ type FileStats struct {
 }
 
 type Config struct {
-	TargetAIPercentage float64  `json:"target_ai_percentage"`
-	TrackedExtensions  []string `json:"tracked_extensions"`
-	ExcludePatterns    []string `json:"exclude_patterns"`
+	TargetAIPercentage float64           `json:"target_ai_percentage"`
+	TrackedExtensions  []string          `json:"tracked_extensions"`
+	ExcludePatterns    []string          `json:"exclude_patterns"`
 	AuthorMappings     map[string]string `json:"author_mappings"`
 }

@@ -25,7 +25,7 @@ func (ms *MetricsStorage) SaveMetrics(result *tracker.AnalysisResult) error {
 func (ms *MetricsStorage) LoadMetrics() (*tracker.AnalysisResult, error) {
 	filename := "metrics/current.json"
 	var result tracker.AnalysisResult
-	
+
 	if !ms.storage.Exists(filename) {
 		return &tracker.AnalysisResult{
 			TotalLines:  0,
@@ -35,11 +35,11 @@ func (ms *MetricsStorage) LoadMetrics() (*tracker.AnalysisResult, error) {
 			LastUpdated: time.Now(),
 		}, nil
 	}
-	
+
 	if err := ms.storage.Load(filename, &result); err != nil {
 		return nil, fmt.Errorf("failed to load metrics: %w", err)
 	}
-	
+
 	return &result, nil
 }
 
@@ -51,15 +51,15 @@ func (ms *MetricsStorage) SaveConfig(config *tracker.Config) error {
 func (ms *MetricsStorage) LoadConfig() (*tracker.Config, error) {
 	filename := "config.json"
 	var config tracker.Config
-	
+
 	if !ms.storage.Exists(filename) {
 		return ms.getDefaultConfig(), nil
 	}
-	
+
 	if err := ms.storage.Load(filename, &config); err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
-	
+
 	return &config, nil
 }
 

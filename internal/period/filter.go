@@ -9,15 +9,15 @@ func FilterRecords(records []tracker.CheckpointRecord, timeRange *TimeRange) []t
 	if timeRange == nil {
 		return records
 	}
-	
+
 	filtered := make([]tracker.CheckpointRecord, 0, len(records))
-	
+
 	for _, record := range records {
 		if record.Timestamp.After(timeRange.From) && record.Timestamp.Before(timeRange.To) {
 			filtered = append(filtered, record)
 		}
 	}
-	
+
 	return filtered
 }
 
@@ -26,15 +26,15 @@ func FilterRecordsInclusive(records []tracker.CheckpointRecord, timeRange *TimeR
 	if timeRange == nil {
 		return records
 	}
-	
+
 	filtered := make([]tracker.CheckpointRecord, 0, len(records))
-	
+
 	for _, record := range records {
 		if (record.Timestamp.Equal(timeRange.From) || record.Timestamp.After(timeRange.From)) &&
-		   (record.Timestamp.Equal(timeRange.To) || record.Timestamp.Before(timeRange.To)) {
+			(record.Timestamp.Equal(timeRange.To) || record.Timestamp.Before(timeRange.To)) {
 			filtered = append(filtered, record)
 		}
 	}
-	
+
 	return filtered
 }
