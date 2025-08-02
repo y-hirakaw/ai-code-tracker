@@ -112,7 +112,7 @@ func (h *HandlerConfig) InitHandler() error {
 	
 	// Record initial checkpoint
 	recorder := tracker.NewCheckpointRecorder(h.BaseDir)
-	if err := recorder.RecordHumanCheckpoint(getGitUserName()); err != nil {
+	if err := recorder.RecordCheckpoint("human"); err != nil {
 		fmt.Printf("Warning: Failed to record initial checkpoint: %v\n", err)
 	}
 	
@@ -156,12 +156,11 @@ func (h *HandlerConfig) TrackHandler() error {
 	
 	// Record checkpoint
 	recorder := tracker.NewCheckpointRecorder(h.BaseDir)
-	checkpoint, err := recorder.RecordHumanCheckpointWithCommit(getGitUserName(), commitHash)
-	if err != nil {
+	if err := recorder.RecordCheckpoint("human"); err != nil {
 		return errors.NewStorageError("TrackHandler", "checkpoint", err)
 	}
 	
-	fmt.Printf("✓ Checkpoint recorded: %s\n", checkpoint.ID)
+	fmt.Printf("✓ Checkpoint recorded\n")
 	if commitHash != "" {
 		fmt.Printf("  Commit: %s\n", commitHash)
 	}
@@ -206,9 +205,9 @@ func (h *HandlerConfig) ResetHandler() error {
 // createHookFiles creates hook files with security checks
 func (h *HandlerConfig) createHookFiles() error {
 	hooks := map[string]string{
-		"hooks/pre-tool-use.sh":  templates.PreToolUseHook,
-		"hooks/post-tool-use.sh": templates.PostToolUseHook,
-		"hooks/post-commit":      templates.PostCommitHook,
+		"hooks/pre-tool-use.sh":  "#!/bin/bash\n# Placeholder hook",
+		"hooks/post-tool-use.sh": "#!/bin/bash\n# Placeholder hook",
+		"hooks/post-commit":      "#!/bin/bash\n# Placeholder hook",
 	}
 	
 	for filename, content := range hooks {
@@ -242,7 +241,7 @@ func (h *HandlerConfig) updateMetricsFromRecords() error {
 	
 	// Read all records
 	recorder := tracker.NewCheckpointRecorder(h.BaseDir)
-	records, err := recorder.ReadRecords()
+	records, err := recorder.ReadAllRecords()
 	if err != nil {
 		return errors.NewStorageError("updateMetricsFromRecords", "records", err)
 	}

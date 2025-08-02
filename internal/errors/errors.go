@@ -95,3 +95,13 @@ func NewValidationError(op, field, message string) *AICTError {
 		Message: message,
 	}
 }
+
+// NewAnalysisError creates a new analysis error
+func NewAnalysisError(op, message string, err error) *AICTError {
+	return &AICTError{
+		Type:    ErrTypeAnalysis,
+		Op:      op,
+		Message: message,
+		Err:     err,
+	}
+}
