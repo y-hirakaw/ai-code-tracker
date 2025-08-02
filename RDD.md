@@ -476,6 +476,24 @@ go build -o bin/aict ./cmd/aict
 
 ## 10. バージョン履歴
 
+### v0.5.1（2025-01-02）- コード品質とセキュリティ強化
+- **Major Quality Improvements**:
+  - インターフェース導入による依存性注入（DI）パターン実装
+  - カスタムエラー型による構造化エラーハンドリング
+  - 設定バリデーション強化（型安全性、範囲チェック）
+  - コンテキスト対応Git操作（タイムアウト制御）
+  - セキュリティ強化（コマンドインジェクション対策、JSONサイズ制限、安全なファイル操作）
+- **Implementation Details**:
+  - 新規パッケージ: internal/interfaces/, internal/errors/, internal/validation/, internal/security/
+  - リファクタリング済みストレージ実装（JSONStorageV2, MetricsStorageV2）
+  - コンテキスト対応Git分析（ContextAwareDiffAnalyzer）
+  - 包括的テストスイート（ユニット、統合、セキュリティ、パフォーマンス）
+  - 技術文書追加（docs/IMPROVEMENTS.md）
+
+### v0.5.0（2025-01-01）- CSV出力対応
+- CSV形式での出力サポート追加
+- クロスプラットフォーム対応のconfig commandエディタサポート
+
 ### v0.4.0（2025-07-31）- 期間指定レポート機能
 - **Major Features Added**:
   - 期間指定レポート機能（--since, --from/--to, --last）
@@ -497,4 +515,4 @@ go build -o bin/aict ./cmd/aict
 - 廃止されたhooksディレクトリの削除
 - テンプレート構造の更新
 
-**現在のステータス**: **v0.4.0で期間指定機能が完全実装され、プロダクション環境で実用可能な状態**
+**現在のステータス**: **v0.5.1でエンタープライズレベルの品質とセキュリティを実現、プロダクション環境での本格運用に対応**

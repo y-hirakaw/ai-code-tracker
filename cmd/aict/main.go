@@ -18,15 +18,17 @@ import (
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
 
-const (
-	version        = "0.5.0"
-	defaultBaseDir = ".ai_code_tracking"
-)
+const version = "0.5.1"
+
+var defaultBaseDir = ".ai_code_tracking"
+
+// exitFunc is used to mock os.Exit in tests
+var exitFunc = os.Exit
 
 func main() {
 	if len(os.Args) < 2 {
 		printUsage()
-		os.Exit(1)
+		exitFunc(1)
 	}
 
 	command := os.Args[1]
@@ -42,7 +44,7 @@ func main() {
 	case "reset":
 		if err := handleReset(); err != nil {
 			fmt.Printf("Error: %v\n", err)
-			os.Exit(1)
+			exitFunc(1)
 		}
 	case "version", "--version", "-v":
 		fmt.Printf("AI Code Tracker (aict) version %s\n", version)
@@ -53,7 +55,7 @@ func main() {
 	default:
 		fmt.Printf("Unknown command: %s\n", command)
 		printUsage()
-		os.Exit(1)
+		exitFunc(1)
 	}
 }
 
@@ -62,7 +64,7 @@ func handleInit() {
 
 	if err := os.MkdirAll(baseDir, 0755); err != nil {
 		fmt.Printf("Error creating tracking directory: %v\n", err)
-		os.Exit(1)
+		exitFunc(1)
 	}
 
 	metricsStorage := storage.NewMetricsStorage(baseDir)
@@ -75,7 +77,7 @@ func handleInit() {
 
 	if err := metricsStorage.SaveConfig(config); err != nil {
 		fmt.Printf("Error saving config: %v\n", err)
-		os.Exit(1)
+		exitFunc(1)
 	}
 
 	// Initialize metrics
@@ -89,7 +91,7 @@ func handleInit() {
 
 	if err := metricsStorage.SaveMetrics(initialMetrics); err != nil {
 		fmt.Printf("Error initializing metrics: %v\n", err)
-		os.Exit(1)
+		exitFunc(1)
 	}
 
 	gitAnalyzer := git.NewDiffAnalyzer()
@@ -126,7 +128,7 @@ func handleTrack() {
 	if *author == "" {
 		fmt.Println("Error: -author flag is required")
 		fmt.Println("Usage: aict track -author <author_name>")
-		os.Exit(1)
+		exitFunc(1)
 	}
 
 	baseDir := defaultBaseDir
@@ -134,20 +136,20 @@ func handleTrack() {
 	// Check if initialized
 	if _, err := os.Stat(baseDir); os.IsNotExist(err) {
 		fmt.Printf("Error: AI Code Tracker not initialized. Run 'aict init' first.\n")
-		os.Exit(1)
+		exitFunc(1)
 	}
 
 	// Record checkpoint using new JSONL format
 	recorder := tracker.NewCheckpointRecorder(baseDir)
 	if err := recorder.RecordCheckpoint(*author); err != nil {
 		fmt.Printf("Error recording checkpoint: %v\n", err)
-		os.Exit(1)
+		exitFunc(1)
 	}
 
 	// Update metrics
 	if err := updateMetricsFromRecords(baseDir); err != nil {
 		fmt.Printf("Error updating metrics: %v\n", err)
-		os.Exit(1)
+		exitFunc(1)
 	}
 
 	fmt.Printf("✓ Checkpoint recorded for author: %s\n", *author)
@@ -197,13 +199,13 @@ func handleSetupHooks() {
 	// Setup Git post-commit hook
 	if err := setupGitHook(); err != nil {
 		fmt.Printf("Error setting up Git post-commit hook: %v\n", err)
-		os.Exit(1)
+		exitFunc(1)
 	}
 
 	// Setup Claude Code hooks
 	if err := setupClaudeHooks(); err != nil {
 		fmt.Printf("Error setting up Claude Code hooks: %v\n", err)
-		os.Exit(1)
+		exitFunc(1)
 	}
 
 	fmt.Println()
@@ -499,7 +501,7 @@ func handleConfig() {
 	// Check if initialized
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		fmt.Printf("Error: AI Code Tracker not initialized. Run 'aict init' first.\n")
-		os.Exit(1)
+		exitFunc(1)
 	}
 
 	// Display configuration explanation
@@ -560,6 +562,6 @@ func handleConfig() {
 	if err := cmd.Run(); err != nil {
 		fmt.Printf("Error opening editor: %v\n", err)
 		fmt.Printf("You can manually edit the file at: %s\n", configPath)
-		os.Exit(1)
+		exitFunc(1)
 	}
 }
