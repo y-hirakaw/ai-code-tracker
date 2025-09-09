@@ -15,7 +15,20 @@ A Go-based CLI tool for tracking the proportion of AI-generated versus human-wri
 - **Scalable**: Handles large codebases (10K+ files) efficiently
 - **Configurable**: Customizable tracked file extensions and exclusion patterns
 - **Smart Skip**: Automatically skips recording when only non-tracked files are modified
-- **Test Code Tracking**: Includes test files as legitimate code contributions
+- **Test File Handling**: `*_test.go` is excluded by default (configurable)
+
+## 🆕 What's New
+
+### v0.5.4
+- Complete branch reporting Phase 2: `--branch`, `--branch-regex`, `--all-branches` CLI options.
+- Regex-based branch grouping with per-branch breakdown and group summary.
+- Overall record stats now include counts for records without branch info (shown as `main (inferred)`).
+- Improved Git branch detection and normalization (handles detached HEAD and remotes).
+- Validation for mutually exclusive branch flags with clear error messages.
+
+### v0.5.3
+- Introduced branch-aware JSONL records (`branch` field) and foundational analysis APIs.
+- Internal plumbing for future CLI branch reporting.
 
 ## 🚀 Quick Start
 
@@ -80,6 +93,7 @@ aict report --last 1m --format json      # JSON format
 aict report --last 1w --format csv       # CSV format (v0.5.0 new!)
 
 # Branch statistics (v0.5.4+ features)
+# Note: --branch, --branch-regex, and --all-branches are mutually exclusive
 aict report --all-branches               # All branches summary
 aict report --branch main                # Specific branch details
 aict report --branch-regex "^feature/"   # Feature branches matching regex
@@ -154,7 +168,45 @@ Date,AI_Lines,Human_Lines,Total_Lines,AI_Percentage,Human_Percentage,Target_Perc
 
 **JSONL Record Format** (ultra-lightweight):
 ```json
-{"timestamp":"2025-07-31T23:09:14+09:00","author":"claude","added":395,"deleted":271}
+{"timestamp":"2025-07-31T23:09:14+09:00","author":"claude","branch":"feature/xyz","commit":"def456","added":395,"deleted":271}
+```
+Note: `branch` and `commit` may be omitted if unavailable (backward compatible via `omitempty`).
+
+### Branch Reports (Examples)
+```
+All Branches Report
+===================
+
+Overall Statistics:
+  Total Records: 128
+  Unique Branches: 6
+  Records with Branch Info: 120
+  Records without Branch Info: 8 (shown as 'main (inferred)')
+
+Group Summary:
+  Total Records: 128
+  Total Added Lines: 5421
+  Group AI Ratio: 78.5% (target: 80.0%)
+  Progress: 📊 98.1% of target
+
+Per-Branch Breakdown:
+  main: AI 80.2% (812/1012 lines) [23 records]
+  feature/abc: AI 76.4% (1350/1767 lines) [41 records]
+  hotfix/x: AI 81.0% (210/259 lines) [7 records]
+```
+
+```
+Branch Pattern Report: "^feature/"
+==================================
+Matching Branches: feature/abc, feature/xyz
+Total Records: 62
+Added Lines: 3117 (AI: 2456, Human: 661)
+Group AI Ratio: 78.8%
+Progress: 📊 98.5% (target: 80.0%)
+
+Per-Branch Breakdown:
+  feature/abc: AI 76.4% (1350/1767 lines) [41 records]
+  feature/xyz: AI 81.9% (1106/1350 lines) [21 records]
 ```
 
 ## ⚙️ Configuration
@@ -165,12 +217,12 @@ Customize settings in `.ai_code_tracking/config.json`:
 {
   "target_ai_percentage": 80.0,
   "tracked_extensions": [".go", ".py", ".js", ".ts", ".swift"],
-  "exclude_patterns": ["*_generated.go"],
+  "exclude_patterns": ["*_test.go", "*_generated.go"],
   "author_mappings": {"y-hirakaw": "human"}
 }
 ```
 
-**Note**: Only files with extensions listed in `tracked_extensions` are monitored. Changes to other files (like `.md`, `.txt`) are automatically skipped for efficiency. As of v0.4.0, test files are included as legitimate code contributions.
+**Note**: Only files with extensions listed in `tracked_extensions` are monitored. Changes to other files (like `.md`, `.txt`) are automatically skipped for efficiency. By default in v0.5.x, `*_test.go` is excluded; remove it from `exclude_patterns` if you want to include test files.
 
 ## 🔧 Claude Code Hooks
 
@@ -181,12 +233,12 @@ Customize settings in `.ai_code_tracking/config.json`:
   "hooks": [
     {
       "event": "PreToolUse",
-      "matcher": "Write|Edit|MultiEdit",
+      "matcher": "Write|Edit|MultiEdit|mcp__.*__.*edit.*|mcp__.*__.*write.*|mcp__.*__.*create.*|mcp__.*__.*replace.*|mcp__.*__.*insert.*|mcp__.*__.*override.*",
       "hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.ai_code_tracking/hooks/pre-tool-use.sh"}]
     },
     {
       "event": "PostToolUse", 
-      "matcher": "Write|Edit|MultiEdit",
+      "matcher": "Write|Edit|MultiEdit|mcp__.*__.*edit.*|mcp__.*__.*write.*|mcp__.*__.*create.*|mcp__.*__.*replace.*|mcp__.*__.*insert.*|mcp__.*__.*override.*",
       "hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.ai_code_tracking/hooks/post-tool-use.sh"}]
     }
   ]
