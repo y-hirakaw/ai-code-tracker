@@ -5,7 +5,7 @@ A Go-based CLI tool for tracking the proportion of AI-generated versus human-wri
 ## 🎯 Features
 
 - **Ultra-Lightweight**: JSONL format reduces storage by 70%+ (~100 bytes per record)
-- **Branch Statistics**: Analyze AI/Human ratios by branch with regex pattern matching (NEW in v0.5.4)
+- **Branch Statistics**: Analyze AI/Human ratios by branch with regex pattern matching
 - **Period-Specified Reports**: Analyze AI/Human ratios for specific time ranges (--since, --last, --from/--to)
 - **Multiple Output Formats**: Table, ASCII graph, JSON, and **CSV** output formats
 - **Automatic Tracking**: Integrated with Claude Code hooks for automatic edit recording
@@ -90,7 +90,7 @@ aict report --since "2 weeks ago"        # Since 2 weeks ago
 aict report --from 2025-01-01 --to 2025-01-15  # Date range
 aict report --last 1w --format graph     # ASCII graph format
 aict report --last 1m --format json      # JSON format
-aict report --last 1w --format csv       # CSV format (v0.5.0 new!)
+aict report --last 1w --format csv       # CSV format
 
 # Branch statistics (v0.5.4+ features)
 # Note: --branch, --branch-regex, and --all-branches are mutually exclusive
@@ -158,7 +158,7 @@ Daily AI Percentage Trend:
 Target [████████████████████████████████████████          ] 80.0%
 ```
 
-### CSV Output (NEW in v0.5.0!)
+### CSV Output
 ```csv
 Date,AI_Lines,Human_Lines,Total_Lines,AI_Percentage,Human_Percentage,Target_Percentage,Progress
 2025-07-30,1458,1209,2667,54.7,45.3,80.0,68.3
@@ -270,23 +270,6 @@ ai-code-tracker/
     └── metrics/              # Legacy compatibility
 ```
 
-## 🎯 Use Cases
-
-### Development Goal Management
-- Set target AI code percentage (e.g., 80%)
-- Visualize project progress
-- Balance code quality and AI utilization
-
-### Team Analysis
-- Track AI utilization by team member
-- Compare across projects
-- Monitor productivity metrics
-
-### Quality Management
-- Identify AI code for review
-- Ensure human quality checks
-- Promote balanced development
-
 ## 🔗 Existing Configuration Integration
 
 When existing Git hooks or Claude settings are detected, `aict setup-hooks` safely merges configurations:
@@ -318,7 +301,7 @@ Do you want to merge AI Code Tracker hooks? (y/N): y
 | `aict report --from DATE --to DATE` | Show report for date range |
 | `aict report --format graph` | Show ASCII graph format |
 | `aict report --format json` | Show JSON format |
-| `aict report --format csv` | Show CSV format (NEW in v0.5.0!) |
+| `aict report --format csv` | Show CSV format |
 | `aict reset` | Reset metrics and create new baseline (with confirmation) |
 | `aict version` | Show version information |
 | `aict help` | Show help information |
