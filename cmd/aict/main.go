@@ -18,7 +18,7 @@ import (
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
 
-const version = "0.5.3"
+const version = "0.5.4"
 
 var defaultBaseDir = ".ai_code_tracking"
 

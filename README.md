@@ -1,10 +1,11 @@
-# AI Code Tracker (AICT) v0.5.3
+# AI Code Tracker (AICT) v0.5.4
 
 A Go-based CLI tool for tracking the proportion of AI-generated versus human-written code with **ultra-lightweight JSONL storage**, integrated with Claude Code and Git.
 
 ## 🎯 Features
 
 - **Ultra-Lightweight**: JSONL format reduces storage by 70%+ (~100 bytes per record)
+- **Branch Statistics**: Analyze AI/Human ratios by branch with regex pattern matching (NEW in v0.5.4)
 - **Period-Specified Reports**: Analyze AI/Human ratios for specific time ranges (--since, --last, --from/--to)
 - **Multiple Output Formats**: Table, ASCII graph, JSON, and **CSV** output formats
 - **Automatic Tracking**: Integrated with Claude Code hooks for automatic edit recording
@@ -77,6 +78,11 @@ aict report --from 2025-01-01 --to 2025-01-15  # Date range
 aict report --last 1w --format graph     # ASCII graph format
 aict report --last 1m --format json      # JSON format
 aict report --last 1w --format csv       # CSV format (v0.5.0 new!)
+
+# Branch statistics (v0.5.4+ features)
+aict report --all-branches               # All branches summary
+aict report --branch main                # Specific branch details
+aict report --branch-regex "^feature/"   # Feature branches matching regex
 
 # Reset tracking from current state (with confirmation)
 aict reset
