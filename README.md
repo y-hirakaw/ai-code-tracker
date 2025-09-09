@@ -102,15 +102,9 @@ aict report --branch-regex "^feature/"   # Feature branches matching regex
 aict reset
 ```
 
-### 4. Automatic Usage (Claude Code Integration)
+### 4. Automatic Usage
 
-After running `aict setup-hooks`, editing files with Claude Code will automatically track changes:
-
-1. **PreToolUse**: Records human state before Claude edits
-2. **PostToolUse**: Records AI state after Claude edits  
-3. **Post-commit**: Saves metrics on Git commit
-
-Hook files are created in `.ai_code_tracking/hooks/` with confirmation prompts for existing configurations.
+Automatic tracking is enabled by `aict setup-hooks`. For hook details and MCP matchers, see the "Claude Code Hooks" section below.
 
 ## 📊 Output Examples
 
@@ -272,21 +266,7 @@ ai-code-tracker/
 
 ## 🔗 Existing Configuration Integration
 
-When existing Git hooks or Claude settings are detected, `aict setup-hooks` safely merges configurations:
-
-```bash
-$ aict setup-hooks
-Warning: Git post-commit hook already exists at .git/hooks/post-commit
-Do you want to merge AI Code Tracker functionality? (y/N): y
-✓ Git post-commit hook merged with existing hook
-
-Warning: Claude settings already exist at .claude/settings.json  
-Do you want to merge AI Code Tracker hooks? (y/N): y
-✓ Claude Code hooks merged with existing settings
-```
-
-- **Git Hook Merge**: Appends AICT functionality to existing hooks
-- **Claude Settings Merge**: Adds hooks section to existing configuration
+`aict setup-hooks` merges with existing Git hooksとClaude設定を安全に拡張します（既存の処理は保持し、AICTの処理を追記）。競合時はユーザー確認のうえで追記し、必要に応じてバックアップを作成します。
 
 ## 📋 Commands
 
@@ -309,14 +289,7 @@ Do you want to merge AI Code Tracker hooks? (y/N): y
 
 ## 🔄 Workflow
 
-1. **Initialize**: `aict init` creates baseline from existing code (excluded from metrics)
-2. **Setup Hooks**: `aict setup-hooks` enables Claude Code and Git integration
-3. **Develop**: Code normally with Claude Code (tracks only changes from baseline)
-4. **Monitor**: `aict report` to check progress on added lines only
-5. **Analyze**: Use period reports (`--last 1w`, `--format csv`) for detailed analysis
-6. **Export**: Use CSV format for Excel/Google Sheets analysis
-7. **Reset**: `aict reset` to start fresh tracking from current state (optional)
-8. **Adjust**: Modify development strategy to achieve targets
+Initialize with `aict init`, enable hooks via `aict setup-hooks`, then develop and monitor with `aict report`. Advanced examples are in the Commands section.
 
 ## 🛠️ Technical Specifications
 
@@ -325,7 +298,7 @@ Do you want to merge AI Code Tracker hooks? (y/N): y
 - **Data Format**: Ultra-lightweight JSONL (~100 bytes per record)
 - **Period Analysis**: Flexible time range filtering with multiple output formats
 - **Export Formats**: Table, Graph, JSON, CSV (v0.5.0+)
-- **Hooks**: Claude Code hooks, Git post-commit
+ 
 - **Supported Platforms**: macOS, Linux, Windows
 - **Smart Features**: Tracked file extension filtering, Smart skip for efficiency
 - **Test Coverage**: 89.3% for period analysis package
