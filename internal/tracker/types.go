@@ -16,9 +16,32 @@ type Checkpoint struct {
 type CheckpointRecord struct {
 	Timestamp time.Time `json:"timestamp"`
 	Author    string    `json:"author"`
+	Branch    string    `json:"branch,omitempty"`    // Branch name where changes occurred
 	Commit    string    `json:"commit,omitempty"`
 	Added     int       `json:"added"`   // Total added lines across all files
 	Deleted   int       `json:"deleted"` // Total deleted lines across all files
+}
+
+// GetBranch returns the branch name, defaulting to "main" for backward compatibility
+func (r *CheckpointRecord) GetBranch() string {
+	if r.Branch == "" {
+		return "main"
+	}
+	return r.Branch
+}
+
+// HasBranchInfo returns true if the record contains explicit branch information
+func (r *CheckpointRecord) HasBranchInfo() bool {
+	return r.Branch != ""
+}
+
+// GetDisplayBranch returns branch name for display purposes
+func (r *CheckpointRecord) GetDisplayBranch() string {
+	branch := r.GetBranch()
+	if branch == "main" && !r.HasBranchInfo() {
+		return "main (inferred)"
+	}
+	return branch
 }
 
 type FileContent struct {

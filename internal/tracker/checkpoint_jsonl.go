@@ -10,16 +10,20 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/y-hirakaw/ai-code-tracker/internal/git"
 )
 
 // CheckpointRecorder handles JSONL-based checkpoint recording
 type CheckpointRecorder struct {
-	baseDir string
+	baseDir      string
+	diffAnalyzer *git.DiffAnalyzer
 }
 
 func NewCheckpointRecorder(baseDir string) *CheckpointRecorder {
 	return &CheckpointRecorder{
-		baseDir: baseDir,
+		baseDir:      baseDir,
+		diffAnalyzer: git.NewDiffAnalyzer(),
 	}
 }
 
@@ -64,10 +68,18 @@ func (cr *CheckpointRecorder) RecordCheckpoint(author string) error {
 		}
 	}
 
+	// Get current branch
+	branch := ""
+	if branchName, err := cr.diffAnalyzer.GetCurrentBranch(); err == nil {
+		branch = branchName
+	}
+	// Note: If branch detection fails, we leave it empty for backward compatibility
+
 	// Create checkpoint record
 	record := CheckpointRecord{
 		Timestamp: time.Now(),
 		Author:    author,
+		Branch:    branch,
 		Commit:    commit,
 		Added:     totalAdded,
 		Deleted:   totalDeleted,

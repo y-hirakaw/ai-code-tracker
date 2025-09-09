@@ -32,6 +32,7 @@ func TestCheckpointRecordStructure(t *testing.T) {
 	record := &CheckpointRecord{
 		Timestamp: time.Now(),
 		Author:    "ai-assistant",
+		Branch:    "feature/test",
 		Commit:    "def456",
 		Added:     100,
 		Deleted:   20,
@@ -41,12 +42,76 @@ func TestCheckpointRecordStructure(t *testing.T) {
 		t.Errorf("Expected Author to be 'ai-assistant', got '%s'", record.Author)
 	}
 
+	if record.Branch != "feature/test" {
+		t.Errorf("Expected Branch to be 'feature/test', got '%s'", record.Branch)
+	}
+
 	if record.Added != 100 {
 		t.Errorf("Expected Added to be 100, got %d", record.Added)
 	}
 
 	if record.Deleted != 20 {
 		t.Errorf("Expected Deleted to be 20, got %d", record.Deleted)
+	}
+}
+
+func TestCheckpointRecordBranchCompatibility(t *testing.T) {
+	tests := []struct {
+		name           string
+		record         CheckpointRecord
+		expectedBranch string
+		hasBranchInfo  bool
+	}{
+		{
+			name: "Record with branch info",
+			record: CheckpointRecord{
+				Timestamp: time.Now(),
+				Author:    "ai-assistant",
+				Branch:    "feature/new-ui",
+				Added:     50,
+				Deleted:   10,
+			},
+			expectedBranch: "feature/new-ui",
+			hasBranchInfo:  true,
+		},
+		{
+			name: "Record without branch info (backward compatibility)",
+			record: CheckpointRecord{
+				Timestamp: time.Now(),
+				Author:    "human",
+				Branch:    "", // Empty branch
+				Added:     30,
+				Deleted:   5,
+			},
+			expectedBranch: "main",
+			hasBranchInfo:  false,
+		},
+		{
+			name: "Legacy record (no branch field set)",
+			record: CheckpointRecord{
+				Timestamp: time.Now(),
+				Author:    "claude",
+				// Branch field omitted (zero value)
+				Added:   25,
+				Deleted: 0,
+			},
+			expectedBranch: "main",
+			hasBranchInfo:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Test GetBranch()
+			if got := tt.record.GetBranch(); got != tt.expectedBranch {
+				t.Errorf("GetBranch() = %v, expected %v", got, tt.expectedBranch)
+			}
+
+			// Test HasBranchInfo()
+			if got := tt.record.HasBranchInfo(); got != tt.hasBranchInfo {
+				t.Errorf("HasBranchInfo() = %v, expected %v", got, tt.hasBranchInfo)
+			}
+		})
 	}
 }
 
