@@ -22,6 +22,7 @@ type ReportOptions struct {
 	Format       string
 	Branch       string
 	BranchRegex  string
+	BranchPattern string
 	AllBranches  bool
 }
 
@@ -37,6 +38,7 @@ func handleReportWithOptions() {
 	fs.StringVar(&opts.Format, "format", "table", "Output format: table, graph, json")
 	fs.StringVar(&opts.Branch, "branch", "", "Filter by specific branch name")
 	fs.StringVar(&opts.BranchRegex, "branch-regex", "", "Filter by branch regex pattern")
+	fs.StringVar(&opts.BranchPattern, "branch-pattern", "", "Filter by branch glob pattern (e.g., 'feature/*')")
 	fs.BoolVar(&opts.AllBranches, "all-branches", false, "Show all branches summary")
 
 	fs.Parse(os.Args[2:])
@@ -163,6 +165,8 @@ func handleBranchReport(records []tracker.CheckpointRecord, config *tracker.Conf
 		handleSingleBranchReport(analyzer, opts.Branch, config.TargetAIPercentage)
 	} else if opts.BranchRegex != "" {
 		handleRegexBranchReport(analyzer, opts.BranchRegex, config.TargetAIPercentage)
+	} else if opts.BranchPattern != "" {
+		handleGlobBranchReport(analyzer, opts.BranchPattern, config.TargetAIPercentage)
 	}
 }
 
@@ -310,11 +314,57 @@ func handleRegexBranchReport(analyzer *branch.BranchAnalyzer, pattern string, ta
 	}
 }
 
+// handleGlobBranchReport shows report for branches matching a glob pattern
+func handleGlobBranchReport(analyzer *branch.BranchAnalyzer, pattern string, targetPercentage float64) {
+	groupReport, err := analyzer.AnalyzeByPattern(pattern, false) // false indicates glob pattern
+	if err != nil {
+		fmt.Printf("Error analyzing branches with glob pattern '%s': %v\n", pattern, err)
+		os.Exit(1)
+	}
+
+	if len(groupReport.MatchingBranches) == 0 {
+		fmt.Printf("No branches found matching glob pattern '%s'.\n", pattern)
+		fmt.Println("\nAvailable branches:")
+		branches := analyzer.GetUniqueBranches()
+		for _, branch := range branches {
+			fmt.Printf("  %s\n", branch)
+		}
+		return
+	}
+
+	fmt.Printf("Branch Glob Pattern Report: \"%s\"\n", pattern)
+	fmt.Printf("=====================================\n")
+	fmt.Printf("Matching Branches: %s\n", strings.Join(groupReport.MatchingBranches, ", "))
+	fmt.Printf("Total Records: %d\n", groupReport.TotalRecords)
+	fmt.Printf("Added Lines: %d (AI: %d, Human: %d)\n", 
+		groupReport.TotalAdded,
+		int(float64(groupReport.TotalAdded)*groupReport.GroupAIRatio/100),
+		groupReport.TotalAdded-int(float64(groupReport.TotalAdded)*groupReport.GroupAIRatio/100))
+	fmt.Printf("Group AI Ratio: %.1f%%\n", groupReport.GroupAIRatio)
+
+	if groupReport.GroupAIRatio >= targetPercentage {
+		fmt.Printf("Progress: ✅ %.1f%% (target: %.1f%%)\n\n", (groupReport.GroupAIRatio/targetPercentage)*100, targetPercentage)
+	} else {
+		fmt.Printf("Progress: 📊 %.1f%% (target: %.1f%%)\n\n", (groupReport.GroupAIRatio/targetPercentage)*100, targetPercentage)
+	}
+
+	fmt.Printf("Per-Branch Breakdown:\n")
+	for _, branchName := range groupReport.MatchingBranches {
+		branchReport := groupReport.BranchReports[branchName]
+		fmt.Printf("  %s: AI %.1f%% (%d/%d lines) [%d records]\n", 
+			branchName, 
+			branchReport.AIRatio, 
+			int(float64(branchReport.TotalAdded)*branchReport.AIRatio/100), 
+			branchReport.TotalAdded,
+			branchReport.RecordCount)
+	}
+}
+
 // Helper functions for Phase 4: Combined period and branch filtering
 
 // hasBranchOptions checks if any branch filtering options are specified
 func hasBranchOptions(opts *ReportOptions) bool {
-	return opts.Branch != "" || opts.BranchRegex != "" || opts.AllBranches
+	return opts.Branch != "" || opts.BranchRegex != "" || opts.BranchPattern != "" || opts.AllBranches
 }
 
 // hasPeriodOptions checks if any period filtering options are specified
@@ -331,12 +381,15 @@ func validateBranchOptions(opts *ReportOptions) error {
 	if opts.BranchRegex != "" {
 		branchOptionsCount++
 	}
+	if opts.BranchPattern != "" {
+		branchOptionsCount++
+	}
 	if opts.AllBranches {
 		branchOptionsCount++
 	}
 
 	if branchOptionsCount > 1 {
-		return fmt.Errorf("please specify only one branch option (--branch, --branch-regex, or --all-branches)")
+		return fmt.Errorf("please specify only one branch option (--branch, --branch-regex, --branch-pattern, or --all-branches)")
 	}
 	return nil
 }
@@ -439,6 +492,8 @@ func handleCombinedReport(records []tracker.CheckpointRecord, config *tracker.Co
 		handleSingleBranchCombinedReport(analyzer, opts.Branch, targetPercentage)
 	} else if opts.BranchRegex != "" {
 		handleRegexBranchCombinedReport(analyzer, opts.BranchRegex, targetPercentage)
+	} else if opts.BranchPattern != "" {
+		handleGlobBranchCombinedReport(analyzer, opts.BranchPattern, targetPercentage)
 	}
 }
 
@@ -544,6 +599,48 @@ func handleRegexBranchCombinedReport(analyzer *branch.BranchAnalyzer, pattern st
 
 	fmt.Printf("Branch Pattern Report (Filtered): \"%s\"\n", pattern)
 	fmt.Printf("==========================================\n")
+	fmt.Printf("Matching Branches: %s\n", strings.Join(groupReport.MatchingBranches, ", "))
+	fmt.Printf("Total Records: %d\n", groupReport.TotalRecords)
+	fmt.Printf("Added Lines: %d (AI: %d, Human: %d)\n", 
+		groupReport.TotalAdded,
+		int(float64(groupReport.TotalAdded)*groupReport.GroupAIRatio/100),
+		groupReport.TotalAdded-int(float64(groupReport.TotalAdded)*groupReport.GroupAIRatio/100))
+	fmt.Printf("Group AI Ratio: %.1f%%\n", groupReport.GroupAIRatio)
+	
+	if groupReport.GroupAIRatio >= targetPercentage {
+		fmt.Printf("Progress: ✅ %.1f%% (target: %.1f%%)\n\n", (groupReport.GroupAIRatio/targetPercentage)*100, targetPercentage)
+	} else {
+		fmt.Printf("Progress: 📊 %.1f%% (target: %.1f%%)\n\n", (groupReport.GroupAIRatio/targetPercentage)*100, targetPercentage)
+	}
+
+	fmt.Printf("Per-Branch Breakdown:\n")
+	for _, branchName := range groupReport.MatchingBranches {
+		branchReport := groupReport.BranchReports[branchName]
+		fmt.Printf("  %s: AI %.1f%% (%d/%d lines) [%d records]\n", 
+			branchName, 
+			branchReport.AIRatio, 
+			int(float64(branchReport.TotalAdded)*branchReport.AIRatio/100), 
+			branchReport.TotalAdded,
+			branchReport.RecordCount)
+	}
+}
+
+
+// handleGlobBranchCombinedReport shows report for branches matching a glob pattern with period filtering
+func handleGlobBranchCombinedReport(analyzer *branch.BranchAnalyzer, pattern string, targetPercentage float64) {
+	groupReport, err := analyzer.AnalyzeByPattern(pattern, false) // false indicates glob pattern
+	if err != nil {
+		fmt.Printf("Error analyzing branches with glob pattern '%s': %v\n", pattern, err)
+		os.Exit(1)
+	}
+
+	if len(groupReport.MatchingBranches) == 0 {
+		fmt.Printf("No branches matching glob pattern '%s' found in filtered records.\n", pattern)
+		return
+	}
+
+	fmt.Printf("Branch Glob Pattern Report (Filtered): \"%s\"\n", pattern)
+	fmt.Printf("=======================================\n")
 	fmt.Printf("Matching Branches: %s\n", strings.Join(groupReport.MatchingBranches, ", "))
 	fmt.Printf("Total Records: %d\n", groupReport.TotalRecords)
 	fmt.Printf("Added Lines: %d (AI: %d, Human: %d)\n", 

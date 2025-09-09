@@ -3,6 +3,7 @@ package branch
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
@@ -64,7 +65,17 @@ func (a *BranchAnalyzer) AnalyzeByBranch(branchName string) (*BranchReport, erro
 
 // AnalyzeByPattern analyzes records for branches matching a pattern
 func (a *BranchAnalyzer) AnalyzeByPattern(pattern string, isRegex bool) (*GroupReport, error) {
-	filter := NewBranchFilter(pattern, isRegex)
+	var filter *BranchFilter
+	if isRegex {
+		filter = NewRegexFilter(pattern)
+	} else {
+		// Check if pattern looks like a glob pattern
+		if strings.ContainsAny(pattern, "*?[]") {
+			filter = NewGlobFilter(pattern)
+		} else {
+			filter = NewExactFilter(pattern)
+		}
+	}
 	
 	// Validate filter
 	if err := filter.Validate(); err != nil {

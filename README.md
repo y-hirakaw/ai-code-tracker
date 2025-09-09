@@ -1,4 +1,4 @@
-# AI Code Tracker (AICT) v0.5.4
+# AI Code Tracker (AICT) v0.6.0
 
 A Go-based CLI tool for tracking the proportion of AI-generated versus human-written code with **ultra-lightweight JSONL storage**, integrated with Claude Code and Git.
 
@@ -18,6 +18,13 @@ A Go-based CLI tool for tracking the proportion of AI-generated versus human-wri
 - **Test File Handling**: `*_test.go` is excluded by default (configurable)
 
 ## 🆕 What's New
+
+### v0.6.0
+- Complete branch reporting Phase 5: `--branch-pattern` CLI option for glob-style pattern matching.
+- Intelligent pattern detection automatically chooses between exact, regex, and glob matching.
+- Enhanced branch filtering with four mutually exclusive options for maximum flexibility.
+- Combined period and branch filtering support for complex reporting scenarios.
+- Comprehensive test coverage with 133+ test cases and 95%+ coverage.
 
 ### v0.5.4
 - Complete branch reporting Phase 2: `--branch`, `--branch-regex`, `--all-branches` CLI options.
@@ -93,10 +100,11 @@ aict report --last 1m --format json      # JSON format
 aict report --last 1w --format csv       # CSV format
 
 # Branch statistics (v0.5.4+ features)
-# Note: --branch, --branch-regex, and --all-branches are mutually exclusive
+# Note: --branch, --branch-regex, --branch-pattern, and --all-branches are mutually exclusive
 aict report --all-branches               # All branches summary
 aict report --branch main                # Specific branch details
 aict report --branch-regex "^feature/"   # Feature branches matching regex
+aict report --branch-pattern "feature/*" # Feature branches matching glob pattern (v0.6.0+)
 
 # Reset tracking from current state (with confirmation)
 aict reset

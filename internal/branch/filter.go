@@ -2,6 +2,7 @@ package branch
 
 import (
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -10,6 +11,7 @@ import (
 type BranchFilter struct {
 	Pattern     string `json:"pattern"`
 	IsRegex     bool   `json:"is_regex"`
+	IsGlob      bool   `json:"is_glob"`
 	CaseInsensitive bool   `json:"case_insensitive,omitempty"`
 }
 
@@ -27,6 +29,17 @@ func NewRegexFilter(pattern string) *BranchFilter {
 	return &BranchFilter{
 		Pattern: pattern,
 		IsRegex: true,
+		IsGlob:  false,
+		CaseInsensitive: false,
+	}
+}
+
+// NewGlobFilter creates a new glob-based branch filter
+func NewGlobFilter(pattern string) *BranchFilter {
+	return &BranchFilter{
+		Pattern: pattern,
+		IsRegex: false,
+		IsGlob:  true,
 		CaseInsensitive: false,
 	}
 }
@@ -36,6 +49,7 @@ func NewExactFilter(branchName string) *BranchFilter {
 	return &BranchFilter{
 		Pattern: branchName,
 		IsRegex: false,
+		IsGlob:  false,
 		CaseInsensitive: false,
 	}
 }
@@ -65,6 +79,10 @@ func (f *BranchFilter) Matches(branchName string) (bool, error) {
 		return f.matchesRegex(branch, pattern)
 	}
 	
+	if f.IsGlob {
+		return f.matchesGlob(branch, pattern)
+	}
+	
 	// Exact match
 	return branch == pattern, nil
 }
@@ -83,6 +101,24 @@ func (f *BranchFilter) matchesRegex(branchName, pattern string) (bool, error) {
 	}
 
 	return regex.MatchString(branchName), nil
+}
+
+// matchesGlob performs glob pattern matching with error handling
+func (f *BranchFilter) matchesGlob(branchName, pattern string) (bool, error) {
+	// Use case-sensitive matching by default for glob patterns
+	// Note: filepath.Match doesn't have case-insensitive option,
+	// so we handle it manually if needed
+	if f.CaseInsensitive {
+		branchName = strings.ToLower(branchName)
+		pattern = strings.ToLower(pattern)
+	}
+	
+	matched, err := filepath.Match(pattern, branchName)
+	if err != nil {
+		return false, fmt.Errorf("invalid glob pattern '%s': %w", f.Pattern, err)
+	}
+	
+	return matched, nil
 }
 
 // MustMatch is like Matches but panics on error (for testing convenience)
@@ -105,6 +141,12 @@ func (f *BranchFilter) Validate() error {
 		if err != nil {
 			return fmt.Errorf("invalid regex pattern '%s': %w", f.Pattern, err)
 		}
+	} else if f.IsGlob {
+		// Validate glob pattern by attempting to compile it
+		_, err := filepath.Match(f.Pattern, "test")
+		if err != nil {
+			return fmt.Errorf("invalid glob pattern '%s': %w", f.Pattern, err)
+		}
 	}
 
 	return nil
@@ -119,6 +161,8 @@ func (f *BranchFilter) String() string {
 	filterType := "exact"
 	if f.IsRegex {
 		filterType = "regex"
+	} else if f.IsGlob {
+		filterType = "glob"
 	}
 
 	caseMode := ""

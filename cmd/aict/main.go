@@ -18,7 +18,7 @@ import (
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
 
-const version = "0.5.4"
+const version = "0.6.0"
 
 var defaultBaseDir = ".ai_code_tracking"
 
@@ -481,6 +481,7 @@ func printUsage() {
 	fmt.Println("    --format <format>          Output format: table, graph, json (default: table)")
 	fmt.Println("    --branch <name>            Show report for specific branch")
 	fmt.Println("    --branch-regex <pattern>   Show report for branches matching regex pattern")
+	fmt.Println("    --branch-pattern <pattern> Show report for branches matching glob pattern (e.g., 'feature/*')")
 	fmt.Println("    --all-branches             Show summary of all branches")
 	fmt.Println("  aict setup-hooks             Setup Claude Code and Git hooks for automatic tracking")
 	fmt.Println("  aict config                  View and edit configuration settings")

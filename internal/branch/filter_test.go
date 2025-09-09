@@ -374,3 +374,234 @@ func TestBranchFilter_MustMatch(t *testing.T) {
 	// invalidFilter := NewRegexFilter("[invalid")
 	// This would panic: invalidFilter.MustMatch("any")
 }
+
+func TestBranchFilter_GlobMatch(t *testing.T) {
+	tests := []struct {
+		name       string
+		pattern    string
+		branchName string
+		want       bool
+		wantError  bool
+	}{
+		{
+			name:       "feature prefix glob",
+			pattern:    "feature/*",
+			branchName: "feature/ui-improve",
+			want:       true,
+		},
+		{
+			name:       "feature prefix glob - no match",
+			pattern:    "feature/*",
+			branchName: "main",
+			want:       false,
+		},
+		{
+			name:       "any suffix glob",
+			pattern:    "*/fix-*",
+			branchName: "hotfix/fix-bug",
+			want:       true,
+		},
+		{
+			name:       "any suffix glob - no match",
+			pattern:    "*/fix-*",
+			branchName: "feature/ui-improve",
+			want:       false,
+		},
+		{
+			name:       "release version glob",
+			pattern:    "release/v*.*",
+			branchName: "release/v1.0",
+			want:       true,
+		},
+		{
+			name:       "release version glob - matches longer version",
+			pattern:    "release/v*.*",
+			branchName: "release/v1.0.1",
+			want:       true,
+		},
+		{
+			name:       "wildcard anywhere - same level only",
+			pattern:    "*hotfix*",
+			branchName: "hotfix-critical",
+			want:       true,
+		},
+		{
+			name:       "wildcard anywhere - no match different path",
+			pattern:    "*hotfix*",
+			branchName: "bugfix/hotfix-critical",
+			want:       false,
+		},
+		{
+			name:       "wildcard anywhere - no match",
+			pattern:    "*hotfix*",
+			branchName: "feature/new-ui",
+			want:       false,
+		},
+		{
+			name:       "question mark single char",
+			pattern:    "release/v?.?",
+			branchName: "release/v1.0",
+			want:       true,
+		},
+		{
+			name:       "question mark single char - no match",
+			pattern:    "release/v?.?",
+			branchName: "release/v10.0",
+			want:       false,
+		},
+		{
+			name:       "empty glob matches all",
+			pattern:    "",
+			branchName: "any-branch",
+			want:       true,
+		},
+		{
+			name:       "invalid glob pattern",
+			pattern:    "[invalid",
+			branchName: "any-branch",
+			want:       false,
+			wantError:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			filter := NewGlobFilter(tt.pattern)
+			got, err := filter.Matches(tt.branchName)
+			
+			if tt.wantError {
+				if err == nil {
+					t.Errorf("BranchFilter.Matches() expected error, got nil")
+				}
+				return
+			}
+			
+			if err != nil {
+				t.Errorf("BranchFilter.Matches() error = %v", err)
+				return
+			}
+			
+			if got != tt.want {
+				t.Errorf("BranchFilter.Matches() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBranchFilter_GlobCaseInsensitive(t *testing.T) {
+	tests := []struct {
+		name       string
+		pattern    string
+		branchName string
+		want       bool
+	}{
+		{
+			name:       "glob match - case insensitive",
+			pattern:    "FEATURE/*",
+			branchName: "feature/ui-improve",
+			want:       true,
+		},
+		{
+			name:       "glob match - mixed case",
+			pattern:    "Feature/*",
+			branchName: "FEATURE/ui-improve",
+			want:       true,
+		},
+		{
+			name:       "glob no match - case insensitive",
+			pattern:    "HOTFIX/*",
+			branchName: "feature/ui-improve",
+			want:       false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			filter := NewGlobFilter(tt.pattern).WithCaseInsensitive()
+			got, err := filter.Matches(tt.branchName)
+			if err != nil {
+				t.Errorf("BranchFilter.Matches() error = %v", err)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("BranchFilter.Matches() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBranchFilter_GlobValidate(t *testing.T) {
+	tests := []struct {
+		name      string
+		pattern   string
+		wantError bool
+	}{
+		{
+			name:      "valid glob pattern",
+			pattern:   "feature/*",
+			wantError: false,
+		},
+		{
+			name:      "valid complex glob",
+			pattern:   "*/fix-*",
+			wantError: false,
+		},
+		{
+			name:      "invalid glob pattern",
+			pattern:   "[invalid",
+			wantError: true,
+		},
+		{
+			name:      "empty glob is valid",
+			pattern:   "",
+			wantError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			filter := NewGlobFilter(tt.pattern)
+			err := filter.Validate()
+			
+			if tt.wantError && err == nil {
+				t.Errorf("BranchFilter.Validate() expected error, got nil")
+			}
+			if !tt.wantError && err != nil {
+				t.Errorf("BranchFilter.Validate() unexpected error = %v", err)
+			}
+		})
+	}
+}
+
+func TestBranchFilter_GlobString(t *testing.T) {
+	tests := []struct {
+		name     string
+		filter   *BranchFilter
+		expected string
+	}{
+		{
+			name:     "glob match",
+			filter:   NewGlobFilter("feature/*"),
+			expected: "glob match: 'feature/*'",
+		},
+		{
+			name:     "case insensitive glob",
+			filter:   NewGlobFilter("FEATURE/*").WithCaseInsensitive(),
+			expected: "glob match: 'FEATURE/*' (case-insensitive)",
+		},
+		{
+			name:     "empty glob pattern",
+			filter:   NewGlobFilter(""),
+			expected: "all branches",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.filter.String()
+			if got != tt.expected {
+				t.Errorf("BranchFilter.String() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
