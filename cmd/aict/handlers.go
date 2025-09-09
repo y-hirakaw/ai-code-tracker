@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/y-hirakaw/ai-code-tracker/internal/branch"
 	"github.com/y-hirakaw/ai-code-tracker/internal/period"
 	"github.com/y-hirakaw/ai-code-tracker/internal/storage"
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
@@ -14,11 +15,14 @@ import (
 
 // ReportOptions holds options for the report command
 type ReportOptions struct {
-	Since  string
-	From   string
-	To     string
-	Last   string
-	Format string
+	Since        string
+	From         string
+	To           string
+	Last         string
+	Format       string
+	Branch       string
+	BranchRegex  string
+	AllBranches  bool
 }
 
 // handleReportWithOptions handles the report command with period options
@@ -31,6 +35,9 @@ func handleReportWithOptions() {
 	fs.StringVar(&opts.To, "to", "", "End date for report range")
 	fs.StringVar(&opts.Last, "last", "", "Show report for last N days/weeks/months (e.g., '7d', '2w', '1m')")
 	fs.StringVar(&opts.Format, "format", "table", "Output format: table, graph, json")
+	fs.StringVar(&opts.Branch, "branch", "", "Filter by specific branch name")
+	fs.StringVar(&opts.BranchRegex, "branch-regex", "", "Filter by branch regex pattern")
+	fs.BoolVar(&opts.AllBranches, "all-branches", false, "Show all branches summary")
 
 	fs.Parse(os.Args[2:])
 
@@ -56,6 +63,12 @@ func handleReportWithOptions() {
 	if err != nil {
 		fmt.Printf("Error reading records: %v\n", err)
 		os.Exit(1)
+	}
+
+	// Check if branch options are specified
+	if opts.Branch != "" || opts.BranchRegex != "" || opts.AllBranches {
+		handleBranchReport(records, config, opts)
+		return
 	}
 
 	// Check if period options are specified
@@ -145,4 +158,179 @@ func handlePeriodReport(records []tracker.CheckpointRecord, config *tracker.Conf
 	}
 
 	fmt.Print(output)
+}
+
+// handleBranchReport handles branch-specific reports
+func handleBranchReport(records []tracker.CheckpointRecord, config *tracker.Config, opts *ReportOptions) {
+	analyzer := branch.NewBranchAnalyzer(records)
+
+	// Validate branch options (ensure only one is specified)
+	branchOptionsCount := 0
+	if opts.Branch != "" {
+		branchOptionsCount++
+	}
+	if opts.BranchRegex != "" {
+		branchOptionsCount++
+	}
+	if opts.AllBranches {
+		branchOptionsCount++
+	}
+
+	if branchOptionsCount > 1 {
+		fmt.Printf("Error: Please specify only one branch option (--branch, --branch-regex, or --all-branches)\n")
+		os.Exit(1)
+	}
+
+	// Handle different branch report types
+	if opts.AllBranches {
+		handleAllBranchesReport(analyzer, config.TargetAIPercentage)
+	} else if opts.Branch != "" {
+		handleSingleBranchReport(analyzer, opts.Branch, config.TargetAIPercentage)
+	} else if opts.BranchRegex != "" {
+		handleRegexBranchReport(analyzer, opts.BranchRegex, config.TargetAIPercentage)
+	}
+}
+
+// handleAllBranchesReport shows summary of all branches
+func handleAllBranchesReport(analyzer *branch.BranchAnalyzer, targetPercentage float64) {
+	groupReport, err := analyzer.AnalyzeAllBranches()
+	if err != nil {
+		fmt.Printf("Error analyzing all branches: %v\n", err)
+		os.Exit(1)
+	}
+
+	if len(groupReport.MatchingBranches) == 0 {
+		fmt.Println("No branches found in tracking records.")
+		return
+	}
+
+	fmt.Printf("All Branches Report\n")
+	fmt.Printf("===================\n\n")
+	
+	// Show overall stats
+	stats := analyzer.GetRecordStats()
+	fmt.Printf("Overall Statistics:\n")
+	fmt.Printf("  Total Records: %d\n", stats.TotalRecords)
+	fmt.Printf("  Unique Branches: %d\n", stats.UniqueBranches)
+	fmt.Printf("  Records with Branch Info: %d\n", stats.RecordsWithBranch)
+	fmt.Printf("  Records without Branch Info: %d (shown as 'main (inferred)')\n\n", stats.RecordsWithoutBranch)
+
+	fmt.Printf("Group Summary:\n")
+	fmt.Printf("  Total Records: %d\n", groupReport.TotalRecords)
+	fmt.Printf("  Total Added Lines: %d\n", groupReport.TotalAdded)
+	fmt.Printf("  Group AI Ratio: %.1f%% (target: %.1f%%)\n", groupReport.GroupAIRatio, targetPercentage)
+	
+	// Progress indicator
+	if groupReport.GroupAIRatio >= targetPercentage {
+		fmt.Printf("  Progress: ✅ Target achieved (%.1f%%)\n\n", (groupReport.GroupAIRatio/targetPercentage)*100)
+	} else {
+		fmt.Printf("  Progress: 📊 %.1f%% of target\n\n", (groupReport.GroupAIRatio/targetPercentage)*100)
+	}
+
+	fmt.Printf("Per-Branch Breakdown:\n")
+	for _, branchName := range groupReport.MatchingBranches {
+		branchReport := groupReport.BranchReports[branchName]
+		displayBranchName := branchName
+		if branchName == "main" && len(groupReport.BranchReports) > 0 {
+			// Check if this might be inferred
+			if branchReport.RecordCount > 0 {
+				// We can't easily check HasBranchInfo here, so just show the name as-is
+				displayBranchName = branchName
+			}
+		}
+		
+		fmt.Printf("  %s: AI %.1f%% (%d/%d lines) [%d records]\n", 
+			displayBranchName, 
+			branchReport.AIRatio, 
+			int(float64(branchReport.TotalAdded)*branchReport.AIRatio/100), 
+			branchReport.TotalAdded,
+			branchReport.RecordCount)
+	}
+}
+
+// handleSingleBranchReport shows detailed report for a specific branch
+func handleSingleBranchReport(analyzer *branch.BranchAnalyzer, branchName string, targetPercentage float64) {
+	branchReport, err := analyzer.AnalyzeByBranch(branchName)
+	if err != nil {
+		fmt.Printf("Error analyzing branch '%s': %v\n", branchName, err)
+		os.Exit(1)
+	}
+
+	if branchReport.RecordCount == 0 {
+		fmt.Printf("No records found for branch '%s'.\n", branchName)
+		fmt.Println("\nAvailable branches:")
+		branches := analyzer.GetUniqueBranches()
+		for _, branch := range branches {
+			fmt.Printf("  %s\n", branch)
+		}
+		return
+	}
+
+	fmt.Printf("Branch Report: %s\n", branchName)
+	fmt.Printf("================================\n")
+	fmt.Printf("Records: %d (%s to %s)\n", 
+		branchReport.RecordCount,
+		branchReport.FirstRecord.Format("2006-01-02"),
+		branchReport.LastRecord.Format("2006-01-02"))
+	fmt.Printf("Added Lines: %d (AI: %d, Human: %d)\n", 
+		branchReport.TotalAdded,
+		int(float64(branchReport.TotalAdded)*branchReport.AIRatio/100),
+		branchReport.TotalAdded-int(float64(branchReport.TotalAdded)*branchReport.AIRatio/100))
+	fmt.Printf("AI Ratio: %.1f%%\n", branchReport.AIRatio)
+	
+	if branchReport.AIRatio >= targetPercentage {
+		fmt.Printf("Progress: ✅ %.1f%% (target: %.1f%%)\n", (branchReport.AIRatio/targetPercentage)*100, targetPercentage)
+	} else {
+		fmt.Printf("Progress: 📊 %.1f%% (target: %.1f%%)\n", (branchReport.AIRatio/targetPercentage)*100, targetPercentage)
+	}
+
+	if len(branchReport.Authors) > 0 {
+		fmt.Printf("Authors: %s\n", strings.Join(branchReport.Authors, ", "))
+	}
+}
+
+// handleRegexBranchReport shows report for branches matching a regex pattern
+func handleRegexBranchReport(analyzer *branch.BranchAnalyzer, pattern string, targetPercentage float64) {
+	groupReport, err := analyzer.AnalyzeByPattern(pattern, true)
+	if err != nil {
+		fmt.Printf("Error analyzing branches with pattern '%s': %v\n", pattern, err)
+		os.Exit(1)
+	}
+
+	if len(groupReport.MatchingBranches) == 0 {
+		fmt.Printf("No branches found matching pattern '%s'.\n", pattern)
+		fmt.Println("\nAvailable branches:")
+		branches := analyzer.GetUniqueBranches()
+		for _, branch := range branches {
+			fmt.Printf("  %s\n", branch)
+		}
+		return
+	}
+
+	fmt.Printf("Branch Pattern Report: \"%s\"\n", pattern)
+	fmt.Printf("==================================\n")
+	fmt.Printf("Matching Branches: %s\n", strings.Join(groupReport.MatchingBranches, ", "))
+	fmt.Printf("Total Records: %d\n", groupReport.TotalRecords)
+	fmt.Printf("Added Lines: %d (AI: %d, Human: %d)\n", 
+		groupReport.TotalAdded,
+		int(float64(groupReport.TotalAdded)*groupReport.GroupAIRatio/100),
+		groupReport.TotalAdded-int(float64(groupReport.TotalAdded)*groupReport.GroupAIRatio/100))
+	fmt.Printf("Group AI Ratio: %.1f%%\n", groupReport.GroupAIRatio)
+
+	if groupReport.GroupAIRatio >= targetPercentage {
+		fmt.Printf("Progress: ✅ %.1f%% (target: %.1f%%)\n\n", (groupReport.GroupAIRatio/targetPercentage)*100, targetPercentage)
+	} else {
+		fmt.Printf("Progress: 📊 %.1f%% (target: %.1f%%)\n\n", (groupReport.GroupAIRatio/targetPercentage)*100, targetPercentage)
+	}
+
+	fmt.Printf("Per-Branch Breakdown:\n")
+	for _, branchName := range groupReport.MatchingBranches {
+		branchReport := groupReport.BranchReports[branchName]
+		fmt.Printf("  %s: AI %.1f%% (%d/%d lines) [%d records]\n", 
+			branchName, 
+			branchReport.AIRatio, 
+			int(float64(branchReport.TotalAdded)*branchReport.AIRatio/100), 
+			branchReport.TotalAdded,
+			branchReport.RecordCount)
+	}
 }
