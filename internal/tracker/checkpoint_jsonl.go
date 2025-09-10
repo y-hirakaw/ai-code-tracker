@@ -63,7 +63,8 @@ func (cr *CheckpointRecorder) RecordCheckpoint(author string) error {
 	// Skip recording if no changes from last record
 	lastRecord, err := cr.getLastRecord()
 	if err == nil && lastRecord != nil {
-		if lastRecord.Added == totalAdded && lastRecord.Deleted == totalDeleted {
+		// Skip only if both metrics AND author are unchanged
+		if lastRecord.Added == totalAdded && lastRecord.Deleted == totalDeleted && lastRecord.Author == author {
 			return nil // No change from last record, skip recording
 		}
 	}
@@ -84,6 +85,7 @@ func (cr *CheckpointRecorder) RecordCheckpoint(author string) error {
 		Added:     totalAdded,
 		Deleted:   totalDeleted,
 	}
+
 
 	// Append to JSONL file
 	return cr.appendRecord(record)
