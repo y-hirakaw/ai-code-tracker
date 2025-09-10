@@ -76,39 +76,24 @@ aict init
 aict setup-hooks
 ```
 
-### 3. Manual Usage
+### 3. Basic Usage
 
 ```bash
 # Navigate to your project directory first
 cd /path/to/your-project
 
-# Record human code state
-aict track -author human
+# Record code changes manually (if hooks not used)
+aict track -author human   # After human coding
+aict track -author claude  # After AI coding
 
-# Record AI code state  
-aict track -author claude
-
-# Display current statistics (baseline excluded)
+# View current statistics
 aict report
 
-# Period-specified reports (v0.4.0+ features)
-aict report --last 7d                    # Last 7 days
-aict report --since "2 weeks ago"        # Since 2 weeks ago
-aict report --from 2025-01-01 --to 2025-01-15  # Date range
-aict report --last 1w --format graph     # ASCII graph format
-aict report --last 1m --format json      # JSON format
-aict report --last 1w --format csv       # CSV format
-
-# Branch statistics (v0.5.4+ features)
-# Note: --branch, --branch-regex, --branch-pattern, and --all-branches are mutually exclusive
-aict report --all-branches               # All branches summary
-aict report --branch main                # Specific branch details
-aict report --branch-regex "^feature/"   # Feature branches matching regex
-aict report --branch-pattern "feature/*" # Feature branches matching glob pattern (v0.6.0+)
-
-# Reset tracking from current state (with confirmation)
-aict reset
+# View progress over time
+aict report --last 7d
 ```
+
+For complete command reference and advanced usage, see **[COMMANDS.md](docs/COMMANDS.md)**.
 
 ### 4. Automatic Usage
 
@@ -253,26 +238,11 @@ Customize settings in `.ai_code_tracking/config.json`:
 
 ## 📋 Commands
 
-| Command | Description |
-|---------|-------------|
-| `aict init` | Initialize tracking with baseline from existing codebase |
-| `aict setup-hooks` | Setup Claude Code and Git hooks (with merge confirmation) |
-| `aict track -author <name>` | Create manual checkpoint |
-| `aict report [options]` | Display current metrics (baseline excluded) |
-| `aict report --last 7d` | Show report for last 7 days |
-| `aict report --since "2 weeks ago"` | Show report since specific time |
-| `aict report --from DATE --to DATE` | Show report for date range |
-| `aict report --format graph` | Show ASCII graph format |
-| `aict report --format json` | Show JSON format |
-| `aict report --format csv` | Show CSV format |
-| `aict reset` | Reset metrics and create new baseline (with confirmation) |
-| `aict version` | Show version information |
-| `aict help` | Show help information |
-| `aict config` | Show configuration |
+For complete command reference, options, and advanced usage examples, see **[COMMANDS.md](docs/COMMANDS.md)**.
 
 ## 🔄 Workflow
 
-Initialize with `aict init`, enable hooks via `aict setup-hooks`, then develop and monitor with `aict report`. Advanced examples are in the Commands section.
+Initialize with `aict init`, enable hooks via `aict setup-hooks`, then develop and monitor with `aict report`. For advanced usage, see [COMMANDS.md](docs/COMMANDS.md).
 
 ## 🛠️ Technical Specifications
 
