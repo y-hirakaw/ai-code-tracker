@@ -249,7 +249,7 @@ Customize settings in `.ai_code_tracking/config.json`:
 
 ## 🔗 Existing Configuration Integration
 
-`aict setup-hooks` merges with existing Git hooksとClaude設定を安全に拡張します（既存の処理は保持し、AICTの処理を追記）。競合時はユーザー確認のうえで追記し、必要に応じてバックアップを作成します。
+`aict setup-hooks` safely merges with existing Git hooks and Claude settings, preserving existing functionality while adding AICT tracking. When conflicts occur, user confirmation is required before merging, with automatic backup creation when necessary.
 
 ## 📋 Commands
 
