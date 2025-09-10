@@ -247,31 +247,6 @@ Customize settings in `.ai_code_tracking/config.json`:
 }
 ```
 
-## 📁 File Structure
-
-```
-ai-code-tracker/
-├── bin/aict                   # CLI executable
-├── cmd/aict/
-│   ├── main.go               # CLI entry point
-│   └── handlers.go           # Period report handlers (v0.4.0+)
-├── internal/
-│   ├── tracker/              # Core tracking logic
-│   ├── period/               # Period analysis (v0.4.0+)
-│   ├── storage/              # Data persistence
-│   └── git/                  # Git integration
-├── .claude/
-│   └── settings.json         # Claude Code hook configuration
-└── .ai_code_tracking/        # Tracking data
-    ├── config.json
-    ├── checkpoints.jsonl     # Ultra-lightweight records
-    ├── hooks/                # Hook scripts (auto-generated)
-    │   ├── pre-tool-use.sh
-    │   ├── post-tool-use.sh
-    │   └── post-commit
-    └── metrics/              # Legacy compatibility
-```
-
 ## 🔗 Existing Configuration Integration
 
 `aict setup-hooks` merges with existing Git hooksとClaude設定を安全に拡張します（既存の処理は保持し、AICTの処理を追記）。競合時はユーザー確認のうえで追記し、必要に応じてバックアップを作成します。
