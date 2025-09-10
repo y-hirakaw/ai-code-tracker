@@ -39,3 +39,5 @@ go.work.sum
 
 # Test demo project
 test/demo-project/
+
+.serena/
