@@ -4,15 +4,15 @@ A Go-based CLI tool for tracking the proportion of AI-generated versus human-wri
 
 ## 🎯 Features
 
-- **Ultra-Lightweight**: JSONL format reduces storage by 70%+ (~100 bytes per record)
-- **Branch Statistics**: Analyze AI/Human ratios by branch with regex pattern matching
+- **Ultra-Lightweight**: JSONL format reduces storage by 70%+ (~150 bytes per record)
+- **Branch Statistics**: Analyze AI/Human ratios by branch with regex and glob pattern matching
 - **Period-Specified Reports**: Analyze AI/Human ratios for specific time ranges (--since, --last, --from/--to)
 - **Multiple Output Formats**: Table, ASCII graph, JSON, and **CSV** output formats
 - **Automatic Tracking**: Integrated with Claude Code hooks for automatic edit recording
 - **Simple Architecture**: No baseline concept - pure differential tracking
 - **Accurate Analysis**: Git numstat-based precise line counting
-- **Real-time Reporting**: Instant AI/Human ratio calculations with daily breakdown
-- **Scalable**: Handles large codebases (10K+ files) efficiently
+- **Fast Reporting**: Sub-second AI/Human ratio calculations with daily breakdown
+- **Scalable**: Handles large codebases efficiently with optimized JSONL storage
 - **Configurable**: Customizable tracked file extensions and exclusion patterns
 - **Smart Skip**: Automatically skips recording when only non-tracked files are modified
 - **Test File Handling**: `*_test.go` is excluded by default (configurable)
