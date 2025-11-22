@@ -188,18 +188,19 @@ func TestLoadConfigDefault(t *testing.T) {
 		t.Errorf("Expected default TargetAIPercentage 80.0, got %.1f", config.TargetAIPercentage)
 	}
 
-	expectedExtensions := []string{".go", ".py", ".js", ".ts", ".java", ".cpp", ".c", ".h", ".rs"}
-	if len(config.TrackedExtensions) != len(expectedExtensions) {
-		t.Errorf("Expected %d default extensions, got %d", len(expectedExtensions), len(config.TrackedExtensions))
+	// GetDefaultConfig returns 17 extensions including .go, .py, .js, .ts, .java, .cs, .cpp, .c, .h, .rb, .php, .swift, .kt, .rs, .scala, .r, .m
+	if len(config.TrackedExtensions) != 17 {
+		t.Errorf("Expected 17 default extensions, got %d", len(config.TrackedExtensions))
 	}
 
-	expectedPatterns := []string{"*_test.go", "*.test.js", "*.spec.ts", "*_generated.go"}
-	if len(config.ExcludePatterns) != len(expectedPatterns) {
-		t.Errorf("Expected %d default exclude patterns, got %d", len(expectedPatterns), len(config.ExcludePatterns))
+	// GetDefaultConfig returns 9 exclude patterns
+	if len(config.ExcludePatterns) != 9 {
+		t.Errorf("Expected 9 default exclude patterns, got %d", len(config.ExcludePatterns))
 	}
 
-	if len(config.AuthorMappings) != 0 {
-		t.Errorf("Expected empty author mappings by default, got %d", len(config.AuthorMappings))
+	// GetDefaultConfig returns 3 default AI author mappings
+	if len(config.AuthorMappings) != 3 {
+		t.Errorf("Expected 3 default author mappings, got %d", len(config.AuthorMappings))
 	}
 }
 
@@ -255,8 +256,7 @@ func TestArchiveMetrics(t *testing.T) {
 }
 
 func TestGetDefaultConfig(t *testing.T) {
-	ms := NewMetricsStorage("/tmp")
-	config := ms.getDefaultConfig()
+	config := GetDefaultConfig()
 
 	// Verify default config structure
 	if config.TargetAIPercentage != 80.0 {

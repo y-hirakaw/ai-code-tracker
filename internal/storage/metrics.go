@@ -53,7 +53,12 @@ func (ms *MetricsStorage) LoadConfig() (*tracker.Config, error) {
 	var config tracker.Config
 
 	if !ms.storage.Exists(filename) {
-		return ms.getDefaultConfig(), nil
+		// Create default config file if it doesn't exist
+		defaultConfig := GetDefaultConfig()
+		if err := ms.SaveConfig(defaultConfig); err != nil {
+			return nil, fmt.Errorf("failed to create default config: %w", err)
+		}
+		return defaultConfig, nil
 	}
 
 	if err := ms.storage.Load(filename, &config); err != nil {
@@ -61,15 +66,6 @@ func (ms *MetricsStorage) LoadConfig() (*tracker.Config, error) {
 	}
 
 	return &config, nil
-}
-
-func (ms *MetricsStorage) getDefaultConfig() *tracker.Config {
-	return &tracker.Config{
-		TargetAIPercentage: 80.0,
-		TrackedExtensions:  []string{".go", ".py", ".js", ".ts", ".java", ".cpp", ".c", ".h", ".rs"},
-		ExcludePatterns:    []string{"*_test.go", "*.test.js", "*.spec.ts", "*_generated.go"},
-		AuthorMappings:     make(map[string]string),
-	}
 }
 
 func (ms *MetricsStorage) ArchiveMetrics(result *tracker.AnalysisResult) error {

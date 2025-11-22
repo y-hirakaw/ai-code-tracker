@@ -68,12 +68,7 @@ func handleInit() {
 	}
 
 	metricsStorage := storage.NewMetricsStorage(baseDir)
-	config := &tracker.Config{
-		TargetAIPercentage: 80.0,
-		TrackedExtensions:  []string{".go", ".py", ".js", ".ts", ".java", ".cpp", ".c", ".h", ".rs"},
-		ExcludePatterns:    []string{"*_test.go", "*.test.js", "*.spec.ts", "*_generated.go"},
-		AuthorMappings:     make(map[string]string),
-	}
+	config := storage.GetDefaultConfig()
 
 	if err := metricsStorage.SaveConfig(config); err != nil {
 		fmt.Printf("Error saving config: %v\n", err)
@@ -502,10 +497,15 @@ func handleConfig() {
 	baseDir := defaultBaseDir
 	configPath := filepath.Join(baseDir, "config.json")
 
-	// Check if initialized
+	// Check if initialized - create default config if not exists
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		fmt.Printf("Error: AI Code Tracker not initialized. Run 'aict init' first.\n")
-		exitFunc(1)
+		// Create default config using MetricsStorage
+		metricsStorage := storage.NewMetricsStorage(baseDir)
+		_, err := metricsStorage.LoadConfig() // This will auto-create if not exists
+		if err != nil {
+			fmt.Printf("Error: Failed to create default config: %v\n", err)
+			exitFunc(1)
+		}
 	}
 
 	// Display configuration explanation

@@ -101,8 +101,12 @@ func (ms *MetricsStorageV2) LoadConfig() (*tracker.Config, error) {
 	filename := "config.json"
 	
 	if !ms.storage.Exists(filename) {
-		// Return default configuration
-		return GetDefaultConfig(), nil
+		// Create default config file if it doesn't exist
+		defaultConfig := GetDefaultConfig()
+		if err := ms.SaveConfig(defaultConfig); err != nil {
+			return nil, errors.NewConfigError("LoadConfig", "failed to create default config", err)
+		}
+		return defaultConfig, nil
 	}
 	
 	var config tracker.Config

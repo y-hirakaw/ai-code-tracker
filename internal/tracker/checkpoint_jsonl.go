@@ -224,6 +224,7 @@ func (cr *CheckpointRecorder) GetLatestRecords(count int) ([]CheckpointRecord, e
 // loadConfig loads the configuration file
 func (cr *CheckpointRecorder) loadConfig() (*Config, error) {
 	configPath := filepath.Join(cr.baseDir, "config.json")
+
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, err
