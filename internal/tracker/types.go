@@ -69,4 +69,87 @@ type Config struct {
 	TrackedExtensions  []string          `json:"tracked_extensions"`
 	ExcludePatterns    []string          `json:"exclude_patterns"`
 	AuthorMappings     map[string]string `json:"author_mappings"`
+	DefaultAuthor      string            `json:"default_author,omitempty"` // SPEC.md準拠
+	AIAgents           []string          `json:"ai_agents,omitempty"`      // SPEC.md準拠
+}
+
+// SPEC.md準拠の型定義
+
+// AuthorType represents the type of code author
+type AuthorType string
+
+const (
+	AuthorTypeHuman AuthorType = "human"
+	AuthorTypeAI    AuthorType = "ai"
+)
+
+// Change represents file-level changes with line ranges
+type Change struct {
+	Added   int     `json:"added"`
+	Deleted int     `json:"deleted"`
+	Lines   [][]int `json:"lines"` // [[start, end], [single], ...]
+}
+
+// CheckpointV2 represents a development checkpoint (SPEC.md準拠)
+type CheckpointV2 struct {
+	Timestamp time.Time          `json:"timestamp"`
+	Author    string             `json:"author"`
+	Type      AuthorType         `json:"type"`
+	Metadata  map[string]string  `json:"metadata,omitempty"`
+	Changes   map[string]Change  `json:"changes"` // filepath -> Change
+}
+
+// AuthorshipLog represents commit-level authorship information
+type AuthorshipLog struct {
+	Version   string                `json:"version"`
+	Commit    string                `json:"commit"`
+	Timestamp time.Time             `json:"timestamp"`
+	Files     map[string]FileInfo   `json:"files"`
+}
+
+// FileInfo contains author information for a single file
+type FileInfo struct {
+	Authors []AuthorInfo `json:"authors"`
+}
+
+// AuthorInfo represents a single author's contribution to a file
+type AuthorInfo struct {
+	Name     string            `json:"name"`
+	Type     AuthorType        `json:"type"`
+	Lines    [][]int           `json:"lines"` // [[start, end], ...]
+	Metadata map[string]string `json:"metadata,omitempty"`
+}
+
+// Report represents generated code generation report
+type Report struct {
+	Range    string       `json:"range,omitempty"`
+	Branch   string       `json:"branch,omitempty"`
+	Commits  int          `json:"commits,omitempty"`
+	Period   *Period      `json:"period,omitempty"`
+	Summary  SummaryStats `json:"summary"`
+	ByFile   []FileStats  `json:"by_file,omitempty"`
+	ByAuthor []AuthorStats `json:"by_author,omitempty"`
+}
+
+// Period represents a time period
+type Period struct {
+	Start time.Time `json:"start"`
+	End   time.Time `json:"end"`
+}
+
+// SummaryStats represents summary statistics
+type SummaryStats struct {
+	TotalLines   int     `json:"total_lines"`
+	AILines      int     `json:"ai_lines"`
+	HumanLines   int     `json:"human_lines"`
+	AIPercentage float64 `json:"ai_percentage"`
+}
+
+// AuthorStats represents statistics per author
+type AuthorStats struct {
+	Name       string     `json:"name"`
+	Type       AuthorType `json:"type"`
+	Lines      int        `json:"lines"`
+	Percentage float64    `json:"percentage"`
+	Commits    int        `json:"commits,omitempty"`
 }

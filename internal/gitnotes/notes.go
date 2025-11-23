@@ -6,11 +6,16 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
 
 const (
-	// NotesRef is the git notes reference for AICT
+	// NotesRef is the git notes reference for AICT (legacy)
 	NotesRef = "refs/notes/aict"
+
+	// AuthorshipNotesRef is the SPEC.md準拠 git notes reference
+	AuthorshipNotesRef = "refs/aict/authorship"
 )
 
 // AIEditNote represents AI editing information stored in git notes
@@ -121,4 +126,77 @@ func GetCurrentCommit() (string, error) {
 	}
 
 	return strings.TrimSpace(string(output)), nil
+}
+
+// SPEC.md準拠: Authorship Log操作
+
+// AddAuthorshipLog adds an AuthorshipLog to Git notes
+func (nm *NotesManager) AddAuthorshipLog(log *tracker.AuthorshipLog) error {
+	data, err := json.MarshalIndent(log, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal authorship log: %w", err)
+	}
+
+	// refs/aict/authorship/ に保存
+	cmd := exec.Command("git", "notes", "--ref="+AuthorshipNotesRef, "add", "-f", "-m", string(data), log.Commit)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to add authorship log: %w (output: %s)", err, string(output))
+	}
+
+	return nil
+}
+
+// GetAuthorshipLog retrieves an AuthorshipLog from Git notes
+func (nm *NotesManager) GetAuthorshipLog(commitHash string) (*tracker.AuthorshipLog, error) {
+	cmd := exec.Command("git", "notes", "--ref="+AuthorshipNotesRef, "show", commitHash)
+	output, err := cmd.Output()
+	if err != nil {
+		// No authorship log exists for this commit
+		return nil, nil
+	}
+
+	var log tracker.AuthorshipLog
+	if err := json.Unmarshal(output, &log); err != nil {
+		return nil, fmt.Errorf("failed to parse authorship log: %w", err)
+	}
+
+	return &log, nil
+}
+
+// ListAuthorshipLogs lists all commits that have Authorship Logs
+func (nm *NotesManager) ListAuthorshipLogs() (map[string]*tracker.AuthorshipLog, error) {
+	cmd := exec.Command("git", "notes", "--ref="+AuthorshipNotesRef, "list")
+	output, err := cmd.Output()
+	if err != nil {
+		// No notes exist yet
+		return make(map[string]*tracker.AuthorshipLog), nil
+	}
+
+	logs := make(map[string]*tracker.AuthorshipLog)
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+
+		// Format: "noteHash commitHash"
+		parts := strings.Fields(line)
+		if len(parts) != 2 {
+			continue
+		}
+
+		commitHash := parts[1]
+		log, err := nm.GetAuthorshipLog(commitHash)
+		if err != nil {
+			continue
+		}
+
+		if log != nil {
+			logs[commitHash] = log
+		}
+	}
+
+	return logs, nil
 }
