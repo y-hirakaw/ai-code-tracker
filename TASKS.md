@@ -124,10 +124,10 @@ type CommitSnapshot struct {
 - rebase/merge/cherry-pickで保持される
 
 **実装フェーズ**:
-1. Phase 1: git notes マーキング機能
-2. Phase 2: git blame + notes による分析
-3. Phase 3: レポート生成
-4. Phase 4: 既存データからのマイグレーション
+1. ✅ Phase 1: git notes マーキング機能
+2. ✅ Phase 2: git notes 記録機能の実装
+3. ✅ Phase 3: git blame ベースの分析基礎実装
+4. 🔄 Phase 4: git notes と git blame を組み合わせて正確なAI%を計算
 
 ## 技術的検証結果
 
@@ -192,10 +192,13 @@ refs/notes/aict         # AICT（提案）
    ```
 
 3. **マイルストーン**:
-   - [ ] MVP: git notes マーキング動作確認
-   - [ ] git blame ベースの正確なAI%計算
-   - [ ] Claude Code hooks 統合
-   - [ ] 既存ユーザーへのマイグレーションパス提供
+   - [x] MVP: git notes マーキング動作確認
+   - [x] git blame ベースの分析基礎実装
+   - [x] Claude Code hooks 統合
+   - [ ] git notes + git blame で正確なAI%計算
+   - [ ] テストとドキュメント整備
+
+**注**: 既存データのマイグレーションは不要（新方式で再スタート）
 
 ## 参考リンク
 
@@ -210,8 +213,30 @@ refs/notes/aict         # AICT（提案）
 - Main branch: main
 - 最終コミット: 0d73a48 (feat: Centralize default config and add .kt/.swift support)
 
+## 実装進捗 (2025-11-23)
+
+### ✅ 完了
+1. **aict mark-ai-edit コマンド** - AI編集をgit notesに記録
+2. **git notes 統合** - `internal/gitnotes` パッケージ作成
+3. **aict snapshot コマンド** - git blameベースのコードベース分析
+4. **Claude Code hooks 更新** - PostToolUseフックで自動マーク
+5. **git blame 分析基盤** - `internal/blame` パッケージ作成
+
+### 🔄 次のタスク
+**Phase 4**: git notes情報とgit blameを組み合わせて正確なAI%を計算
+
+**現在の課題**:
+- git blameは全コミットが`y-hirakaw`名義なのでAI%が7.7%と低く出る
+- git notesに記録されたAI編集情報を活用する必要がある
+
+**解決策**:
+1. git blameで各行のコミットハッシュを取得
+2. そのコミットのgit notes (refs/notes/aict) を確認
+3. notesに記録されている場合はAI生成としてカウント
+4. notesがない場合はgit author + author_mappingsで判定
+
 ---
 
 **作成日**: 2025-11-23
 **最終更新**: 2025-11-23
-**ステータス**: 設計フェーズ完了、実装待ち
+**ステータス**: MVP実装完了、正確性向上フェーズ
