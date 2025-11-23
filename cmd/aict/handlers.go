@@ -24,6 +24,7 @@ type ReportOptions struct {
 	BranchRegex  string
 	BranchPattern string
 	AllBranches  bool
+	Range        string // SPEC.md準拠: "origin/main..HEAD" 形式
 }
 
 // handleReportWithOptions handles the report command with period options
@@ -40,6 +41,7 @@ func handleReportWithOptions() {
 	fs.StringVar(&opts.BranchRegex, "branch-regex", "", "Filter by branch regex pattern")
 	fs.StringVar(&opts.BranchPattern, "branch-pattern", "", "Filter by branch glob pattern (e.g., 'feature/*')")
 	fs.BoolVar(&opts.AllBranches, "all-branches", false, "Show all branches summary")
+	fs.StringVar(&opts.Range, "range", "", "Commit range (e.g., 'origin/main..HEAD') - SPEC.md準拠")
 
 	fs.Parse(os.Args[2:])
 
@@ -73,10 +75,16 @@ func handleReportWithOptions() {
 		os.Exit(1)
 	}
 	
+	// SPEC.md準拠: --range オプションが指定された場合
+	if opts.Range != "" {
+		handleRangeReport(opts)
+		return
+	}
+
 	// Determine report type based on options
 	hasBranch := hasBranchOptions(opts)
 	hasPeriod := hasPeriodOptions(opts)
-	
+
 	switch {
 	case hasBranch && hasPeriod:
 		// Combined filtering - new functionality

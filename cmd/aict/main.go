@@ -37,8 +37,14 @@ func main() {
 		handleInit()
 	case "track":
 		handleTrack()
+	case "checkpoint":
+		handleCheckpoint()
+	case "commit":
+		handleCommit()
 	case "report":
 		handleReportWithOptions()
+	case "sync":
+		handleSync()
 	case "setup-hooks":
 		handleSetupHooks()
 	case "reset":
@@ -472,8 +478,14 @@ func printUsage() {
 	fmt.Println()
 	fmt.Println("Usage:")
 	fmt.Println("  aict init                    Initialize tracking in current directory")
-	fmt.Println("  aict track -author <name>    Create a checkpoint for the specified author")
+	fmt.Println("  aict track -author <name>    Create a checkpoint for the specified author (legacy)")
+	fmt.Println("  aict checkpoint [options]    Record development checkpoint (SPEC.md)")
+	fmt.Println("    --author <name>            Author name (default: config.default_author)")
+	fmt.Println("    --model <model>            AI model name (for AI agents)")
+	fmt.Println("    --message <msg>            Optional message")
+	fmt.Println("  aict commit                  Generate Authorship Log (auto-run by hook)")
 	fmt.Println("  aict report [options]        Show tracking metrics")
+	fmt.Println("    --range <base>..<head>     Commit range (e.g., 'origin/main..HEAD') - SPEC.md")
 	fmt.Println("    --since <date>             Show report since date/time")
 	fmt.Println("    --from <date> --to <date>  Show report for date range")
 	fmt.Println("    --last <duration>          Show report for last N days/weeks/months (e.g., '7d', '2w', '1m')")
@@ -482,6 +494,7 @@ func printUsage() {
 	fmt.Println("    --branch-regex <pattern>   Show report for branches matching regex pattern")
 	fmt.Println("    --branch-pattern <pattern> Show report for branches matching glob pattern (e.g., 'feature/*')")
 	fmt.Println("    --all-branches             Show summary of all branches")
+	fmt.Println("  aict sync [push|fetch]       Sync authorship logs with remote - SPEC.md")
 	fmt.Println("  aict setup-hooks             Setup Claude Code and Git hooks for automatic tracking")
 	fmt.Println("  aict mark-ai-edit            Mark current changes as AI-edited (called by hooks)")
 	fmt.Println("    --tool <name>              AI tool name (default: claude)")
