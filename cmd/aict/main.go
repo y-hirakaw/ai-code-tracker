@@ -52,6 +52,10 @@ func main() {
 		printUsage()
 	case "config":
 		handleConfig()
+	case "mark-ai-edit":
+		handleMarkAIEdit()
+	case "snapshot":
+		handleSnapshot()
 	default:
 		fmt.Printf("Unknown command: %s\n", command)
 		printUsage()
@@ -479,6 +483,9 @@ func printUsage() {
 	fmt.Println("    --branch-pattern <pattern> Show report for branches matching glob pattern (e.g., 'feature/*')")
 	fmt.Println("    --all-branches             Show summary of all branches")
 	fmt.Println("  aict setup-hooks             Setup Claude Code and Git hooks for automatic tracking")
+	fmt.Println("  aict mark-ai-edit            Mark current changes as AI-edited (called by hooks)")
+	fmt.Println("    --tool <name>              AI tool name (default: claude)")
+	fmt.Println("  aict snapshot                Analyze entire codebase using git blame")
 	fmt.Println("  aict config                  View and edit configuration settings")
 	fmt.Println("  aict reset                   Reset metrics to start tracking from current codebase state")
 	fmt.Println("  aict version                 Show version information")
@@ -568,4 +575,243 @@ func handleConfig() {
 		fmt.Printf("You can manually edit the file at: %s\n", configPath)
 		exitFunc(1)
 	}
+}
+
+func handleMarkAIEdit() {
+	fs := flag.NewFlagSet("mark-ai-edit", flag.ExitOnError)
+	tool := fs.String("tool", "claude", "AI tool name (claude, copilot, etc.)")
+	fs.Parse(os.Args[2:])
+
+	baseDir := defaultBaseDir
+
+	// Check if initialized
+	if _, err := os.Stat(baseDir); os.IsNotExist(err) {
+		fmt.Printf("Error: AI Code Tracker not initialized. Run 'aict init' first.\n")
+		exitFunc(1)
+	}
+
+	// Load config to get tracked extensions
+	metricsStorage := storage.NewMetricsStorage(baseDir)
+	config, err := metricsStorage.LoadConfig()
+	if err != nil {
+		fmt.Printf("Error loading config: %v\n", err)
+		exitFunc(1)
+	}
+
+	// Get current commit
+	currentCommit, err := exec.Command("git", "rev-parse", "HEAD").Output()
+	if err != nil {
+		fmt.Printf("Error getting current commit: %v\n", err)
+		exitFunc(1)
+	}
+	commit := strings.TrimSpace(string(currentCommit))
+
+	// Get git diff to find changed files and lines
+	cmd := exec.Command("git", "diff", "HEAD", "--numstat")
+	output, err := cmd.Output()
+	if err != nil {
+		fmt.Printf("Error running git diff: %v\n", err)
+		exitFunc(1)
+	}
+
+	// Parse changed files
+	changedFiles := make(map[string][]int)
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+
+		parts := strings.Fields(line)
+		if len(parts) < 3 {
+			continue
+		}
+
+		filePath := strings.Join(parts[2:], " ")
+
+		// Check if file should be tracked
+		shouldTrack := false
+		for _, ext := range config.TrackedExtensions {
+			if strings.HasSuffix(filePath, ext) {
+				shouldTrack = true
+				break
+			}
+		}
+
+		if !shouldTrack {
+			continue
+		}
+
+		// For simplicity in MVP, mark entire file as AI-edited
+		// TODO: In future, parse git diff to get exact line numbers
+		changedFiles[filePath] = []int{} // Empty array means "all changes in this file"
+	}
+
+	if len(changedFiles) == 0 {
+		// No tracked files changed, nothing to mark
+		return
+	}
+
+	// Create git note with AI edit information
+	note := struct {
+		Timestamp time.Time         `json:"timestamp"`
+		Tool      string            `json:"tool"`
+		Files     map[string][]int  `json:"files"`
+		Commit    string            `json:"commit"`
+	}{
+		Timestamp: time.Now(),
+		Tool:      *tool,
+		Files:     changedFiles,
+		Commit:    commit,
+	}
+
+	noteJSON, err := json.MarshalIndent(note, "", "  ")
+	if err != nil {
+		fmt.Printf("Error creating note: %v\n", err)
+		exitFunc(1)
+	}
+
+	// Add git note
+	cmd = exec.Command("git", "notes", "--ref=aict", "add", "-f", "-m", string(noteJSON), "HEAD")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		fmt.Printf("Error adding git note: %v (output: %s)\n", err, string(output))
+		exitFunc(1)
+	}
+
+	fmt.Printf("✓ Marked AI edits in %d file(s) for commit %s\n", len(changedFiles), commit[:7])
+}
+
+func handleSnapshot() {
+	baseDir := defaultBaseDir
+
+	// Check if initialized
+	if _, err := os.Stat(baseDir); os.IsNotExist(err) {
+		fmt.Printf("Error: AI Code Tracker not initialized. Run 'aict init' first.\n")
+		exitFunc(1)
+	}
+
+	// Load config
+	metricsStorage := storage.NewMetricsStorage(baseDir)
+	config, err := metricsStorage.LoadConfig()
+	if err != nil {
+		fmt.Printf("Error loading config: %v\n", err)
+		exitFunc(1)
+	}
+
+	fmt.Println("Analyzing codebase with git blame...")
+
+	// Analyze codebase using git blame
+	// TODO: Import blame package and use BlameAnalyzer
+	// For now, use a simplified implementation
+
+	// Get all tracked files
+	cmd := exec.Command("git", "ls-files")
+	output, err := cmd.Output()
+	if err != nil {
+		fmt.Printf("Error listing files: %v\n", err)
+		exitFunc(1)
+	}
+
+	aiLines := 0
+	humanLines := 0
+	filesAnalyzed := 0
+
+	lines := strings.Split(string(output), "\n")
+	for _, filePath := range lines {
+		if filePath == "" {
+			continue
+		}
+
+		// Check if file should be tracked
+		shouldTrack := false
+		for _, ext := range config.TrackedExtensions {
+			if strings.HasSuffix(filePath, ext) {
+				shouldTrack = true
+				break
+			}
+		}
+
+		if !shouldTrack {
+			continue
+		}
+
+		// Run git blame
+		blameCmd := exec.Command("git", "blame", "--line-porcelain", filePath)
+		blameOutput, err := blameCmd.Output()
+		if err != nil {
+			// Skip files that can't be blamed
+			continue
+		}
+
+		// Parse blame output
+		scanner := bufio.NewScanner(strings.NewReader(string(blameOutput)))
+		var currentAuthor string
+
+		for scanner.Scan() {
+			line := scanner.Text()
+
+			if strings.HasPrefix(line, "author ") {
+				currentAuthor = strings.TrimPrefix(line, "author ")
+				continue
+			}
+
+			if strings.HasPrefix(line, "\t") && currentAuthor != "" {
+				// Check if AI author
+				isAI := false
+				authorLower := strings.ToLower(currentAuthor)
+				aiAuthors := []string{"claude", "ai", "assistant", "bot", "copilot"}
+				for _, aiAuthor := range aiAuthors {
+					if strings.Contains(authorLower, aiAuthor) {
+						isAI = true
+						break
+					}
+				}
+
+				// Check author mappings
+				if mapping, exists := config.AuthorMappings[currentAuthor]; exists {
+					isAI = strings.ToLower(mapping) == "ai"
+				}
+
+				if isAI {
+					aiLines++
+				} else {
+					humanLines++
+				}
+				currentAuthor = ""
+			}
+		}
+
+		filesAnalyzed++
+	}
+
+	totalLines := aiLines + humanLines
+	percentage := 0.0
+	if totalLines > 0 {
+		percentage = float64(aiLines) / float64(totalLines) * 100
+	}
+
+	// Save snapshot
+	result := &tracker.AnalysisResult{
+		TotalLines:  totalLines,
+		AILines:     aiLines,
+		HumanLines:  humanLines,
+		Percentage:  percentage,
+		LastUpdated: time.Now(),
+	}
+
+	if err := metricsStorage.SaveMetrics(result); err != nil {
+		fmt.Printf("Error saving snapshot: %v\n", err)
+		exitFunc(1)
+	}
+
+	// Generate report
+	fmt.Printf("\nCodebase Snapshot\n")
+	fmt.Printf("=================\n")
+	fmt.Printf("Files analyzed: %d\n", filesAnalyzed)
+	fmt.Printf("Total lines: %d\n", totalLines)
+	fmt.Printf("  AI lines: %d (%.1f%%)\n", aiLines, percentage)
+	fmt.Printf("  Human lines: %d (%.1f%%)\n", humanLines, 100-percentage)
+	fmt.Printf("\nTarget: %.1f%% AI code\n", config.TargetAIPercentage)
+	fmt.Printf("Progress: %.1f%%\n", percentage/config.TargetAIPercentage*100)
+	fmt.Printf("\n✓ Snapshot saved to %s/metrics/current.json\n", baseDir)
 }
