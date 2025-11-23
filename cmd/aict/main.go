@@ -46,7 +46,7 @@ func main() {
 	case "sync":
 		handleSync()
 	case "setup-hooks":
-		handleSetupHooks()
+		handleSetupHooksV2()
 	case "reset":
 		if err := handleReset(); err != nil {
 			fmt.Printf("Error: %v\n", err)

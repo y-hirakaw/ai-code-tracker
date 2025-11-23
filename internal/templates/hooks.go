@@ -1,10 +1,10 @@
 package templates
 
-// PreToolUseHook template - records state before Claude Code edits
+// PreToolUseHook template - records human checkpoint before Claude Code edits
 const PreToolUseHook = `#!/bin/bash
 
-# AI Code Tracker - PreToolUse Hook
-# Records current state before Claude Code makes edits
+# AI Code Tracker - PreToolUse Hook (SPEC.md)
+# Records human checkpoint before Claude Code makes edits
 
 set -e
 
@@ -12,20 +12,32 @@ set -e
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 
 # Check if AI Code Tracker is initialized
-if [[ ! -d "$PROJECT_DIR/.ai_code_tracking" ]]; then
+if [[ ! -d "$PROJECT_DIR/.git/aict" ]]; then
     exit 0
 fi
 
-# Save current diff from HEAD (human edits before AI)
-git diff HEAD --numstat > "$PROJECT_DIR/.ai_code_tracking/.before_ai_edit" 2>/dev/null || true
+# Try to find aict binary
+if command -v aict >/dev/null 2>&1; then
+    AICT_BIN="aict"
+elif [[ -f "$PROJECT_DIR/bin/aict" ]]; then
+    AICT_BIN="$PROJECT_DIR/bin/aict"
+else
+    exit 0
+fi
+
+# Get git user name
+GIT_USER=$(git config user.name 2>/dev/null || echo "Developer")
+
+# Record human checkpoint before AI edits
+"$AICT_BIN" checkpoint --author "$GIT_USER" --message "Before Claude Code edits" 2>/dev/null || true
 
 exit 0`
 
-// PostToolUseHook template for marking AI edits after Claude Code
+// PostToolUseHook template - records AI checkpoint after Claude Code edits
 const PostToolUseHook = `#!/bin/bash
 
-# AI Code Tracker - PostToolUse Hook
-# Records state after Claude Code edits and calculates AI contribution
+# AI Code Tracker - PostToolUse Hook (SPEC.md)
+# Records AI checkpoint after Claude Code edits
 
 set -e
 
@@ -33,41 +45,34 @@ set -e
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 
 # Check if AI Code Tracker is initialized
-if [[ ! -d "$PROJECT_DIR/.ai_code_tracking" ]]; then
+if [[ ! -d "$PROJECT_DIR/.git/aict" ]]; then
     exit 0
 fi
 
-# Read hook input (JSON) from stdin
-INPUT=$(cat)
-
-# Extract tool information
-TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // "unknown"')
-TOOL_RESPONSE=$(echo "$INPUT" | jq -r '.tool_response // "{}"')
-
-# Check if tool was successful
-if echo "$TOOL_RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
+# Try to find aict binary
+if command -v aict >/dev/null 2>&1; then
+    AICT_BIN="aict"
+elif [[ -f "$PROJECT_DIR/bin/aict" ]]; then
+    AICT_BIN="$PROJECT_DIR/bin/aict"
+else
     exit 0
 fi
 
-# Save current diff from HEAD (includes both human + AI edits)
-git diff HEAD --numstat > "$PROJECT_DIR/.ai_code_tracking/.after_ai_edit" 2>/dev/null || true
-
-# Create a marker file indicating AI made edits
-# This will be picked up by the post-commit hook
-echo "claude" > "$PROJECT_DIR/.ai_code_tracking/.pending_ai_edit"
+# Record AI checkpoint after edits
+"$AICT_BIN" checkpoint --author "Claude Code" --model "claude-sonnet-4.5" --message "Claude Code edits" 2>/dev/null || true
 
 exit 0`
 
-// PreCommitHook template - no longer needed for git notes approach
+// PreCommitHook template - no longer needed for SPEC.md approach
 const PreCommitHook = `#!/bin/bash
-# AI Code Tracker - Pre-Commit Hook (placeholder for compatibility)
+# AI Code Tracker - Pre-Commit Hook (not used in SPEC.md)
 exit 0`
 
-// PostCommitHook template for Git post-commit hook
+// PostCommitHook template - generates Authorship Log after commit
 const PostCommitHook = `#!/bin/bash
 
-# AI Code Tracker - Git Post-Commit Hook
-# Marks AI-generated code and shows tracking report after commit
+# AI Code Tracker - Git Post-Commit Hook (SPEC.md)
+# Generates Authorship Log from checkpoints
 
 set -e
 
@@ -80,40 +85,16 @@ if command -v aict >/dev/null 2>&1; then
 elif [[ -f "$PROJECT_DIR/bin/aict" ]]; then
     AICT_BIN="$PROJECT_DIR/bin/aict"
 else
-    # Silently exit if aict not found
     exit 0
 fi
 
 # Check if AI Code Tracker is initialized
-if [[ ! -d "$PROJECT_DIR/.ai_code_tracking" ]]; then
+if [[ ! -d "$PROJECT_DIR/.git/aict" ]]; then
     exit 0
 fi
 
-# Get commit information
-COMMIT_HASH=$(git rev-parse HEAD)
-COMMIT_AUTHOR=$(git log -1 --format='%an')
-COMMIT_MESSAGE=$(git log -1 --format='%s')
-
-# Check if post-tool-use hook marked this commit as AI-edited
-PENDING_MARKER="$PROJECT_DIR/.ai_code_tracking/.pending_ai_edit"
-
-if [[ -f "$PENDING_MARKER" ]]; then
-    # Read the AI tool name from the marker file
-    AI_TOOL=$(cat "$PENDING_MARKER" 2>/dev/null || echo "claude")
-
-    # Mark this commit as AI-generated
-    "$AICT_BIN" mark-ai-edit --tool "$AI_TOOL" --post-commit 2>/dev/null || true
-
-    # Remove the marker file
-    rm -f "$PENDING_MARKER"
-fi
-
-echo "AI Code Tracker: Post-commit analysis for $COMMIT_HASH" >&2
-echo "Author: $COMMIT_AUTHOR" >&2
-echo "Message: $COMMIT_MESSAGE" >&2
-
-# Display current tracking status
-"$AICT_BIN" report >&2
+# Generate Authorship Log from checkpoints
+"$AICT_BIN" commit 2>/dev/null || true
 
 exit 0`
 
@@ -126,7 +107,7 @@ const ClaudeSettingsJSON = `{
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.ai_code_tracking/hooks/pre-tool-use.sh"
+            "command": "$CLAUDE_PROJECT_DIR/.git/aict/hooks/pre-tool-use.sh"
           }
         ]
       }
@@ -137,7 +118,7 @@ const ClaudeSettingsJSON = `{
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.ai_code_tracking/hooks/post-tool-use.sh"
+            "command": "$CLAUDE_PROJECT_DIR/.git/aict/hooks/post-tool-use.sh"
           }
         ]
       }
