@@ -877,3 +877,4 @@ func handleSnapshot() {
 	fmt.Printf("\n✓ Snapshot saved to %s/metrics/current.json\n", baseDir)
 }
 // Test comment for AI tracking
+// Another test
