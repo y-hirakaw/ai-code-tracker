@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -12,8 +13,34 @@ import (
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
 
-// handleRangeReport handles report for commit range (SPEC.md準拠)
-func handleRangeReport(opts *ReportOptions) {
+// ReportOptions holds options for the report command
+type ReportOptions struct {
+	Range  string
+	Format string
+}
+
+// handleRangeReport is the entry point called from main
+func handleRangeReport() {
+	fs := flag.NewFlagSet("report", flag.ExitOnError)
+
+	opts := &ReportOptions{}
+	fs.StringVar(&opts.Range, "range", "", "Commit range (e.g., 'origin/main..HEAD')")
+	fs.StringVar(&opts.Format, "format", "table", "Output format: table or json")
+
+	fs.Parse(os.Args[2:])
+
+	if opts.Range == "" {
+		fmt.Println("Error: --range flag is required")
+		fmt.Println("Usage: aict report --range <base>..<head>")
+		fmt.Println("Example: aict report --range origin/main..HEAD")
+		os.Exit(1)
+	}
+
+	handleRangeReportWithOptions(opts)
+}
+
+// handleRangeReportWithOptions handles report for commit range (SPEC.md準拠)
+func handleRangeReportWithOptions(opts *ReportOptions) {
 	// 1. git log <range> でコミット一覧を取得
 	commits, err := getCommitsInRange(opts.Range)
 	if err != nil {
