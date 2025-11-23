@@ -700,9 +700,7 @@ func handleSnapshot() {
 
 	fmt.Println("Analyzing codebase with git blame...")
 
-	// Analyze codebase using git blame
-	// TODO: Import blame package and use BlameAnalyzer
-	// For now, use a simplified implementation
+	// Analyze codebase using git blame combined with git notes
 
 	// Get all tracked files
 	cmd := exec.Command("git", "ls-files")
@@ -715,6 +713,9 @@ func handleSnapshot() {
 	aiLines := 0
 	humanLines := 0
 	filesAnalyzed := 0
+
+	// Cache for git notes to avoid repeated queries
+	notesCache := make(map[string]bool) // commitHash -> hasAINote for this file
 
 	lines := strings.Split(string(output), "\n")
 	for _, filePath := range lines {
@@ -735,7 +736,7 @@ func handleSnapshot() {
 			continue
 		}
 
-		// Run git blame
+		// Run git blame with commit hash
 		blameCmd := exec.Command("git", "blame", "--line-porcelain", filePath)
 		blameOutput, err := blameCmd.Output()
 		if err != nil {
@@ -745,31 +746,69 @@ func handleSnapshot() {
 
 		// Parse blame output
 		scanner := bufio.NewScanner(strings.NewReader(string(blameOutput)))
+		var currentCommit string
 		var currentAuthor string
 
 		for scanner.Scan() {
 			line := scanner.Text()
+
+			// First line of each block is the commit hash
+			if len(line) >= 40 && !strings.Contains(line, " ") {
+				currentCommit = line[:40]
+				continue
+			}
 
 			if strings.HasPrefix(line, "author ") {
 				currentAuthor = strings.TrimPrefix(line, "author ")
 				continue
 			}
 
-			if strings.HasPrefix(line, "\t") && currentAuthor != "" {
-				// Check if AI author
+			// When we hit the actual code line (starts with tab)
+			if strings.HasPrefix(line, "\t") && currentCommit != "" {
 				isAI := false
-				authorLower := strings.ToLower(currentAuthor)
-				aiAuthors := []string{"claude", "ai", "assistant", "bot", "copilot"}
-				for _, aiAuthor := range aiAuthors {
-					if strings.Contains(authorLower, aiAuthor) {
-						isAI = true
-						break
-					}
-				}
 
-				// Check author mappings
-				if mapping, exists := config.AuthorMappings[currentAuthor]; exists {
-					isAI = strings.ToLower(mapping) == "ai"
+				// Check git notes cache first
+				cacheKey := currentCommit + ":" + filePath
+				if aiNote, cached := notesCache[cacheKey]; cached {
+					isAI = aiNote
+				} else {
+					// Query git notes for this commit
+					notesCmd := exec.Command("git", "notes", "--ref=aict", "show", currentCommit)
+					notesOutput, err := notesCmd.Output()
+
+					if err == nil && len(notesOutput) > 0 {
+						// Parse JSON to check if this file was AI-edited
+						var noteData struct {
+							Files map[string][]int `json:"files"`
+						}
+						if json.Unmarshal(notesOutput, &noteData) == nil {
+							if _, exists := noteData.Files[filePath]; exists {
+								isAI = true
+							}
+						}
+					}
+
+					// If no git note, fall back to author matching
+					if !isAI && currentAuthor != "" {
+						authorLower := strings.ToLower(currentAuthor)
+						aiAuthors := []string{"claude", "ai", "assistant", "bot", "copilot"}
+						for _, aiAuthor := range aiAuthors {
+							if strings.Contains(authorLower, aiAuthor) {
+								isAI = true
+								break
+							}
+						}
+
+						// Check author mappings
+						if !isAI {
+							if mapping, exists := config.AuthorMappings[currentAuthor]; exists {
+								isAI = strings.ToLower(mapping) == "ai"
+							}
+						}
+					}
+
+					// Cache the result
+					notesCache[cacheKey] = isAI
 				}
 
 				if isAI {
@@ -777,6 +816,9 @@ func handleSnapshot() {
 				} else {
 					humanLines++
 				}
+
+				// Reset for next line
+				currentCommit = ""
 				currentAuthor = ""
 			}
 		}
@@ -815,3 +857,4 @@ func handleSnapshot() {
 	fmt.Printf("Progress: %.1f%%\n", percentage/config.TargetAIPercentage*100)
 	fmt.Printf("\n✓ Snapshot saved to %s/metrics/current.json\n", baseDir)
 }
+// Test comment for AI tracking
