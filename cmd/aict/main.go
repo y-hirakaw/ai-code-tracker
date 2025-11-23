@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 const version = "0.7.0"
@@ -76,6 +77,6 @@ func getGitUserName() string {
 	if err != nil {
 		return ""
 	}
-	return string(output)
+	return strings.TrimSpace(string(output))
 }
 
