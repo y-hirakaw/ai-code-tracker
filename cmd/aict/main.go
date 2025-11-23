@@ -580,6 +580,7 @@ func handleConfig() {
 func handleMarkAIEdit() {
 	fs := flag.NewFlagSet("mark-ai-edit", flag.ExitOnError)
 	tool := fs.String("tool", "claude", "AI tool name (claude, copilot, etc.)")
+	postCommit := fs.Bool("post-commit", false, "Mark the last commit instead of working directory changes")
 	fs.Parse(os.Args[2:])
 
 	baseDir := defaultBaseDir
@@ -607,7 +608,14 @@ func handleMarkAIEdit() {
 	commit := strings.TrimSpace(string(currentCommit))
 
 	// Get git diff to find changed files and lines
-	cmd := exec.Command("git", "diff", "HEAD", "--numstat")
+	var cmd *exec.Cmd
+	if *postCommit {
+		// For post-commit hook: compare HEAD~1 with HEAD
+		cmd = exec.Command("git", "diff", "HEAD~1", "HEAD", "--numstat")
+	} else {
+		// For post-tool-use hook: compare HEAD with working directory
+		cmd = exec.Command("git", "diff", "HEAD", "--numstat")
+	}
 	output, err := cmd.Output()
 	if err != nil {
 		fmt.Printf("Error running git diff: %v\n", err)
@@ -752,10 +760,21 @@ func handleSnapshot() {
 		for scanner.Scan() {
 			line := scanner.Text()
 
-			// First line of each block is the commit hash
-			if len(line) >= 40 && !strings.Contains(line, " ") {
-				currentCommit = line[:40]
-				continue
+			// First line of each block contains the commit hash (40 hex chars followed by space and numbers)
+			if len(line) >= 40 {
+				// Check if first 40 chars are hex (commit hash)
+				possibleHash := line[:40]
+				isHash := true
+				for _, c := range possibleHash {
+					if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+						isHash = false
+						break
+					}
+				}
+				if isHash {
+					currentCommit = possibleHash
+					continue
+				}
 			}
 
 			if strings.HasPrefix(line, "author ") {

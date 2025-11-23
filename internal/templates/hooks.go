@@ -52,7 +52,7 @@ exit 0`
 const PostCommitHook = `#!/bin/bash
 
 # AI Code Tracker - Git Post-Commit Hook
-# Shows AI code tracking report after commit
+# Marks AI-generated code and shows tracking report after commit
 
 set -e
 
@@ -78,6 +78,25 @@ fi
 COMMIT_HASH=$(git rev-parse HEAD)
 COMMIT_AUTHOR=$(git log -1 --format='%an')
 COMMIT_MESSAGE=$(git log -1 --format='%s')
+
+# Check if this commit should be marked as AI-generated
+# (based on author name or commit message patterns)
+SHOULD_MARK_AI=false
+
+# Check for AI author patterns
+if [[ "$COMMIT_AUTHOR" =~ [Cc]laude|[Aa][Ii]|[Aa]ssistant|[Bb]ot|[Cc]opilot ]]; then
+    SHOULD_MARK_AI=true
+fi
+
+# Check for AI-related commit message patterns
+if [[ "$COMMIT_MESSAGE" =~ \[AI\]|\[Claude\]|\[Copilot\] ]]; then
+    SHOULD_MARK_AI=true
+fi
+
+# Mark AI edits if detected
+if [[ "$SHOULD_MARK_AI" == "true" ]]; then
+    "$AICT_BIN" mark-ai-edit --tool claude --post-commit 2>/dev/null || true
+fi
 
 echo "AI Code Tracker: Post-commit analysis for $COMMIT_HASH" >&2
 echo "Author: $COMMIT_AUTHOR" >&2
