@@ -1,15 +1,31 @@
 package templates
 
-// PreToolUseHook template - no longer needed for git notes approach
+// PreToolUseHook template - records state before Claude Code edits
 const PreToolUseHook = `#!/bin/bash
-# AI Code Tracker - PreToolUse Hook (placeholder for compatibility)
+
+# AI Code Tracker - PreToolUse Hook
+# Records current state before Claude Code makes edits
+
+set -e
+
+# Get project directory
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+
+# Check if AI Code Tracker is initialized
+if [[ ! -d "$PROJECT_DIR/.ai_code_tracking" ]]; then
+    exit 0
+fi
+
+# Save current diff from HEAD (human edits before AI)
+git diff HEAD --numstat > "$PROJECT_DIR/.ai_code_tracking/.before_ai_edit" 2>/dev/null || true
+
 exit 0`
 
 // PostToolUseHook template for marking AI edits after Claude Code
 const PostToolUseHook = `#!/bin/bash
 
 # AI Code Tracker - PostToolUse Hook
-# Marks that AI (Claude Code) made edits, to be recorded on next commit
+# Records state after Claude Code edits and calculates AI contribution
 
 set -e
 
@@ -32,6 +48,9 @@ TOOL_RESPONSE=$(echo "$INPUT" | jq -r '.tool_response // "{}"')
 if echo "$TOOL_RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
     exit 0
 fi
+
+# Save current diff from HEAD (includes both human + AI edits)
+git diff HEAD --numstat > "$PROJECT_DIR/.ai_code_tracking/.after_ai_edit" 2>/dev/null || true
 
 # Create a marker file indicating AI made edits
 # This will be picked up by the post-commit hook
@@ -101,6 +120,17 @@ exit 0`
 // ClaudeSettingsJSON template for Claude Code hook configuration
 const ClaudeSettingsJSON = `{
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|mcp__.*__.*edit.*|mcp__.*__.*write.*|mcp__.*__.*create.*|mcp__.*__.*replace.*|mcp__.*__.*insert.*|mcp__.*__.*override.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.ai_code_tracking/hooks/pre-tool-use.sh"
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Write|Edit|MultiEdit|mcp__.*__.*edit.*|mcp__.*__.*write.*|mcp__.*__.*create.*|mcp__.*__.*replace.*|mcp__.*__.*insert.*|mcp__.*__.*override.*",

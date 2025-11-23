@@ -607,24 +607,121 @@ func handleMarkAIEdit() {
 	}
 	commit := strings.TrimSpace(string(currentCommit))
 
-	// Get git diff to find changed files and lines
-	var cmd *exec.Cmd
+	var changedFiles map[string][]int
+
 	if *postCommit {
-		// For post-commit hook: compare HEAD~1 with HEAD
-		cmd = exec.Command("git", "diff", "HEAD~1", "HEAD", "--numstat")
+		// For post-commit hook: use before/after files to calculate AI-only changes
+		beforeFile := filepath.Join(baseDir, ".before_ai_edit")
+		afterFile := filepath.Join(baseDir, ".after_ai_edit")
+
+		changedFiles = calculateAIOnlyChanges(beforeFile, afterFile, config)
+
+		// Clean up temporary files
+		os.Remove(beforeFile)
+		os.Remove(afterFile)
 	} else {
-		// For post-tool-use hook: compare HEAD with working directory
-		cmd = exec.Command("git", "diff", "HEAD", "--numstat")
+		// For manual invocation: use current diff
+		cmd := exec.Command("git", "diff", "HEAD", "--numstat")
+		output, err := cmd.Output()
+		if err != nil {
+			fmt.Printf("Error running git diff: %v\n", err)
+			exitFunc(1)
+		}
+
+		changedFiles = parseNumstatOutput(string(output), config)
 	}
-	output, err := cmd.Output()
+
+	if len(changedFiles) == 0 {
+		// No tracked files changed, nothing to mark
+		return
+	}
+
+	// Create git note with AI edit information
+	note := struct {
+		Timestamp time.Time        `json:"timestamp"`
+		Tool      string           `json:"tool"`
+		Files     map[string][]int `json:"files"`
+		Commit    string           `json:"commit"`
+	}{
+		Timestamp: time.Now(),
+		Tool:      *tool,
+		Files:     changedFiles,
+		Commit:    commit,
+	}
+
+	noteJSON, err := json.MarshalIndent(note, "", "  ")
 	if err != nil {
-		fmt.Printf("Error running git diff: %v\n", err)
+		fmt.Printf("Error creating note: %v\n", err)
 		exitFunc(1)
 	}
 
-	// Parse changed files
+	// Add git note
+	cmd := exec.Command("git", "notes", "--ref=aict", "add", "-f", "-m", string(noteJSON), "HEAD")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		fmt.Printf("Error adding git note: %v (output: %s)\n", err, string(output))
+		exitFunc(1)
+	}
+
+	fmt.Printf("✓ Marked AI edits in %d file(s) for commit %s\n", len(changedFiles), commit[:7])
+}
+
+// calculateAIOnlyChanges compares before/after diff files to extract AI-only changes
+func calculateAIOnlyChanges(beforeFile, afterFile string, config *tracker.Config) map[string][]int {
+	// Read before state (human edits before AI)
+	beforeData, err := os.ReadFile(beforeFile)
+	if err != nil {
+		// No before file means no human edits before AI
+		beforeData = []byte{}
+	}
+
+	// Read after state (human + AI edits)
+	afterData, err := os.ReadFile(afterFile)
+	if err != nil {
+		// No after file means no changes at all
+		return make(map[string][]int)
+	}
+
+	// Parse both numstat outputs
+	beforeFiles := parseNumstatToMap(string(beforeData))
+	afterFiles := parseNumstatToMap(string(afterData))
+
+	// Calculate AI-only changes: files in after but not in before, or with increased changes
+	aiOnlyFiles := make(map[string][]int)
+
+	for filePath, afterStats := range afterFiles {
+		// Check if file should be tracked
+		shouldTrack := false
+		for _, ext := range config.TrackedExtensions {
+			if strings.HasSuffix(filePath, ext) {
+				shouldTrack = true
+				break
+			}
+		}
+
+		if !shouldTrack {
+			continue
+		}
+
+		beforeStats, existedBefore := beforeFiles[filePath]
+
+		if !existedBefore {
+			// File was changed only by AI
+			aiOnlyFiles[filePath] = []int{}
+		} else if afterStats.Added > beforeStats.Added || afterStats.Deleted > beforeStats.Deleted {
+			// File had more changes after AI than before (AI contributed)
+			aiOnlyFiles[filePath] = []int{}
+		}
+		// If afterStats == beforeStats, AI didn't change this file (skip it)
+	}
+
+	return aiOnlyFiles
+}
+
+// parseNumstatOutput parses git diff --numstat output into file map
+func parseNumstatOutput(output string, config *tracker.Config) map[string][]int {
 	changedFiles := make(map[string][]int)
-	lines := strings.Split(string(output), "\n")
+	lines := strings.Split(output, "\n")
+
 	for _, line := range lines {
 		if line == "" {
 			continue
@@ -646,47 +743,50 @@ func handleMarkAIEdit() {
 			}
 		}
 
-		if !shouldTrack {
+		if shouldTrack {
+			changedFiles[filePath] = []int{}
+		}
+	}
+
+	return changedFiles
+}
+
+type numstatEntry struct {
+	Added   int
+	Deleted int
+}
+
+// parseNumstatToMap parses numstat output into a map of filename -> stats
+func parseNumstatToMap(output string) map[string]numstatEntry {
+	result := make(map[string]numstatEntry)
+	lines := strings.Split(output, "\n")
+
+	for _, line := range lines {
+		if line == "" {
 			continue
 		}
 
-		// For simplicity in MVP, mark entire file as AI-edited
-		// TODO: In future, parse git diff to get exact line numbers
-		changedFiles[filePath] = []int{} // Empty array means "all changes in this file"
+		parts := strings.Fields(line)
+		if len(parts) < 3 {
+			continue
+		}
+
+		added := 0
+		deleted := 0
+
+		// Handle binary files (marked as -)
+		if parts[0] != "-" {
+			fmt.Sscanf(parts[0], "%d", &added)
+		}
+		if parts[1] != "-" {
+			fmt.Sscanf(parts[1], "%d", &deleted)
+		}
+
+		filePath := strings.Join(parts[2:], " ")
+		result[filePath] = numstatEntry{Added: added, Deleted: deleted}
 	}
 
-	if len(changedFiles) == 0 {
-		// No tracked files changed, nothing to mark
-		return
-	}
-
-	// Create git note with AI edit information
-	note := struct {
-		Timestamp time.Time         `json:"timestamp"`
-		Tool      string            `json:"tool"`
-		Files     map[string][]int  `json:"files"`
-		Commit    string            `json:"commit"`
-	}{
-		Timestamp: time.Now(),
-		Tool:      *tool,
-		Files:     changedFiles,
-		Commit:    commit,
-	}
-
-	noteJSON, err := json.MarshalIndent(note, "", "  ")
-	if err != nil {
-		fmt.Printf("Error creating note: %v\n", err)
-		exitFunc(1)
-	}
-
-	// Add git note
-	cmd = exec.Command("git", "notes", "--ref=aict", "add", "-f", "-m", string(noteJSON), "HEAD")
-	if output, err := cmd.CombinedOutput(); err != nil {
-		fmt.Printf("Error adding git note: %v (output: %s)\n", err, string(output))
-		exitFunc(1)
-	}
-
-	fmt.Printf("✓ Marked AI edits in %d file(s) for commit %s\n", len(changedFiles), commit[:7])
+	return result
 }
 
 func handleSnapshot() {
