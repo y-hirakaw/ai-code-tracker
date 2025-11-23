@@ -9,20 +9,15 @@ exit 0`
 const PostToolUseHook = `#!/bin/bash
 
 # AI Code Tracker - PostToolUse Hook
-# Marks AI code edits after Claude Code makes changes
+# Marks that AI (Claude Code) made edits, to be recorded on next commit
 
 set -e
 
 # Get project directory
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 
-# Try to find aict binary (in order of preference)
-if command -v aict >/dev/null 2>&1; then
-    AICT_BIN="aict"
-elif [[ -f "$PROJECT_DIR/bin/aict" ]]; then
-    AICT_BIN="$PROJECT_DIR/bin/aict"
-else
-    # Silently exit if aict not found
+# Check if AI Code Tracker is initialized
+if [[ ! -d "$PROJECT_DIR/.ai_code_tracking" ]]; then
     exit 0
 fi
 
@@ -38,8 +33,9 @@ if echo "$TOOL_RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
     exit 0
 fi
 
-# Mark AI edits in git notes
-"$AICT_BIN" mark-ai-edit --tool claude 2>/dev/null || true
+# Create a marker file indicating AI made edits
+# This will be picked up by the post-commit hook
+echo "claude" > "$PROJECT_DIR/.ai_code_tracking/.pending_ai_edit"
 
 exit 0`
 
@@ -79,23 +75,18 @@ COMMIT_HASH=$(git rev-parse HEAD)
 COMMIT_AUTHOR=$(git log -1 --format='%an')
 COMMIT_MESSAGE=$(git log -1 --format='%s')
 
-# Check if this commit should be marked as AI-generated
-# (based on author name or commit message patterns)
-SHOULD_MARK_AI=false
+# Check if post-tool-use hook marked this commit as AI-edited
+PENDING_MARKER="$PROJECT_DIR/.ai_code_tracking/.pending_ai_edit"
 
-# Check for AI author patterns
-if [[ "$COMMIT_AUTHOR" =~ [Cc]laude|[Aa][Ii]|[Aa]ssistant|[Bb]ot|[Cc]opilot ]]; then
-    SHOULD_MARK_AI=true
-fi
+if [[ -f "$PENDING_MARKER" ]]; then
+    # Read the AI tool name from the marker file
+    AI_TOOL=$(cat "$PENDING_MARKER" 2>/dev/null || echo "claude")
 
-# Check for AI-related commit message patterns
-if [[ "$COMMIT_MESSAGE" =~ \[AI\]|\[Claude\]|\[Copilot\] ]]; then
-    SHOULD_MARK_AI=true
-fi
+    # Mark this commit as AI-generated
+    "$AICT_BIN" mark-ai-edit --tool "$AI_TOOL" --post-commit 2>/dev/null || true
 
-# Mark AI edits if detected
-if [[ "$SHOULD_MARK_AI" == "true" ]]; then
-    "$AICT_BIN" mark-ai-edit --tool claude --post-commit 2>/dev/null || true
+    # Remove the marker file
+    rm -f "$PENDING_MARKER"
 fi
 
 echo "AI Code Tracker: Post-commit analysis for $COMMIT_HASH" >&2
