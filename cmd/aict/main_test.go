@@ -195,7 +195,7 @@ func TestPrintUsage(t *testing.T) {
 	w.Close()
 	os.Stdout = oldOut
 
-	output := make([]byte, 1024)
+	output := make([]byte, 4096) // Increased buffer size
 	n, _ := r.Read(output)
 	result := string(output[:n])
 

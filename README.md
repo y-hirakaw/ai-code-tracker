@@ -1,41 +1,37 @@
-# AI Code Tracker (AICT) v0.6.1
+# AI Code Tracker (AICT) v0.7.0
 
-A Go-based CLI tool for tracking the proportion of AI-generated versus human-written code with **ultra-lightweight JSONL storage**, integrated with Claude Code and Git.
+A Go-based CLI tool for tracking the proportion of AI-generated versus human-written code with **Git notes-based authorship tracking**, integrated with Claude Code and Git workflows.
 
 ## 🎯 Features
 
-- **Ultra-Lightweight**: JSONL format reduces storage by 70%+ (~150 bytes per record)
-- **Branch Statistics**: Analyze AI/Human ratios by branch with regex and glob pattern matching
-- **Period-Specified Reports**: Analyze AI/Human ratios for specific time ranges (--since, --last, --from/--to)
-- **Multiple Output Formats**: Table, ASCII graph, JSON, and **CSV** output formats
-- **Automatic Tracking**: Integrated with Claude Code hooks for automatic edit recording
-- **Simple Architecture**: No baseline concept - pure differential tracking
-- **Accurate Analysis**: Git numstat-based precise line counting
-- **Fast Reporting**: Sub-second AI/Human ratio calculations with daily breakdown
-- **Scalable**: Handles large codebases efficiently with optimized JSONL storage
-- **Configurable**: Customizable tracked file extensions and exclusion patterns
-- **Smart Skip**: Automatically skips recording when only non-tracked files are modified
-- **Test File Handling**: `*_test.go` is excluded by default (configurable)
+- **Git Notes Integration**: Authorship logs stored in `refs/aict/authorship` for version control
+- **Line-Level Tracking**: Precise line range tracking for each code change
+- **Checkpoint System**: Record development checkpoints with author and metadata
+- **Commit Range Reports**: Analyze AI/Human ratios for commit ranges (`--range origin/main..HEAD`)
+- **Author Type Detection**: Automatic classification of AI vs Human contributors
+- **Git Workflow Integration**: Seamless integration with git commit workflows
+- **Remote Sync**: Push/fetch authorship logs to/from remote repositories
+- **Accurate Analysis**: Git diff-based precise line counting with range tracking
+- **Configurable**: Customizable tracked file extensions, exclusion patterns, and AI agent list
+- **Multiple Output Formats**: Table and JSON output formats for reports
+- **SPEC.md Compliant**: Implements detailed specification for enterprise use cases
 
 ## 🆕 What's New
 
+### v0.7.0 (SPEC.md Implementation - Breaking Changes)
+- **Git Notes-based Storage**: Authorship logs now stored in `refs/aict/authorship` (replaces `.ai_code_tracking/`)
+- **New Checkpoint System**: `aict checkpoint` records development checkpoints with line ranges
+- **Commit Integration**: `aict commit` generates Authorship Logs from checkpoints (post-commit hook compatible)
+- **Range Reports**: `aict report --range <base>..<head>` analyzes commit ranges
+- **Author Classification**: Automatic AI vs Human detection based on configurable agent list
+- **Remote Sync**: `aict sync push/fetch` to share authorship logs across team
+- **Line Range Tracking**: Precise tracking of which lines were modified by each author
+- **⚠️ Breaking Change**: This version uses a new storage format and is not backward compatible with v0.6.x
+
 ### v0.6.0
-- Complete branch reporting Phase 5: `--branch-pattern` CLI option for glob-style pattern matching.
-- Intelligent pattern detection automatically chooses between exact, regex, and glob matching.
-- Enhanced branch filtering with four mutually exclusive options for maximum flexibility.
-- Combined period and branch filtering support for complex reporting scenarios.
-- Comprehensive test coverage with 133+ test cases and 95%+ coverage.
-
-### v0.5.4
-- Complete branch reporting Phase 2: `--branch`, `--branch-regex`, `--all-branches` CLI options.
-- Regex-based branch grouping with per-branch breakdown and group summary.
-- Overall record stats now include counts for records without branch info (shown as `main (inferred)`).
-- Improved Git branch detection and normalization (handles detached HEAD and remotes).
-- Validation for mutually exclusive branch flags with clear error messages.
-
-### v0.5.3
-- Introduced branch-aware JSONL records (`branch` field) and foundational analysis APIs.
-- Internal plumbing for future CLI branch reporting.
+- Branch reporting with `--branch-pattern` CLI option for glob-style pattern matching
+- Enhanced branch filtering with four mutually exclusive options
+- Combined period and branch filtering support
 
 ## 🚀 Quick Start
 
@@ -69,35 +65,51 @@ export PATH=$PATH:$(pwd)/bin
 # Navigate to your project directory
 cd /path/to/your-project
 
-# Initialize AI Code Tracker (creates .ai_code_tracking/ directory)
+# Initialize AI Code Tracker (creates .git/aict/ directory)
 aict init
-
-# Setup hooks for automatic tracking with Claude Code and Git
-aict setup-hooks
 ```
 
-### 3. Basic Usage
+### 3. Basic Workflow
 
 ```bash
-# Navigate to your project directory first
-cd /path/to/your-project
+# 1. Make code changes
+vim main.go
 
-# Record code changes manually (if hooks not used)
-aict track -author human   # After human coding
-aict track -author claude  # After AI coding
+# 2. Stage your changes
+git add .
 
-# View current statistics
-aict report
+# 3. Record a checkpoint (before commit)
+aict checkpoint --author "Your Name" --message "Implemented feature X"
+# Or for AI-generated code:
+aict checkpoint --author "Claude Code" --model "claude-sonnet-4" --message "Generated API handlers"
 
-# View progress over time
-aict report --last 7d
+# 4. Commit your changes
+git commit -m "Add feature X"
+
+# 5. Generate Authorship Log (auto-run by post-commit hook, or manual)
+aict commit
+
+# 6. View statistics for a commit range
+aict report --range origin/main..HEAD
+
+# 7. (Optional) Sync authorship logs with remote
+aict sync push
 ```
 
-For complete command reference and advanced usage, see **[COMMANDS.md](docs/COMMANDS.md)**.
+### 4. Advanced Usage
 
-### 4. Automatic Usage
+```bash
+# View report in JSON format
+aict report --range HEAD~5..HEAD --format json
 
-Automatic tracking is enabled by `aict setup-hooks`. For hook details and MCP matchers, see the "Claude Code Hooks" section below.
+# Sync authorship logs from remote
+aict sync fetch
+
+# View configuration
+cat .git/aict/config.json
+```
+
+For complete SPEC.md documentation and advanced usage patterns, see **[SPEC.md](SPEC.md)**.
 
 ## 📊 Output Examples
 
