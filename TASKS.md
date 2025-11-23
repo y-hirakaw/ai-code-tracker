@@ -221,19 +221,27 @@ refs/notes/aict         # AICT（提案）
 3. **aict snapshot コマンド** - git blameベースのコードベース分析
 4. **Claude Code hooks 更新** - PostToolUseフックで自動マーク
 5. **git blame 分析基盤** - `internal/blame` パッケージ作成
+6. **Phase 4: git notes + git blame 統合** - 正確なAI%計算の実装完了
+
+#### Phase 4 実装詳細:
+- ✅ git blameでコミットハッシュを正しく解析（40文字の16進数判定）
+- ✅ 各コミットのgit notes (`refs/notes/aict`) をクエリ
+- ✅ notesにファイルが記録されていればAI、なければauthor判定
+- ✅ パフォーマンス最適化（git notesクエリ結果のキャッシング）
+- ✅ `--post-commit`フラグ実装（コミット後のマーク機能）
+- ✅ post-tool-use → post-commit ワークフロー実装
+  - PostToolUseフックで`.pending_ai_edit`マーカー作成
+  - PostCommitフックでマーカー読み込み、`mark-ai-edit --post-commit`実行
+  - git notesをHEADコミットに記録、マーカー削除
+- ✅ 動作確認完了（git notes自動記録、snapshotでの正確な計算）
 
 ### 🔄 次のタスク
-**Phase 4**: git notes情報とgit blameを組み合わせて正確なAI%を計算
+**Phase 5**: テストとドキュメント更新
 
-**現在の課題**:
-- git blameは全コミットが`y-hirakaw`名義なのでAI%が7.7%と低く出る
-- git notesに記録されたAI編集情報を活用する必要がある
-
-**解決策**:
-1. git blameで各行のコミットハッシュを取得
-2. そのコミットのgit notes (refs/notes/aict) を確認
-3. notesに記録されている場合はAI生成としてカウント
-4. notesがない場合はgit author + author_mappingsで判定
+**残課題**:
+- 過去のコミット（git notesなし）は人間としてカウントされる
+  - これは設計通り：新方式で再スタート、過去データのマイグレーション不要
+  - 今後のClaude Code編集から正確に追跡される
 
 ---
 
