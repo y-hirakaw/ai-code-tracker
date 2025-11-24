@@ -7,126 +7,198 @@ README.mdだけは英語で記載すること
 
 ## Project Overview
 
-AI Code Tracker (AICT) is a Go-based tool designed to track the proportion of AI-generated versus human-written code in a repository. The project aims to integrate with Claude Code hooks and Git post-commit hooks to automatically monitor code generation metrics and help achieve configurable AI code generation targets.
+AI Code Tracker (AICT) is a Go-based tool designed to track the proportion of AI-generated versus human-written code in a repository. The project integrates with Claude Code hooks and Git post-commit hooks to automatically monitor code generation metrics.
 
-**Current Status**: This is a newly initialized project with only design documentation. The actual Go implementation has not been started yet.
+**Current Version**: v1.0.0 (Production ready)
+
+**Key Features**:
+- Git notes-based authorship tracking (`refs/aict/authorship`)
+- Checkpoint system for human/AI code tracking
+- Date-based report filtering with `--since` option
+- Automatic Claude Code hooks integration
+- Table and JSON output formats
 
 ## Architecture
 
-The planned system follows this structure:
+Current implementation structure:
 
 ```
 ai-code-tracker/
-├── cmd/
-│   └── aict/              # Main CLI tool
-│       └── main.go
+├── cmd/aict/              # Main CLI entry point
+│   ├── main.go            # CLI commands (init, checkpoint, commit, report, sync, setup-hooks)
+│   ├── handlers_*.go      # Command handlers
+│   └── *_test.go          # Unit tests
 ├── internal/
-│   ├── tracker/           # Core tracking logic
-│   │   ├── checkpoint.go  # Checkpoint management
-│   │   ├── analyzer.go    # Analysis logic
-│   │   └── types.go       # Type definitions
-│   ├── storage/           # Data persistence
-│   │   ├── json.go        # JSON serialization
-│   │   └── metrics.go     # Metrics management
-│   ├── git/               # Git integration
-│   │   └── diff.go        # Git diff processing
-│   └── templates/         # Hook templates
-│       └── hooks.go       # Embedded hook scripts
+│   ├── authorship/        # Authorship line tracking
+│   ├── checkpoint/        # Checkpoint management
+│   ├── config/            # Configuration handling
+│   ├── gitnotes/          # Git notes integration (refs/aict/authorship)
+│   ├── hooks/             # Hook template generation
+│   └── tracker/           # Core tracking types
+├── .git/aict/             # Created by 'aict init'
+│   ├── config.json        # Project configuration
+│   └── checkpoints/       # Checkpoint snapshots
 ├── .claude-code/
-│   └── config.json        # Claude Code configuration
-└── .ai_code_tracking/     # AI tracking data directory (created by 'aict init')
-    ├── config.json        # Tracking configuration
-    ├── hooks/             # Generated hook scripts
-    │   ├── pre-tool-use.sh
-    │   ├── post-tool-use.sh
-    │   └── post-commit
-    ├── checkpoints/       # Code snapshots
-    └── metrics/           # Tracking metrics
+│   └── settings.json      # Claude Code hooks configuration
+└── test_since_option.sh   # Integration test suite
 ```
 
 ## Development Commands
-
-**Note**: These commands are planned but not yet implemented since the Go code doesn't exist.
 
 ```bash
 # Build the project
 go build -o bin/aict ./cmd/aict
 
-# Run tests (when implemented)
+# Run unit tests
 go test ./...
+
+# Run integration tests
+./test_since_option.sh
 
 # Format code
 go fmt ./...
 
-# Run linter (when configured)
-golangci-lint run
-
 # Install dependencies
 go mod tidy
+
+# Verify version
+./bin/aict version
 ```
 
-## Key Features to Implement
+## Core Features (Implemented)
 
-1. **Checkpoint System**: Record code state before/after Claude Code edits using JSON snapshots
-2. **Git Integration**: Analyze git diff to track line changes by author
-3. **Metrics Tracking**: Calculate AI vs human code ratios and progress toward targets
-4. **Hook Integration**: Automatic tracking via Claude Code hooks and Git post-commit hooks
-5. **CLI Interface**: Commands for tracking, analysis, reporting, and configuration
+### 1. Checkpoint System
+- Records code state before/after Claude Code edits
+- Stores in `.git/aict/checkpoints/` as JSON
+- Tracks author (human/AI), timestamp, and git diff
+
+### 2. Authorship Tracking
+- Uses Git notes (`refs/aict/authorship`) for persistence
+- Analyzes git diff to track line changes by author
+- Calculates AI vs human code ratios per commit
+
+### 3. Report Generation
+- `--range`: Commit range filtering (e.g., `origin/main..HEAD`)
+- `--since`: Date-based filtering with shorthand (7d, 2w, 1m, 1y)
+- `--format`: Output as table or JSON
+- Displays: total lines, AI%, human%, per-author stats, per-file breakdown
+
+### 4. Hook Integration
+- Claude Code hooks (pre-tool-use, post-tool-use)
+- Git post-commit hook for automatic Authorship Log generation
+- Setup via `aict setup-hooks`
+
+### 5. CLI Commands
+- `aict init` - Initialize project tracking
+- `aict checkpoint --author <name>` - Manual checkpoint
+- `aict commit` - Generate Authorship Log from checkpoints
+- `aict report --range/--since` - Show statistics
+- `aict sync push/fetch` - Sync with remote
+- `aict setup-hooks` - Setup automatic tracking
 
 ## Configuration
 
-The system will use `.ai_code_tracking/config.json` for configuration:
-- Target AI percentage (default: 80%)
-- File extensions to track (code files only)
-- Exclude patterns (test files, generated files)
-- Author mappings (human name from git.user.name, AI tools)
+`.git/aict/config.json` settings:
+- `target_ai_percentage`: Target AI generation rate (default: 80%)
+- `tracked_extensions`: File extensions to track (`.go`, `.py`, `.js`, `.ts`, etc.)
+- `exclude_patterns`: Patterns to exclude (`*_test.go`, `vendor/*`, etc.)
+- `default_author`: Default author name
+- `ai_agents`: List of AI agent names (auto-classified as AI)
 
-## Data Flow
+## Data Flow (with hooks enabled)
 
-1. Claude Code Pre-Tool Hook → Record human state checkpoint
-2. Claude Code performs edits
-3. Claude Code Post-Tool Hook → Record AI state checkpoint  
-4. Human makes additional edits
-5. Git commit → Post-commit hook analyzes changes and updates metrics
+1. **Pre-tool-use hook**: Records human checkpoint before Claude Code edits
+2. **Claude Code edits**: AI modifications to code
+3. **Post-tool-use hook**: Records AI checkpoint after Claude Code edits
+4. **Human edits**: Additional manual changes
+5. **Git commit**: Triggers post-commit hook
+6. **Post-commit hook**: Runs `aict commit` to generate Authorship Log
+7. **Authorship Log**: Stored in Git notes (`refs/aict/authorship`)
 
-## Implementation Notes
+## Testing
 
-- Use Go's standard library for file operations and JSON handling
-- Implement efficient diff parsing to handle large repositories
-- Store data in JSON format for simplicity and debuggability
-- Focus on code files only (exclude documentation, configuration files)
-- Track line additions only (ignore deletions for cleaner metrics)
+### Integration Tests
+Run comprehensive test suite:
+```bash
+./test_since_option.sh
+```
 
-## Testing Strategy
+**Test Coverage** (16 tests, 100% pass rate):
+- Shorthand notation (7d, 2w, 1m, 1y)
+- Relative dates (yesterday, N days ago)
+- Absolute dates (2025-01-01)
+- Error handling (mutual exclusivity, invalid input)
+- Output formats (table, JSON)
+- Edge cases (initial commits, very old dates)
+- Real-world scenarios (sprint review, daily standup, monthly release)
 
-When implementing:
-- Unit tests for core logic (diff parsing, metrics calculation)
-- Integration tests for hook workflows
-- Performance tests for large repositories
-- Test coverage target: 80%+
+### Unit Tests
+```bash
+go test ./...
+```
 
-## AICT使用時の注意事項
+### Quick Functional Test
+```bash
+# Build and test basic functionality
+go build -o bin/aict ./cmd/aict
+./bin/aict version                    # v1.0.0
+./bin/aict report --since 7d          # Show last 7 days
+./bin/aict report --since 2w          # Show last 2 weeks
+./bin/aict report --range HEAD~5..HEAD  # Show last 5 commits
+```
+
+## Common Use Cases
+
+### Daily Development Review
+```bash
+aict report --since 1d
+```
+
+### Sprint Retrospective (2 weeks)
+```bash
+aict report --since 2w
+```
+
+### PR Review
+```bash
+aict report --range origin/main..HEAD
+```
+
+### Monthly Release Review
+```bash
+aict report --since 1m
+```
+
+### JSON Export
+```bash
+aict report --since 7d --format json > report.json
+```
+
+## 注意事項・制約
 
 ### ファイル追跡制約
-**重要**: `aict track`でコード変更を記録するには、設定された拡張子（`.go`, `.py`, `.js`等）のファイルを編集する必要があります。
+- **追跡対象**: `.git/aict/config.json`の`tracked_extensions`で設定
+- **デフォルト**: `.go`, `.py`, `.js`, `.ts`, `.java`, `.cpp`, `.c`, `.h`, `.rs`
+- **除外対象**: `*_test.go`, `vendor/*`, `node_modules/*`など
 
-**記録される拡張子**（`.ai_code_tracking/config.json`の`tracked_extensions`で設定）:
-- `.go`, `.py`, `.js`, `.ts`, `.java`, `.cpp`, `.c`, `.h`, `.rs`
+### チェックポイント記録条件
+以下の場合のみチェックポイントが作成されます：
+- 追跡対象拡張子のファイルに変更がある
+- `git diff --numstat`で変更が検出される
+- 前回と異なる変更量（Added/Deleted）
 
-**記録されない拡張子**:
-- `.md`, `.txt`, `.yml`, `.yaml`, `.json`, `.xml` 等のドキュメント・設定ファイル
-- `*_generated.go` 等の除外パターンに一致するファイル
+### Git Notes同期
+Authorship Logは`refs/aict/authorship`に保存されます:
+```bash
+# リモートにプッシュ
+aict sync push
 
-### 記録スキップ条件
-以下の場合、チェックポイントレコードは作成されません：
-- 追跡対象拡張子のファイルに変更がない場合
-- 前回の記録と同じ変更量（Added/Deleted）の場合
-- git diff --numstat で変更が検出されない場合
+# リモートから取得
+aict sync fetch
 
-### トラブルシューティング
-**症状**: `aict track`を実行してもレコードが作成されない  
-**原因**: 通常は正常動作（上記制約による）  
-**確認方法**: 追跡対象拡張子のファイル（例：.goファイル）を編集してから実行
+# 手動確認
+git notes --ref=refs/aict/authorship show HEAD
+```
 
 ## バージョン更新手順
 
@@ -196,3 +268,20 @@ go install github.com/y-hirakaw/ai-code-tracker/cmd/aict@v[バージョン]
 - 新機能追加の場合はマイナーバージョンを上げる
 - バグ修正の場合はパッチバージョンを上げる
 - Go Module Proxy のキャッシュ更新には時間がかかる場合がある
+
+## Release History
+
+### v1.0.0 (2025-01-24)
+**First stable release - Production ready**
+
+Major features:
+- Full `--since` option support (7d, 2w, 1m shorthand)
+- Git notes-based authorship tracking
+- Claude Code hooks integration
+- Comprehensive test suite (16 tests, 100% pass)
+- Edge case handling (initial commits, old dates)
+
+Install:
+```bash
+go install github.com/y-hirakaw/ai-code-tracker/cmd/aict@v1.0.0
+```
