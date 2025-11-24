@@ -33,7 +33,7 @@ func handleSetupHooksV2() {
 		os.Exit(1)
 	}
 
-	// .claude-code/settings.json を更新
+	// .claude/settings.json を更新
 	if err := setupClaudeSettings(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error setting up Claude Code settings: %v\n", err)
 		os.Exit(1)
@@ -98,9 +98,9 @@ func setupPostCommitHook(hooksDir string) error {
 }
 
 func setupClaudeSettings() error {
-	settingsDir := ".claude-code"
+	settingsDir := ".claude"
 	if err := os.MkdirAll(settingsDir, 0755); err != nil {
-		return fmt.Errorf("failed to create .claude-code directory: %w", err)
+		return fmt.Errorf("failed to create .claude directory: %w", err)
 	}
 
 	settingsPath := filepath.Join(settingsDir, "settings.json")
@@ -116,7 +116,7 @@ func setupClaudeSettings() error {
 
 		if response != "y" && response != "yes" {
 			fmt.Println("Claude Code settings setup cancelled.")
-			fmt.Println("Please manually add hook configuration to .claude-code/settings.json")
+			fmt.Println("Please manually add hook configuration to .claude/settings.json")
 			return nil
 		}
 	}

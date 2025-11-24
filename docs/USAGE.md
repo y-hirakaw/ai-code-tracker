@@ -336,7 +336,7 @@ Top Files:
 ### フックが動作しない
 
 - フックファイルが実行可能か確認: `ls -la .git/hooks/post-commit`
-- `.claude-code/settings.json` が正しく設定されているか確認
+- `.claude/settings.json` が正しく設定されているか確認
 - `aict` コマンドがPATHに含まれているか確認
 
 ## 詳細仕様

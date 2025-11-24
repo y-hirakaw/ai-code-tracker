@@ -38,7 +38,7 @@ ai-code-tracker/
 ├── .git/aict/             # Created by 'aict init'
 │   ├── config.json        # Project configuration
 │   └── checkpoints/       # Checkpoint snapshots
-├── .claude-code/
+├── .claude/
 │   └── settings.json      # Claude Code hooks configuration
 └── test_since_option.sh   # Integration test suite
 ```
