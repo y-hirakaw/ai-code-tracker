@@ -57,7 +57,9 @@ func printUsage() {
 	fmt.Println("    --model <model>            AI model name (for AI agents)")
 	fmt.Println("    --message <msg>            Optional message")
 	fmt.Println("  aict commit                  Generate Authorship Log from checkpoints")
-	fmt.Println("  aict report --range <range>  Show commit range statistics")
+	fmt.Println("  aict report [options]        Show code generation statistics")
+	fmt.Println("    --range <range>            Commit range (e.g., 'origin/main..HEAD')")
+	fmt.Println("    --since <date>             Show commits since date (e.g., '7d', '2w', '1m')")
 	fmt.Println("    --format <format>          Output format: table or json (default: table)")
 	fmt.Println("  aict sync [push|fetch]       Sync authorship logs with remote")
 	fmt.Println("  aict setup-hooks             Setup Claude Code and Git hooks")
@@ -68,6 +70,9 @@ func printUsage() {
 	fmt.Println("  aict setup-hooks")
 	fmt.Println("  aict checkpoint --author \"Developer\"")
 	fmt.Println("  aict report --range origin/main..HEAD")
+	fmt.Println("  aict report --since 7d        # 7 days ago")
+	fmt.Println("  aict report --since 2w        # 2 weeks ago")
+	fmt.Println("  aict report --since yesterday")
 	fmt.Println("  aict sync push")
 }
 

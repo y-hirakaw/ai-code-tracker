@@ -16,6 +16,7 @@ import (
 // ReportOptions holds options for the report command
 type ReportOptions struct {
 	Range  string
+	Since  string
 	Format string
 }
 
@@ -25,15 +26,45 @@ func handleRangeReport() {
 
 	opts := &ReportOptions{}
 	fs.StringVar(&opts.Range, "range", "", "Commit range (e.g., 'origin/main..HEAD')")
+	fs.StringVar(&opts.Since, "since", "", "Show commits since date (e.g., '7 days ago', '2025-01-01')")
 	fs.StringVar(&opts.Format, "format", "table", "Output format: table or json")
 
 	fs.Parse(os.Args[2:])
 
-	if opts.Range == "" {
-		fmt.Println("Error: --range flag is required")
-		fmt.Println("Usage: aict report --range <base>..<head>")
-		fmt.Println("Example: aict report --range origin/main..HEAD")
+	// --range と --since の排他チェック
+	if opts.Range != "" && opts.Since != "" {
+		fmt.Println("Error: --range and --since are mutually exclusive")
+		fmt.Println("Please use either --range or --since, not both")
 		os.Exit(1)
+	}
+
+	// どちらも指定されていない場合
+	if opts.Range == "" && opts.Since == "" {
+		fmt.Println("Error: either --range or --since is required")
+		fmt.Println()
+		fmt.Println("Usage:")
+		fmt.Println("  aict report --range <base>..<head>")
+		fmt.Println("  aict report --since <date>")
+		fmt.Println()
+		fmt.Println("Examples:")
+		fmt.Println("  aict report --range origin/main..HEAD")
+		fmt.Println("  aict report --since 7d        # 7 days ago")
+		fmt.Println("  aict report --since 2w        # 2 weeks ago")
+		fmt.Println("  aict report --since 1m        # 1 month ago")
+		fmt.Println("  aict report --since '7 days ago'")
+		fmt.Println("  aict report --since '2025-01-01'")
+		fmt.Println("  aict report --since yesterday")
+		os.Exit(1)
+	}
+
+	// --since を --range に変換
+	if opts.Since != "" {
+		convertedRange, err := convertSinceToRange(opts.Since)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		opts.Range = convertedRange
 	}
 
 	handleRangeReportWithOptions(opts)
@@ -49,7 +80,11 @@ func handleRangeReportWithOptions(opts *ReportOptions) {
 	}
 
 	if len(commits) == 0 {
-		fmt.Println("No commits found in range:", opts.Range)
+		rangeDisplay := opts.Range
+		if opts.Since != "" {
+			rangeDisplay = "since " + opts.Since
+		}
+		fmt.Println("No commits found in range:", rangeDisplay)
 		return
 	}
 
@@ -108,8 +143,13 @@ func handleRangeReportWithOptions(opts *ReportOptions) {
 	}
 
 	// 4. レポート生成
+	rangeDisplay := opts.Range
+	if opts.Since != "" {
+		rangeDisplay = "since " + opts.Since
+	}
+
 	report := &tracker.Report{
-		Range:   opts.Range,
+		Range:   rangeDisplay,
 		Commits: len(commits),
 		Summary: tracker.SummaryStats{
 			TotalLines:   totalAI + totalHuman,
@@ -154,6 +194,83 @@ type FileStatsRange struct {
 	AILines      int
 	HumanLines   int
 	AIPercentage float64
+}
+
+// convertSinceToRange converts --since date to --range format
+func convertSinceToRange(since string) (string, error) {
+	// 簡潔な表記を展開（3d → 3 days ago, 2w → 2 weeks ago, 1m → 1 month ago）
+	expandedSince := expandShorthandDate(since)
+
+	// git log --since でコミットハッシュリストを取得（古い順）
+	cmd := exec.Command("git", "log", "--since="+expandedSince, "--format=%H", "--reverse")
+	output, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return "", fmt.Errorf("git log failed: %s", string(exitErr.Stderr))
+		}
+		return "", fmt.Errorf("failed to get commits since %s: %w", since, err)
+	}
+
+	commits := strings.Split(strings.TrimSpace(string(output)), "\n")
+	if len(commits) == 0 || commits[0] == "" {
+		return "", fmt.Errorf("no commits found since %s", since)
+	}
+
+	// 最初のコミットの1つ前からHEADまでの範囲を作成
+	firstCommit := commits[0]
+
+	// 最初のコミットの親が存在するか確認
+	parentCmd := exec.Command("git", "rev-parse", firstCommit+"^")
+	_, err = parentCmd.Output()
+	if err != nil {
+		// 親がない（最初のコミット）場合は、そのコミット自体から開始
+		return firstCommit + "^.." + firstCommit, nil
+	}
+
+	return firstCommit + "^..HEAD", nil
+}
+
+// expandShorthandDate expands shorthand date notation to git-compatible format
+// Examples: 3d → 3 days ago, 2w → 2 weeks ago, 1m → 1 month ago
+func expandShorthandDate(since string) string {
+	if len(since) < 2 {
+		return since
+	}
+
+	// 末尾の単位文字を確認
+	lastChar := since[len(since)-1]
+	numPart := since[:len(since)-1]
+
+	// 数値部分が有効か確認
+	if !isNumeric(numPart) {
+		return since
+	}
+
+	switch lastChar {
+	case 'd':
+		return numPart + " days ago"
+	case 'w':
+		return numPart + " weeks ago"
+	case 'm':
+		return numPart + " months ago"
+	case 'y':
+		return numPart + " years ago"
+	default:
+		return since
+	}
+}
+
+// isNumeric checks if a string contains only digits
+func isNumeric(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // getCommitsInRange retrieves commit hashes in the given range
