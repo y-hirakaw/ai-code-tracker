@@ -223,8 +223,11 @@ func convertSinceToRange(since string) (string, error) {
 	parentCmd := exec.Command("git", "rev-parse", firstCommit+"^")
 	_, err = parentCmd.Output()
 	if err != nil {
-		// 親がない（最初のコミット）場合は、そのコミット自体から開始
-		return firstCommit + "^.." + firstCommit, nil
+		// 親がない（初回コミット、またはリポジトリ初期化直後）場合
+		// 最初のコミット自体から開始: firstCommit..HEAD
+		// ただし、firstCommitのみが対象の場合もあるので、firstCommit^..HEAD を使う
+		// git では ^ が無効な場合でも --not を使える
+		return firstCommit + "..HEAD", nil
 	}
 
 	return firstCommit + "^..HEAD", nil
