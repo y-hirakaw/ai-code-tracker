@@ -80,7 +80,29 @@ aict commit
 
 ### 4. レポート表示
 
-コミット範囲のAI/人間のコード生成率を表示します:
+コミット範囲のAI/人間のコード生成率を表示します。
+
+#### 日付ベースのフィルタリング（--since）
+
+```bash
+# 過去7日間のレポート（簡潔表記）
+aict report --since 7d
+
+# 過去2週間のレポート
+aict report --since 2w
+
+# 過去1ヶ月のレポート
+aict report --since 1m
+
+# 相対日付指定
+aict report --since yesterday
+aict report --since '7 days ago'
+
+# 絶対日付指定
+aict report --since '2025-01-15'
+```
+
+#### コミット範囲指定（--range）
 
 ```bash
 # 最近5コミットのレポート
@@ -88,9 +110,19 @@ aict report --range HEAD~5..HEAD
 
 # 特定のブランチとの差分
 aict report --range origin/main..HEAD
+```
 
-# JSON形式で出力
-aict report --range HEAD~10..HEAD --format json
+#### 出力フォーマット
+
+```bash
+# テーブル形式（デフォルト）
+aict report --since 7d
+
+# JSON形式
+aict report --since 7d --format json
+
+# JSON出力をファイルに保存
+aict report --since 2w --format json > report.json
 ```
 
 ### 5. リモートとの同期
@@ -113,10 +145,35 @@ aict sync fetch
 | `aict setup-hooks` | Claude Code & Git hooks のセットアップ（推奨） |
 | `aict checkpoint [options]` | チェックポイントの記録（手動の場合） |
 | `aict commit` | Authorship Logの生成（自動 or 手動） |
-| `aict report --range <range>` | コミット範囲のレポート表示 |
+| `aict report [options]` | コード生成統計レポート表示 |
 | `aict sync push` | Authorship Logをリモートにプッシュ |
 | `aict sync fetch` | Authorship Logをリモートから取得 |
 | `aict version` | バージョン表示 |
+
+## レポートコマンドのオプション
+
+### 必須オプション（いずれか1つ）
+
+| オプション | 説明 | 例 |
+|----------|------|-----|
+| `--range <range>` | コミット範囲を指定 | `origin/main..HEAD`, `HEAD~5..HEAD` |
+| `--since <date>` | 指定日時以降のコミット | `7d`, `2w`, `1m`, `yesterday`, `2025-01-15` |
+
+**注意**: `--range` と `--since` は同時に指定できません（排他的）。
+
+### オプション
+
+| オプション | 説明 | デフォルト |
+|----------|------|-----------|
+| `--format <format>` | 出力フォーマット（`table` または `json`） | `table` |
+
+### --since の日付指定形式
+
+| 形式 | 説明 | 例 |
+|------|------|-----|
+| 簡潔表記 | `<数値><単位>` 形式 | `7d` (7日), `2w` (2週間), `1m` (1ヶ月), `1y` (1年) |
+| 相対日付 | Git互換の相対日付 | `yesterday`, `7 days ago`, `2 weeks ago` |
+| 絶対日付 | ISO形式の日付 | `2025-01-15`, `2025-01-01` |
 
 ## チェックポイントのオプション
 
@@ -234,11 +291,17 @@ Top Files:
 
 3. **レポート確認**
    ```bash
-   # PR作成前に確認
+   # 日次レビュー（過去24時間）
+   aict report --since 1d
+
+   # スプリント振り返り（過去2週間）
+   aict report --since 2w
+
+   # PR作成前に確認（ブランチ差分）
    aict report --range origin/main..HEAD
 
-   # 最近の開発状況確認
-   aict report --range HEAD~10..HEAD
+   # JSON形式でエクスポート
+   aict report --since 7d --format json > weekly-report.json
    ```
 
 4. **チーム共有**
