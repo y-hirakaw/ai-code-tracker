@@ -1,4 +1,4 @@
-# AI Code Tracker (AICT) v0.7.0
+# AI Code Tracker (AICT) v1.0.0
 
 AIコード生成率の管理とレポート作成ツールです。学習用に開発中のプロジェクトです。
 
