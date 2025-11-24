@@ -108,8 +108,8 @@ func handleCheckpoint() {
 
 // detectChanges detects file changes since last checkpoint
 func detectChanges() (map[string]tracker.Change, error) {
-	// git diff --unified=0 --numstat HEAD で変更を取得
-	cmd := exec.Command("git", "diff", "--unified=0", "--numstat", "HEAD")
+	// git diff --numstat HEAD で変更を取得
+	cmd := exec.Command("git", "diff", "--numstat", "HEAD")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, err
