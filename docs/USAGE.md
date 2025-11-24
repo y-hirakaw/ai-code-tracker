@@ -199,11 +199,19 @@ aict sync fetch
 }
 ```
 
-- `target_ai_percentage`: 目標AI生成率 (%)
-- `tracked_extensions`: 追跡するファイル拡張子
-- `exclude_patterns`: 除外パターン
-- `default_author`: デフォルト作成者名
-- `ai_agents`: AIエージェントのリスト (ここに含まれる名前は自動的にAIとして分類)
+### 設定項目の説明
+
+| 設定項目 | 説明 | デフォルト値 |
+|---------|------|-------------|
+| `target_ai_percentage` | 目標AI生成率 (%) | 80.0 |
+| `tracked_extensions` | トラッキング対象の拡張子 | `.go`, `.py`, `.js`, `.ts`, `.java` |
+| `exclude_patterns` | 除外パターン (glob形式) | `*_test.go`, `vendor/*`, `node_modules/*` |
+| `default_author` | デフォルト作成者名 | `git config user.name` の値 |
+| `ai_agents` | AIエージェント名のリスト | `Claude Code`, `GitHub Copilot`, `ChatGPT` |
+
+**重要**:
+- `tracked_extensions`: この拡張子のファイルのみが追跡対象になります
+- `ai_agents`: ここに含まれる名前は自動的にAIとして分類されます
 
 ## レポート出力例
 
