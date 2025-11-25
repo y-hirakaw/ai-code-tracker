@@ -9,7 +9,7 @@ README.mdだけは英語で記載すること
 
 AI Code Tracker (AICT) is a Go-based tool designed to track the proportion of AI-generated versus human-written code in a repository. The project integrates with Claude Code hooks and Git post-commit hooks to automatically monitor code generation metrics.
 
-**Current Version**: v1.0.0 (Production ready)
+**Current Version**: v1.0.3 (Production ready)
 
 **Key Features**:
 - Git notes-based authorship tracking (`refs/aict/authorship`)
@@ -17,6 +17,7 @@ AI Code Tracker (AICT) is a Go-based tool designed to track the proportion of AI
 - Date-based report filtering with `--since` option
 - Automatic Claude Code hooks integration
 - Table and JSON output formats
+- Debug commands for development and testing
 
 ## Architecture
 
@@ -25,8 +26,9 @@ Current implementation structure:
 ```
 ai-code-tracker/
 ├── cmd/aict/              # Main CLI entry point
-│   ├── main.go            # CLI commands (init, checkpoint, commit, report, sync, setup-hooks)
+│   ├── main.go            # CLI commands (init, checkpoint, commit, report, sync, setup-hooks, debug)
 │   ├── handlers_*.go      # Command handlers
+│   ├── handlers_debug.go  # Debug command handlers
 │   └── *_test.go          # Unit tests
 ├── internal/
 │   ├── authorship/        # Authorship line tracking
@@ -95,6 +97,13 @@ go mod tidy
 - `aict report --range/--since` - Show statistics
 - `aict sync push/fetch` - Sync with remote
 - `aict setup-hooks` - Setup automatic tracking
+- `aict debug [show|clean|clear-notes]` - Debug and cleanup commands
+
+### 6. Debug Commands (v1.0.3+)
+- `aict debug show` - Display checkpoint details (timestamp, author, changes)
+- `aict debug clean` - Remove all checkpoint data from `.git/aict/checkpoints/`
+- `aict debug clear-notes` - Remove all AICT-related Git notes (refs/notes/aict, refs/aict/authorship, etc.)
+- **Use Case**: Clean up test data during development, reset tracking state
 
 ## Configuration
 
@@ -141,10 +150,15 @@ go test ./...
 ```bash
 # Build and test basic functionality
 go build -o bin/aict ./cmd/aict
-./bin/aict version                    # v1.0.0
+./bin/aict version                    # v1.0.3
 ./bin/aict report --since 7d          # Show last 7 days
 ./bin/aict report --since 2w          # Show last 2 weeks
 ./bin/aict report --range HEAD~5..HEAD  # Show last 5 commits
+
+# Debug commands
+./bin/aict debug show                 # Show checkpoint details
+./bin/aict debug clean                # Clean checkpoints
+./bin/aict debug clear-notes          # Clear Git notes
 ```
 
 ## Common Use Cases
@@ -187,7 +201,7 @@ aict report --since 7d --format json > report.json
 - `git diff --numstat`で変更が検出される
 - 前回と異なる変更量（Added/Deleted）
 
-### Git Notes同期
+### Git Notes同期と管理
 Authorship Logは`refs/aict/authorship`に保存されます:
 ```bash
 # リモートにプッシュ
@@ -198,7 +212,17 @@ aict sync fetch
 
 # 手動確認
 git notes --ref=refs/aict/authorship show HEAD
+
+# Git notesのクリーンアップ（デバッグ用）
+aict debug clear-notes  # すべてのaict関連notesを削除
 ```
+
+**重要**: Git notesは複数のrefに保存される可能性があります:
+- `refs/notes/aict`
+- `refs/notes/refs/aict/authorship`
+- その他"aict"を含むref
+
+`aict debug clear-notes`コマンドはこれらすべてを自動検出して削除します。
 
 ## バージョン更新手順
 
@@ -268,20 +292,3 @@ go install github.com/y-hirakaw/ai-code-tracker/cmd/aict@v[バージョン]
 - 新機能追加の場合はマイナーバージョンを上げる
 - バグ修正の場合はパッチバージョンを上げる
 - Go Module Proxy のキャッシュ更新には時間がかかる場合がある
-
-## Release History
-
-### v1.0.0 (2025-01-24)
-**First stable release - Production ready**
-
-Major features:
-- Full `--since` option support (7d, 2w, 1m shorthand)
-- Git notes-based authorship tracking
-- Claude Code hooks integration
-- Comprehensive test suite (16 tests, 100% pass)
-- Edge case handling (initial commits, old dates)
-
-Install:
-```bash
-go install github.com/y-hirakaw/ai-code-tracker/cmd/aict@v1.0.0
-```
