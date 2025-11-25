@@ -90,13 +90,20 @@ type Change struct {
 	Lines   [][]int `json:"lines"` // [[start, end], [single], ...]
 }
 
+// FileSnapshot represents a snapshot of a file at a specific point in time
+type FileSnapshot struct {
+	Hash  string `json:"hash"`  // SHA-256 hash of file content
+	Lines int    `json:"lines"` // Total number of lines
+}
+
 // CheckpointV2 represents a development checkpoint (SPEC.md準拠)
 type CheckpointV2 struct {
-	Timestamp time.Time          `json:"timestamp"`
-	Author    string             `json:"author"`
-	Type      AuthorType         `json:"type"`
-	Metadata  map[string]string  `json:"metadata,omitempty"`
-	Changes   map[string]Change  `json:"changes"` // filepath -> Change
+	Timestamp time.Time             `json:"timestamp"`
+	Author    string                `json:"author"`
+	Type      AuthorType            `json:"type"`
+	Metadata  map[string]string     `json:"metadata,omitempty"`
+	Changes   map[string]Change     `json:"changes"`  // filepath -> Change
+	Snapshot  map[string]FileSnapshot `json:"snapshot"` // filepath -> FileSnapshot (current state)
 }
 
 // AuthorshipLog represents commit-level authorship information

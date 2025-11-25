@@ -40,8 +40,10 @@ func handleInitV2() {
 		DefaultAuthor: gitUserName,
 		AIAgents: []string{
 			"Claude Code",
+			"Claude",
 			"GitHub Copilot",
 			"ChatGPT",
+			"Cursor",
 		},
 	}
 

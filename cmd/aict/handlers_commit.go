@@ -9,6 +9,7 @@ import (
 	"github.com/y-hirakaw/ai-code-tracker/internal/authorship"
 	"github.com/y-hirakaw/ai-code-tracker/internal/gitnotes"
 	"github.com/y-hirakaw/ai-code-tracker/internal/storage"
+	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
 
 func handleCommit() {
@@ -58,9 +59,29 @@ func handleCommit() {
 		os.Exit(1)
 	}
 
-	// チェックポイントをクリア
-	if err := store.ClearCheckpoints(); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to clear checkpoints: %v\n", err)
+	// チェックポイントをクリア（ただし最新のスナップショットは保持）
+	// 最新のチェックポイントを次のベースラインとして残す
+	if len(checkpoints) > 0 {
+		lastCheckpoint := checkpoints[len(checkpoints)-1]
+
+		// すべてクリア
+		if err := store.ClearCheckpoints(); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to clear checkpoints: %v\n", err)
+		}
+
+		// 最新のスナップショットのみを持つベースラインチェックポイントを作成
+		baselineCheckpoint := &tracker.CheckpointV2{
+			Timestamp: lastCheckpoint.Timestamp,
+			Author:    lastCheckpoint.Author,
+			Type:      lastCheckpoint.Type,
+			Metadata:  map[string]string{"baseline": "true"},
+			Changes:   make(map[string]tracker.Change), // 空の変更
+			Snapshot:  lastCheckpoint.Snapshot,          // スナップショットのみ保持
+		}
+
+		if err := store.SaveCheckpoint(baselineCheckpoint); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to save baseline checkpoint: %v\n", err)
+		}
 	}
 
 	fmt.Println("✓ Authorship log created")

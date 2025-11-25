@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"os"
@@ -60,16 +62,38 @@ func handleCheckpoint() {
 		authorType = tracker.AuthorTypeAI
 	}
 
-	// 前回のチェックポイント以降の変更を検出
-	changes, err := detectChanges()
+	// 前回のチェックポイントを読み込む
+	checkpoints, err := store.LoadCheckpoints()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading checkpoints: %v\n", err)
+		os.Exit(1)
+	}
+
+	var lastCheckpoint *tracker.CheckpointV2
+	if len(checkpoints) > 0 {
+		lastCheckpoint = checkpoints[len(checkpoints)-1]
+	}
+
+	// 現在のスナップショットを作成
+	currentSnapshot, err := captureSnapshot(config.TrackedExtensions)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error capturing snapshot: %v\n", err)
+		os.Exit(1)
+	}
+
+	// 前回のチェックポイントとの差分を検出
+	changes, err := detectChangesFromSnapshot(lastCheckpoint, currentSnapshot)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error detecting changes: %v\n", err)
 		os.Exit(1)
 	}
 
 	if len(changes) == 0 {
-		fmt.Println("No changes detected")
-		return
+		if lastCheckpoint == nil {
+			fmt.Println("✓ Initial checkpoint created (baseline snapshot)")
+		} else {
+			fmt.Println("No changes detected since last checkpoint")
+		}
 	}
 
 	// チェックポイントを作成
@@ -79,6 +103,7 @@ func handleCheckpoint() {
 		Type:      authorType,
 		Metadata:  make(map[string]string),
 		Changes:   changes,
+		Snapshot:  currentSnapshot,
 	}
 
 	// メタデータを追加
@@ -106,55 +131,158 @@ func handleCheckpoint() {
 	fmt.Printf("✓ Checkpoint created (%s, %d files, %d lines added)\n", authorName, totalFiles, totalAdded)
 }
 
-// detectChanges detects file changes since last checkpoint
-func detectChanges() (map[string]tracker.Change, error) {
-	// git diff --numstat HEAD で変更を取得
-	cmd := exec.Command("git", "diff", "--numstat", "HEAD")
+// captureSnapshot creates a snapshot of all tracked files in working directory
+func captureSnapshot(trackedExtensions []string) (map[string]tracker.FileSnapshot, error) {
+	snapshot := make(map[string]tracker.FileSnapshot)
+
+	// Git管理下のファイル一覧を取得（追跡されているファイル + 変更されたファイル）
+	cmd := exec.Command("git", "ls-files")
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to list git files: %w", err)
 	}
 
+	// 拡張子マップを作成
+	extMap := make(map[string]bool)
+	for _, ext := range trackedExtensions {
+		extMap[ext] = true
+	}
+
+	files := strings.Split(strings.TrimSpace(string(output)), "\n")
+	for _, filepath := range files {
+		if filepath == "" {
+			continue
+		}
+
+		// 拡張子チェック
+		ext := ""
+		if idx := strings.LastIndex(filepath, "."); idx != -1 {
+			ext = filepath[idx:]
+		}
+		if !extMap[ext] {
+			continue
+		}
+
+		// 作業ディレクトリのファイル内容を読み込み（コミット済みでなくても良い）
+		content, err := os.ReadFile(filepath)
+		if err != nil {
+			continue // ファイルが読めない場合はスキップ
+		}
+
+		// ハッシュ計算
+		hash := sha256.Sum256(content)
+		hashStr := hex.EncodeToString(hash[:])
+
+		// 行数カウント
+		lines := len(strings.Split(string(content), "\n"))
+
+		snapshot[filepath] = tracker.FileSnapshot{
+			Hash:  hashStr,
+			Lines: lines,
+		}
+	}
+
+	return snapshot, nil
+}
+
+// detectChangesFromSnapshot detects changes between two snapshots
+func detectChangesFromSnapshot(lastCheckpoint *tracker.CheckpointV2, currentSnapshot map[string]tracker.FileSnapshot) (map[string]tracker.Change, error) {
 	changes := make(map[string]tracker.Change)
 
-	// 各ファイルの変更を解析
-	for _, line := range strings.Split(string(output), "\n") {
-		if line == "" {
-			continue
+	// 初回チェックポイントの場合は変更なし
+	if lastCheckpoint == nil {
+		return changes, nil
+	}
+
+	lastSnapshot := lastCheckpoint.Snapshot
+
+	// 変更・追加されたファイルを検出
+	for filepath, currentFile := range currentSnapshot {
+		lastFile, existed := lastSnapshot[filepath]
+
+		if !existed {
+			// 新規ファイル
+			changes[filepath] = tracker.Change{
+				Added:   currentFile.Lines,
+				Deleted: 0,
+				Lines:   [][]int{{1, currentFile.Lines}},
+			}
+		} else if currentFile.Hash != lastFile.Hash {
+			// ファイルが変更された場合、git diffで詳細を取得
+			added, deleted, lineRanges, err := getDetailedDiff(filepath)
+			if err != nil {
+				// エラーがある場合は簡易的に行数の差分で計算
+				if currentFile.Lines > lastFile.Lines {
+					changes[filepath] = tracker.Change{
+						Added:   currentFile.Lines - lastFile.Lines,
+						Deleted: 0,
+						Lines:   [][]int{},
+					}
+				} else if currentFile.Lines < lastFile.Lines {
+					changes[filepath] = tracker.Change{
+						Added:   0,
+						Deleted: lastFile.Lines - currentFile.Lines,
+						Lines:   [][]int{},
+					}
+				}
+			} else {
+				changes[filepath] = tracker.Change{
+					Added:   added,
+					Deleted: deleted,
+					Lines:   lineRanges,
+				}
+			}
 		}
+	}
 
-		parts := strings.Fields(line)
-		if len(parts) < 3 {
-			continue
-		}
-
-		addedStr := parts[0]
-		deletedStr := parts[1]
-		filepath := parts[2]
-
-		// バイナリファイルはスキップ
-		if addedStr == "-" || deletedStr == "-" {
-			continue
-		}
-
-		added, _ := strconv.Atoi(addedStr)
-		deleted, _ := strconv.Atoi(deletedStr)
-
-		// 行範囲を取得
-		lineRanges, err := getLineRanges(filepath)
-		if err != nil {
-			// エラーがあっても継続（行範囲なしで記録）
-			lineRanges = [][]int{}
-		}
-
-		changes[filepath] = tracker.Change{
-			Added:   added,
-			Deleted: deleted,
-			Lines:   lineRanges,
+	// 削除されたファイルを検出
+	for filepath, lastFile := range lastSnapshot {
+		if _, exists := currentSnapshot[filepath]; !exists {
+			changes[filepath] = tracker.Change{
+				Added:   0,
+				Deleted: lastFile.Lines,
+				Lines:   [][]int{},
+			}
 		}
 	}
 
 	return changes, nil
+}
+
+// getDetailedDiff gets detailed diff information for a file
+func getDetailedDiff(filepath string) (added, deleted int, lineRanges [][]int, err error) {
+	// git diff --numstat HEAD でファイルの追加・削除行数を取得
+	cmd := exec.Command("git", "diff", "--numstat", "HEAD", "--", filepath)
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, 0, nil, err
+	}
+
+	line := strings.TrimSpace(string(output))
+	if line == "" {
+		return 0, 0, [][]int{}, nil
+	}
+
+	parts := strings.Fields(line)
+	if len(parts) < 3 {
+		return 0, 0, nil, fmt.Errorf("invalid numstat output")
+	}
+
+	// バイナリファイルチェック
+	if parts[0] == "-" || parts[1] == "-" {
+		return 0, 0, nil, fmt.Errorf("binary file")
+	}
+
+	added, _ = strconv.Atoi(parts[0])
+	deleted, _ = strconv.Atoi(parts[1])
+
+	// 行範囲を取得
+	lineRanges, err = getLineRanges(filepath)
+	if err != nil {
+		lineRanges = [][]int{}
+	}
+
+	return added, deleted, lineRanges, nil
 }
 
 // getLineRanges extracts line ranges from git diff output
