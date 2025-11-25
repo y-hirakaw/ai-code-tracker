@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-const version = "1.0.2"
+const version = "1.0.3"
 
 // exitFunc is used to mock os.Exit in tests
 var exitFunc = os.Exit
@@ -32,6 +32,8 @@ func main() {
 		handleSync()
 	case "setup-hooks":
 		handleSetupHooksV2()
+	case "debug":
+		handleDebug()
 	case "version", "--version", "-v":
 		fmt.Printf("AI Code Tracker (aict) version %s\n", version)
 	case "help", "--help", "-h":
@@ -63,6 +65,10 @@ func printUsage() {
 	fmt.Println("    --format <format>          Output format: table or json (default: table)")
 	fmt.Println("  aict sync [push|fetch]       Sync authorship logs with remote")
 	fmt.Println("  aict setup-hooks             Setup Claude Code and Git hooks")
+	fmt.Println("  aict debug [show|clean|clear-notes]  Debug and cleanup commands")
+	fmt.Println("    show                       Display all checkpoint details")
+	fmt.Println("    clean                      Remove all checkpoint data")
+	fmt.Println("    clear-notes                Remove all Git notes (authorship logs)")
 	fmt.Println("  aict version                 Show version information")
 	fmt.Println()
 	fmt.Println("Examples:")
@@ -74,6 +80,9 @@ func printUsage() {
 	fmt.Println("  aict report --since 2w        # 2 weeks ago")
 	fmt.Println("  aict report --since yesterday")
 	fmt.Println("  aict sync push")
+	fmt.Println("  aict debug show               # Show checkpoint details")
+	fmt.Println("  aict debug clean              # Clean checkpoints")
+	fmt.Println("  aict debug clear-notes        # Clear Git notes")
 }
 
 func getGitUserName() string {
