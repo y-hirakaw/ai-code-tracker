@@ -323,21 +323,54 @@ Top Files:
 
 ## トラブルシューティング
 
+### 既存コードが誤ってカウントされている
+
+既存のコードベースにaictを導入した際、既存コード全体が「変更」としてカウントされてしまった場合：
+
+```bash
+# 1. チェックポイントデータをクリア
+aict debug clean
+
+# 2. （必要に応じて）Git notesもクリア
+aict debug clear-notes
+
+# 3. 新しいベースラインチェックポイントを作成
+aict checkpoint --author "Your Name"
+```
+
+**説明**: v1.0.4以降、aictはスナップショットベースのトラッキングを使用しており、初回チェックポイント時に既存コードを除外します。古いバージョンで記録したデータがある場合は、上記の手順でクリーンアップして再スタートしてください。
+
+### レポート結果がおかしい
+
+計測結果に異常がある場合、デバッグコマンドで状態を確認できます：
+
+```bash
+# チェックポイントの詳細を表示
+aict debug show
+
+# 問題があれば、データをリセット
+aict debug clean          # チェックポイントのみ削除
+aict debug clear-notes    # Git notesも削除
+```
+
 ### チェックポイントが記録されない
 
 - 追跡対象の拡張子（`.go`, `.py`等）のファイルを編集していることを確認
 - `git diff` で変更が検出されることを確認
+- `aict debug show` でチェックポイントの状態を確認
 
 ### Authorship Logが生成されない
 
 - チェックポイントが記録されていることを確認: `ls .git/aict/checkpoints/`
 - Git notesを確認: `git notes --ref=refs/aict/authorship show HEAD`
+- チェックポイントがない場合: `aict checkpoint` で手動作成
 
 ### フックが動作しない
 
 - フックファイルが実行可能か確認: `ls -la .git/hooks/post-commit`
 - `.claude/settings.json` が正しく設定されているか確認
 - `aict` コマンドがPATHに含まれているか確認
+- フックの再セットアップ: `aict setup-hooks`
 
 ## 詳細仕様
 
