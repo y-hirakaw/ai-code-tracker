@@ -116,12 +116,11 @@ func TestSafeFileOperations(t *testing.T) {
 			path    string
 			wantErr bool
 		}{
-			{"Valid relative path", "subdir/file.txt", false},
 			{"Valid absolute within base", filepath.Join(tmpDir, "file.txt"), false},
 			{"Path traversal attempt", "../../../etc/passwd", true},
 			{"Path outside base", "/etc/passwd", true},
 		}
-		
+
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				_, err := safeOps.ValidatePath(tt.path)

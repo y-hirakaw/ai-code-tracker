@@ -1,6 +1,7 @@
 package authorship
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -154,6 +155,217 @@ func TestCountLines(t *testing.T) {
 			result := CountLines(tt.ranges)
 			if result != tt.expected {
 				t.Errorf("Expected %d lines, got %d", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestToJSON(t *testing.T) {
+	log := &tracker.AuthorshipLog{
+		Version:   AuthorshipLogVersion,
+		Commit:    "abc123",
+		Timestamp: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+		Files: map[string]tracker.FileInfo{
+			"test.go": {
+				Authors: []tracker.AuthorInfo{
+					{
+						Name:  "Test User",
+						Type:  tracker.AuthorTypeHuman,
+						Lines: [][]int{{1, 10}},
+					},
+				},
+			},
+		},
+	}
+
+	data, err := ToJSON(log)
+	if err != nil {
+		t.Fatalf("ToJSON failed: %v", err)
+	}
+
+	if len(data) == 0 {
+		t.Error("Expected non-empty JSON data")
+	}
+
+	// Verify it's valid JSON by parsing it back
+	var parsed tracker.AuthorshipLog
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Errorf("Generated JSON is not valid: %v", err)
+	}
+
+	if parsed.Version != log.Version {
+		t.Errorf("Version = %s, want %s", parsed.Version, log.Version)
+	}
+
+	if parsed.Commit != log.Commit {
+		t.Errorf("Commit = %s, want %s", parsed.Commit, log.Commit)
+	}
+}
+
+func TestFromJSON(t *testing.T) {
+	jsonData := []byte(`{
+		"version": "1.0",
+		"commit": "abc123",
+		"timestamp": "2024-01-01T00:00:00Z",
+		"files": {
+			"test.go": {
+				"authors": [
+					{
+						"name": "Test User",
+						"type": "human",
+						"lines": [[1, 10]],
+						"metadata": {}
+					}
+				]
+			}
+		}
+	}`)
+
+	log, err := FromJSON(jsonData)
+	if err != nil {
+		t.Fatalf("FromJSON failed: %v", err)
+	}
+
+	if log.Version != "1.0" {
+		t.Errorf("Version = %s, want 1.0", log.Version)
+	}
+
+	if log.Commit != "abc123" {
+		t.Errorf("Commit = %s, want abc123", log.Commit)
+	}
+
+	if len(log.Files) != 1 {
+		t.Errorf("Files count = %d, want 1", len(log.Files))
+	}
+
+	fileInfo, exists := log.Files["test.go"]
+	if !exists {
+		t.Fatal("test.go not found in files")
+	}
+
+	if len(fileInfo.Authors) != 1 {
+		t.Errorf("Authors count = %d, want 1", len(fileInfo.Authors))
+	}
+
+	if fileInfo.Authors[0].Name != "Test User" {
+		t.Errorf("Author name = %s, want Test User", fileInfo.Authors[0].Name)
+	}
+}
+
+func TestFromJSONInvalidJSON(t *testing.T) {
+	invalidJSON := []byte(`{invalid json}`)
+
+	_, err := FromJSON(invalidJSON)
+	if err == nil {
+		t.Error("Expected error for invalid JSON, got nil")
+	}
+}
+
+func TestValidateAuthorshipLog(t *testing.T) {
+	tests := []struct {
+		name    string
+		log     *tracker.AuthorshipLog
+		wantErr bool
+	}{
+		{
+			name: "Valid log",
+			log: &tracker.AuthorshipLog{
+				Version: AuthorshipLogVersion,
+				Commit:  "abc123",
+				Files: map[string]tracker.FileInfo{
+					"test.go": {
+						Authors: []tracker.AuthorInfo{
+							{
+								Name: "Test User",
+								Type: tracker.AuthorTypeHuman,
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "Missing version",
+			log: &tracker.AuthorshipLog{
+				Commit: "abc123",
+				Files:  map[string]tracker.FileInfo{},
+			},
+			wantErr: true,
+		},
+		{
+			name: "Missing commit",
+			log: &tracker.AuthorshipLog{
+				Version: AuthorshipLogVersion,
+				Files:   map[string]tracker.FileInfo{},
+			},
+			wantErr: true,
+		},
+		{
+			name: "Wrong version",
+			log: &tracker.AuthorshipLog{
+				Version: "999.0",
+				Commit:  "abc123",
+				Files:   map[string]tracker.FileInfo{},
+			},
+			wantErr: true,
+		},
+		{
+			name: "File with no authors",
+			log: &tracker.AuthorshipLog{
+				Version: AuthorshipLogVersion,
+				Commit:  "abc123",
+				Files: map[string]tracker.FileInfo{
+					"test.go": {
+						Authors: []tracker.AuthorInfo{},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "Author with empty name",
+			log: &tracker.AuthorshipLog{
+				Version: AuthorshipLogVersion,
+				Commit:  "abc123",
+				Files: map[string]tracker.FileInfo{
+					"test.go": {
+						Authors: []tracker.AuthorInfo{
+							{
+								Name: "",
+								Type: tracker.AuthorTypeHuman,
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "Invalid author type",
+			log: &tracker.AuthorshipLog{
+				Version: AuthorshipLogVersion,
+				Commit:  "abc123",
+				Files: map[string]tracker.FileInfo{
+					"test.go": {
+						Authors: []tracker.AuthorInfo{
+							{
+								Name: "Test User",
+								Type: "invalid",
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateAuthorshipLog(tt.log)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateAuthorshipLog() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
