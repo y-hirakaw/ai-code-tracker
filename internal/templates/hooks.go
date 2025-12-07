@@ -59,7 +59,7 @@ else
 fi
 
 # Record AI checkpoint after edits
-"$AICT_BIN" checkpoint --author "Claude Code" --model "claude-sonnet-4.5" --message "Claude Code edits" 2>/dev/null || true
+"$AICT_BIN" checkpoint --author "Claude Code" --message "Claude Code edits" 2>/dev/null || true
 
 exit 0`
 
