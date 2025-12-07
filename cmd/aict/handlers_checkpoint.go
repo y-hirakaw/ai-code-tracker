@@ -249,44 +249,70 @@ func detectChangesFromSnapshot(lastCheckpoint *tracker.CheckpointV2, currentSnap
 	return changes, nil
 }
 
-// getDetailedDiff gets detailed diff information for a file
+// getDetailedDiff gets detailed diff information for a file by comparing file content directly
 func getDetailedDiff(filepath string) (added, deleted int, lineRanges [][]int, err error) {
-	// git diff --numstat HEAD でファイルの追加・削除行数を取得
-	cmd := exec.Command("git", "diff", "--numstat", "HEAD", "--", filepath)
-	output, err := cmd.Output()
+	// 作業ディレクトリの現在のファイル内容を取得
+	currentContent, err := os.ReadFile(filepath)
 	if err != nil {
-		return 0, 0, nil, err
+		return 0, 0, nil, fmt.Errorf("failed to read current file: %w", err)
 	}
 
-	line := strings.TrimSpace(string(output))
-	if line == "" {
-		return 0, 0, [][]int{}, nil
-	}
-
-	parts := strings.Fields(line)
-	if len(parts) < 3 {
-		return 0, 0, nil, fmt.Errorf("invalid numstat output")
-	}
-
-	// バイナリファイルチェック
-	if parts[0] == "-" || parts[1] == "-" {
-		return 0, 0, nil, fmt.Errorf("binary file")
-	}
-
-	added, _ = strconv.Atoi(parts[0])
-	deleted, _ = strconv.Atoi(parts[1])
-
-	// 行範囲を取得
-	lineRanges, err = getLineRanges(filepath)
+	// HEADのファイル内容を取得（git show HEAD:filepath）
+	cmd := exec.Command("git", "show", fmt.Sprintf("HEAD:%s", filepath))
+	headContent, err := cmd.Output()
 	if err != nil {
-		lineRanges = [][]int{}
+		// HEADに存在しない（新規ファイル）の場合
+		currentLines := strings.Split(string(currentContent), "\n")
+		lineCount := len(currentLines)
+		return lineCount, 0, [][]int{{1, lineCount}}, nil
+	}
+
+	// 両方の内容を行単位で比較
+	currentLines := strings.Split(string(currentContent), "\n")
+	headLines := strings.Split(string(headContent), "\n")
+
+	// 簡易的なdiff計算（追加・削除行数）
+	currentLineCount := len(currentLines)
+	headLineCount := len(headLines)
+
+	if currentLineCount > headLineCount {
+		added = currentLineCount - headLineCount
+		deleted = 0
+	} else if currentLineCount < headLineCount {
+		added = 0
+		deleted = headLineCount - currentLineCount
+	} else {
+		// 行数が同じでも内容が変更されている可能性があるため、
+		// 変更された行をカウント
+		changedLines := 0
+		for i := 0; i < currentLineCount && i < headLineCount; i++ {
+			if currentLines[i] != headLines[i] {
+				changedLines++
+			}
+		}
+		if changedLines > 0 {
+			// 簡易的に変更行数を追加として扱う
+			added = changedLines
+			deleted = 0
+		}
+	}
+
+	// 行範囲を取得（git diffを使用）
+	lineRanges, err = getLineRangesFromDiff(filepath)
+	if err != nil {
+		// エラー時は簡易的な範囲を返す
+		if added > 0 {
+			lineRanges = [][]int{{1, currentLineCount}}
+		} else {
+			lineRanges = [][]int{}
+		}
 	}
 
 	return added, deleted, lineRanges, nil
 }
 
-// getLineRanges extracts line ranges from git diff output
-func getLineRanges(filepath string) ([][]int, error) {
+// getLineRangesFromDiff extracts line ranges using git diff
+func getLineRangesFromDiff(filepath string) ([][]int, error) {
 	cmd := exec.Command("git", "diff", "--unified=0", "HEAD", "--", filepath)
 	output, err := cmd.Output()
 	if err != nil {
