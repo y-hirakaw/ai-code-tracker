@@ -52,11 +52,7 @@ func (a *Analyzer) AnalyzeCheckpoints(before, after *Checkpoint) (*AnalysisResul
 			addedLinesDiff := afterStats[0] - beforeStats[0]
 
 			if addedLinesDiff > 0 {
-				if isAIAuthor {
-					result.AILines += addedLinesDiff
-				} else {
-					result.HumanLines += addedLinesDiff
-				}
+				a.aggregateLinesByAuthor(addedLinesDiff, isAIAuthor, &result.AILines, &result.HumanLines)
 			}
 		}
 
@@ -68,11 +64,7 @@ func (a *Analyzer) AnalyzeCheckpoints(before, after *Checkpoint) (*AnalysisResul
 
 			if _, existed := before.NumstatData[filepath]; !existed {
 				// New file
-				if isAIAuthor {
-					result.AILines += afterStats[0]
-				} else {
-					result.HumanLines += afterStats[0]
-				}
+				a.aggregateLinesByAuthor(afterStats[0], isAIAuthor, &result.AILines, &result.HumanLines)
 			}
 		}
 
@@ -81,9 +73,7 @@ func (a *Analyzer) AnalyzeCheckpoints(before, after *Checkpoint) (*AnalysisResul
 			result.TotalLines += len(file.Lines)
 		}
 
-		if result.AILines+result.HumanLines > 0 {
-			result.Percentage = float64(result.AILines) / float64(result.AILines+result.HumanLines) * 100
-		}
+		result.Percentage = calculatePercentage(result.AILines, result.HumanLines)
 
 		return result, nil
 	}
@@ -100,11 +90,7 @@ func (a *Analyzer) AnalyzeCheckpoints(before, after *Checkpoint) (*AnalysisResul
 				}
 
 				addedLines := stats[0]
-				if isAIAuthor {
-					result.AILines += addedLines
-				} else {
-					result.HumanLines += addedLines
-				}
+				a.aggregateLinesByAuthor(addedLines, isAIAuthor, &result.AILines, &result.HumanLines)
 			}
 
 			// Calculate total lines from current checkpoint
@@ -112,9 +98,7 @@ func (a *Analyzer) AnalyzeCheckpoints(before, after *Checkpoint) (*AnalysisResul
 				result.TotalLines += len(file.Lines)
 			}
 
-			if result.AILines+result.HumanLines > 0 {
-				result.Percentage = float64(result.AILines) / float64(result.AILines+result.HumanLines) * 100
-			}
+			result.Percentage = calculatePercentage(result.AILines, result.HumanLines)
 
 			return result, nil
 		}
@@ -126,12 +110,9 @@ func (a *Analyzer) AnalyzeCheckpoints(before, after *Checkpoint) (*AnalysisResul
 		beforeFile, exists := before.Files[path]
 		if !exists {
 			// New file
-			if isAIAuthor {
-				result.AILines += len(afterFile.Lines)
-			} else {
-				result.HumanLines += len(afterFile.Lines)
-			}
-			result.TotalLines += len(afterFile.Lines)
+			lineCount := len(afterFile.Lines)
+			a.aggregateLinesByAuthor(lineCount, isAIAuthor, &result.AILines, &result.HumanLines)
+			result.TotalLines += lineCount
 			continue
 		}
 
@@ -148,9 +129,7 @@ func (a *Analyzer) AnalyzeCheckpoints(before, after *Checkpoint) (*AnalysisResul
 		}
 	}
 
-	if result.TotalLines > 0 {
-		result.Percentage = float64(result.AILines) / float64(result.TotalLines) * 100
-	}
+	result.Percentage = calculatePercentage(result.AILines, result.HumanLines)
 
 	return result, nil
 }
@@ -299,6 +278,24 @@ func (a *Analyzer) shouldTrackFile(filepath string) bool {
 	}
 
 	return true
+}
+
+// calculatePercentage calculates AI percentage from AI and human lines
+func calculatePercentage(aiLines, humanLines int) float64 {
+	total := aiLines + humanLines
+	if total == 0 {
+		return 0.0
+	}
+	return float64(aiLines) / float64(total) * 100
+}
+
+// aggregateLinesByAuthor adds lines to appropriate counter based on author type
+func (a *Analyzer) aggregateLinesByAuthor(lines int, isAI bool, aiLines, humanLines *int) {
+	if isAI {
+		*aiLines += lines
+	} else {
+		*humanLines += lines
+	}
 }
 
 func (a *Analyzer) IsAIAuthor(author string) bool {
