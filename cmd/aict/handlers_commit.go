@@ -3,10 +3,9 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/exec"
-	"strings"
 
 	"github.com/y-hirakaw/ai-code-tracker/internal/authorship"
+	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
 	"github.com/y-hirakaw/ai-code-tracker/internal/gitnotes"
 	"github.com/y-hirakaw/ai-code-tracker/internal/storage"
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
@@ -89,10 +88,10 @@ func handleCommit() {
 
 // getLatestCommitHash retrieves the latest commit hash
 func getLatestCommitHash() (string, error) {
-	cmd := exec.Command("git", "rev-parse", "HEAD")
-	output, err := cmd.Output()
+	executor := gitexec.NewExecutor()
+	output, err := executor.Run("rev-parse", "HEAD")
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSpace(string(output)), nil
+	return output, nil
 }

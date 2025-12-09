@@ -2,18 +2,29 @@ package tracker
 
 import (
 	"fmt"
-	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
 )
 
 type Analyzer struct {
-	config *Config
+	config   *Config
+	executor gitexec.Executor
 }
 
 func NewAnalyzer(config *Config) *Analyzer {
 	return &Analyzer{
-		config: config,
+		config:   config,
+		executor: gitexec.NewExecutor(),
+	}
+}
+
+// NewAnalyzerWithExecutor creates an Analyzer with a custom executor (for testing)
+func NewAnalyzerWithExecutor(config *Config, executor gitexec.Executor) *Analyzer {
+	return &Analyzer{
+		config:   config,
+		executor: executor,
 	}
 }
 
@@ -225,13 +236,12 @@ func (a *Analyzer) getGitNumstat(fromCommit, toCommit string) (map[string][2]int
 	// Result: map[filepath] -> [added_lines, deleted_lines]
 	result := make(map[string][2]int)
 
-	cmd := exec.Command("git", "diff", "--numstat", fromCommit, toCommit)
-	output, err := cmd.Output()
+	output, err := a.executor.Run("diff", "--numstat", fromCommit, toCommit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run git diff --numstat: %w", err)
 	}
 
-	lines := strings.Split(string(output), "\n")
+	lines := strings.Split(output, "\n")
 	for _, line := range lines {
 		if line == "" {
 			continue
