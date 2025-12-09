@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
 
@@ -157,14 +157,14 @@ func handleDebugClean(aictDir string) error {
 // handleDebugClearNotes removes all Git notes for authorship tracking
 func handleDebugClearNotes() error {
 	// Get all aict-related refs
-	cmd := exec.Command("git", "show-ref")
-	output, err := cmd.Output()
+	executor := gitexec.NewExecutor()
+	output, err := executor.Run("show-ref")
 	if err != nil {
 		return fmt.Errorf("Git refsの取得に失敗しました: %w", err)
 	}
 
 	var aictRefs []string
-	lines := strings.Split(string(output), "\n")
+	lines := strings.Split(output, "\n")
 	for _, line := range lines {
 		if strings.Contains(line, "aict") {
 			parts := strings.Fields(line)
@@ -187,8 +187,9 @@ func handleDebugClearNotes() error {
 	// Remove each ref
 	removed := 0
 	for _, ref := range aictRefs {
-		cmd := exec.Command("git", "update-ref", "-d", ref)
-		if err := cmd.Run(); err != nil {
+		executor := gitexec.NewExecutor()
+		_, err := executor.Run("update-ref", "-d", ref)
+		if err != nil {
 			fmt.Printf("警告: %s の削除に失敗しました: %v\n", ref, err)
 		} else {
 			removed++
