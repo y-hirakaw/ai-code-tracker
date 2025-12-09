@@ -3,9 +3,9 @@ package main
 import (
 	"os"
 	"os/exec"
-	"path/filepath"
 	"testing"
 
+	"github.com/y-hirakaw/ai-code-tracker/internal/testutil"
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
 
@@ -13,63 +13,20 @@ import (
 func setupTestRepo(t *testing.T) (string, func()) {
 	t.Helper()
 
-	tmpDir, err := os.MkdirTemp("", "aict-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-
-	cleanup := func() {
-		os.RemoveAll(tmpDir)
-	}
-
-	// Initialize git repo
-	cmd := exec.Command("git", "init")
-	cmd.Dir = tmpDir
-	if err := cmd.Run(); err != nil {
-		cleanup()
-		t.Fatalf("Failed to init git repo: %v", err)
-	}
-
-	// Configure git
-	cmds := [][]string{
-		{"git", "config", "user.name", "Test User"},
-		{"git", "config", "user.email", "test@example.com"},
-	}
-
-	for _, args := range cmds {
-		cmd := exec.Command(args[0], args[1:]...)
-		cmd.Dir = tmpDir
-		if err := cmd.Run(); err != nil {
-			cleanup()
-			t.Fatalf("Failed to configure git: %v", err)
-		}
-	}
+	tmpDir := testutil.TempGitRepo(t)
 
 	// Create initial commit
-	testFile := filepath.Join(tmpDir, "test.go")
 	content := `package main
 
 func hello() string {
 	return "hello"
 }
 `
-	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
-		cleanup()
-		t.Fatalf("Failed to create test file: %v", err)
-	}
+	testutil.CreateTestFile(t, tmpDir, "test.go", content)
+	testutil.GitCommit(t, tmpDir, "Initial commit")
 
-	cmd = exec.Command("git", "add", "test.go")
-	cmd.Dir = tmpDir
-	if err := cmd.Run(); err != nil {
-		cleanup()
-		t.Fatalf("Failed to git add: %v", err)
-	}
-
-	cmd = exec.Command("git", "commit", "-m", "Initial commit")
-	cmd.Dir = tmpDir
-	if err := cmd.Run(); err != nil {
-		cleanup()
-		t.Fatalf("Failed to git commit: %v", err)
+	cleanup := func() {
+		// No cleanup needed - t.TempDir() handles it
 	}
 
 	return tmpDir, cleanup
