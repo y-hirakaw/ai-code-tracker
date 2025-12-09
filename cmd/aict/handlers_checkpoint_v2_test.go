@@ -61,7 +61,7 @@ func new() {
 				os.WriteFile(filepath, []byte(content), 0644)
 				return filepath
 			},
-			wantAdded:   6,
+			wantAdded:   5, // TrimSpace removes trailing newline, so 5 lines instead of 6
 			wantDeleted: 0,
 			wantErr:     false,
 		},

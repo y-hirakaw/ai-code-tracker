@@ -262,13 +262,13 @@ func getDetailedDiff(filepath string) (added, deleted int, lineRanges [][]int, e
 	headContentStr, err := executor.Run("show", fmt.Sprintf("HEAD:%s", filepath))
 	if err != nil {
 		// HEADに存在しない（新規ファイル）の場合
-		currentLines := strings.Split(string(currentContent), "\n")
+		currentLines := strings.Split(strings.TrimSpace(string(currentContent)), "\n")
 		lineCount := len(currentLines)
 		return lineCount, 0, [][]int{{1, lineCount}}, nil
 	}
 
 	// 両方の内容を行単位で比較
-	currentLines := strings.Split(string(currentContent), "\n")
+	currentLines := strings.Split(strings.TrimSpace(string(currentContent)), "\n")
 	headLines := strings.Split(headContentStr, "\n")
 
 	// 簡易的なdiff計算（追加・削除行数）
