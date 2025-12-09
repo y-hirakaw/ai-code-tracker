@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/y-hirakaw/ai-code-tracker/internal/testutil"
 )
 
 func TestNewDiffAnalyzer(t *testing.T) {
@@ -19,12 +21,7 @@ func TestIsGitRepository(t *testing.T) {
 	analyzer := NewDiffAnalyzer()
 
 	// Test in a non-git directory
-	tmpDir := filepath.Join(os.TempDir(), "test-non-git")
-	err := os.MkdirAll(tmpDir, 0755)
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Change to non-git directory
 	originalDir, _ := os.Getwd()
@@ -37,7 +34,7 @@ func TestIsGitRepository(t *testing.T) {
 
 	// Initialize git repo
 	cmd := exec.Command("git", "init")
-	err = cmd.Run()
+	err := cmd.Run()
 	if err != nil {
 		t.Skip("Git not available, skipping git repository test")
 		return
@@ -49,39 +46,19 @@ func TestIsGitRepository(t *testing.T) {
 }
 
 func setupTestGitRepo(t *testing.T) (string, func()) {
-	// Create temporary directory
-	tmpDir := filepath.Join(os.TempDir(), "test-git-repo")
-	err := os.MkdirAll(tmpDir, 0755)
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
+	// Use testutil.TempGitRepo for git setup
+	tmpDir := testutil.TempGitRepo(t)
 
 	// Change to temp directory
 	originalDir, _ := os.Getwd()
 	os.Chdir(tmpDir)
 
-	// Initialize git repo
-	cmd := exec.Command("git", "init")
-	err = cmd.Run()
-	if err != nil {
-		os.Chdir(originalDir)
-		os.RemoveAll(tmpDir)
-		t.Skip("Git not available, skipping test")
-	}
-
-	// Configure git user
-	exec.Command("git", "config", "user.email", "test@example.com").Run()
-	exec.Command("git", "config", "user.name", "Test User").Run()
-
 	// Create initial commit
-	testFile := filepath.Join(tmpDir, "test.txt")
-	os.WriteFile(testFile, []byte("initial content\n"), 0644)
-	exec.Command("git", "add", "test.txt").Run()
-	exec.Command("git", "commit", "-m", "Initial commit").Run()
+	testutil.CreateTestFile(t, tmpDir, "test.txt", "initial content\n")
+	testutil.GitCommit(t, tmpDir, "Initial commit")
 
 	cleanup := func() {
 		os.Chdir(originalDir)
-		os.RemoveAll(tmpDir)
 	}
 
 	return tmpDir, cleanup
