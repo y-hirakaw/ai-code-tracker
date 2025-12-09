@@ -3,10 +3,10 @@ package gitnotes
 import (
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
 
+	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
 
@@ -28,13 +28,23 @@ type AIEditNote struct {
 
 // NotesManager handles git notes operations
 type NotesManager struct {
-	ref string
+	ref      string
+	executor gitexec.Executor
 }
 
 // NewNotesManager creates a new NotesManager
 func NewNotesManager() *NotesManager {
 	return &NotesManager{
-		ref: NotesRef,
+		ref:      NotesRef,
+		executor: gitexec.NewExecutor(),
+	}
+}
+
+// NewNotesManagerWithExecutor creates a NotesManager with a custom executor (for testing)
+func NewNotesManagerWithExecutor(executor gitexec.Executor) *NotesManager {
+	return &NotesManager{
+		ref:      NotesRef,
+		executor: executor,
 	}
 }
 
@@ -47,10 +57,9 @@ func (nm *NotesManager) AddNote(note *AIEditNote) error {
 	}
 
 	// Add git note
-	cmd := exec.Command("git", "notes", "--ref="+nm.ref, "add", "-f", "-m", string(data), "HEAD")
-	output, err := cmd.CombinedOutput()
+	_, err = nm.executor.Run("notes", "--ref="+nm.ref, "add", "-f", "-m", string(data), "HEAD")
 	if err != nil {
-		return fmt.Errorf("failed to add git note: %w (output: %s)", err, string(output))
+		return fmt.Errorf("failed to add git note: %w", err)
 	}
 
 	return nil
@@ -58,15 +67,14 @@ func (nm *NotesManager) AddNote(note *AIEditNote) error {
 
 // GetNote retrieves the git note for a specific commit
 func (nm *NotesManager) GetNote(commitHash string) (*AIEditNote, error) {
-	cmd := exec.Command("git", "notes", "--ref="+nm.ref, "show", commitHash)
-	output, err := cmd.Output()
+	output, err := nm.executor.Run("notes", "--ref="+nm.ref, "show", commitHash)
 	if err != nil {
 		// No note exists for this commit
 		return nil, nil
 	}
 
 	var note AIEditNote
-	if err := json.Unmarshal(output, &note); err != nil {
+	if err := json.Unmarshal([]byte(output), &note); err != nil {
 		return nil, fmt.Errorf("failed to parse note: %w", err)
 	}
 
@@ -75,14 +83,13 @@ func (nm *NotesManager) GetNote(commitHash string) (*AIEditNote, error) {
 
 // ListNotes lists all commits that have AICT notes
 func (nm *NotesManager) ListNotes() (map[string]*AIEditNote, error) {
-	cmd := exec.Command("git", "notes", "--ref="+nm.ref, "list")
-	output, err := cmd.Output()
+	output, err := nm.executor.Run("notes", "--ref="+nm.ref, "list")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list notes: %w", err)
 	}
 
 	notes := make(map[string]*AIEditNote)
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	lines := strings.Split(output, "\n")
 
 	for _, line := range lines {
 		if line == "" {
@@ -111,21 +118,20 @@ func (nm *NotesManager) ListNotes() (map[string]*AIEditNote, error) {
 
 // RemoveNote removes the git note for a specific commit
 func (nm *NotesManager) RemoveNote(commitHash string) error {
-	cmd := exec.Command("git", "notes", "--ref="+nm.ref, "remove", commitHash)
-	_, err := cmd.CombinedOutput()
+	_, err := nm.executor.Run("notes", "--ref="+nm.ref, "remove", commitHash)
 	// Ignore error if note doesn't exist
 	return err
 }
 
 // GetCurrentCommit returns the current HEAD commit hash
 func GetCurrentCommit() (string, error) {
-	cmd := exec.Command("git", "rev-parse", "HEAD")
-	output, err := cmd.Output()
+	executor := gitexec.NewExecutor()
+	output, err := executor.Run("rev-parse", "HEAD")
 	if err != nil {
 		return "", fmt.Errorf("failed to get current commit: %w", err)
 	}
 
-	return strings.TrimSpace(string(output)), nil
+	return output, nil
 }
 
 // SPEC.md準拠: Authorship Log操作
@@ -138,10 +144,9 @@ func (nm *NotesManager) AddAuthorshipLog(log *tracker.AuthorshipLog) error {
 	}
 
 	// refs/aict/authorship/ に保存
-	cmd := exec.Command("git", "notes", "--ref="+AuthorshipNotesRef, "add", "-f", "-m", string(data), log.Commit)
-	output, err := cmd.CombinedOutput()
+	_, err = nm.executor.Run("notes", "--ref="+AuthorshipNotesRef, "add", "-f", "-m", string(data), log.Commit)
 	if err != nil {
-		return fmt.Errorf("failed to add authorship log: %w (output: %s)", err, string(output))
+		return fmt.Errorf("failed to add authorship log: %w", err)
 	}
 
 	return nil
@@ -149,15 +154,14 @@ func (nm *NotesManager) AddAuthorshipLog(log *tracker.AuthorshipLog) error {
 
 // GetAuthorshipLog retrieves an AuthorshipLog from Git notes
 func (nm *NotesManager) GetAuthorshipLog(commitHash string) (*tracker.AuthorshipLog, error) {
-	cmd := exec.Command("git", "notes", "--ref="+AuthorshipNotesRef, "show", commitHash)
-	output, err := cmd.Output()
+	output, err := nm.executor.Run("notes", "--ref="+AuthorshipNotesRef, "show", commitHash)
 	if err != nil {
 		// No authorship log exists for this commit
 		return nil, nil
 	}
 
 	var log tracker.AuthorshipLog
-	if err := json.Unmarshal(output, &log); err != nil {
+	if err := json.Unmarshal([]byte(output), &log); err != nil {
 		return nil, fmt.Errorf("failed to parse authorship log: %w", err)
 	}
 
@@ -166,15 +170,14 @@ func (nm *NotesManager) GetAuthorshipLog(commitHash string) (*tracker.Authorship
 
 // ListAuthorshipLogs lists all commits that have Authorship Logs
 func (nm *NotesManager) ListAuthorshipLogs() (map[string]*tracker.AuthorshipLog, error) {
-	cmd := exec.Command("git", "notes", "--ref="+AuthorshipNotesRef, "list")
-	output, err := cmd.Output()
+	output, err := nm.executor.Run("notes", "--ref="+AuthorshipNotesRef, "list")
 	if err != nil {
 		// No notes exist yet
 		return make(map[string]*tracker.AuthorshipLog), nil
 	}
 
 	logs := make(map[string]*tracker.AuthorshipLog)
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	lines := strings.Split(output, "\n")
 
 	for _, line := range lines {
 		if line == "" {

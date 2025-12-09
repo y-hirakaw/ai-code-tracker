@@ -3,10 +3,59 @@ package gitexec
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
-
-	"github.com/y-hirakaw/ai-code-tracker/internal/testutil"
 )
+
+// setupGitRepo creates a temporary git repository for testing
+func setupGitRepo(t *testing.T) (string, func()) {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+
+	// Initialize git repository
+	cmd := exec.Command("git", "init")
+	cmd.Dir = tmpDir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Failed to initialize git repo: %v", err)
+	}
+
+	// Configure git user
+	exec.Command("git", "-C", tmpDir, "config", "user.name", "Test User").Run()
+	exec.Command("git", "-C", tmpDir, "config", "user.email", "test@example.com").Run()
+
+	cleanup := func() {
+		// t.TempDir() handles cleanup automatically
+	}
+
+	return tmpDir, cleanup
+}
+
+// createFileAndCommit creates a file and commits it
+func createFileAndCommit(t *testing.T, dir, filename, content, message string) {
+	t.Helper()
+
+	// Create file
+	filePath := filepath.Join(dir, filename)
+	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create file: %v", err)
+	}
+
+	// Git add
+	cmd := exec.Command("git", "add", filename)
+	cmd.Dir = dir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Failed to git add: %v", err)
+	}
+
+	// Git commit
+	cmd = exec.Command("git", "commit", "-m", message)
+	cmd.Dir = dir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Failed to git commit: %v", err)
+	}
+}
 
 func TestNewExecutor(t *testing.T) {
 	executor := NewExecutor()
@@ -22,7 +71,8 @@ func TestNewExecutor(t *testing.T) {
 
 func TestRealExecutor_Run(t *testing.T) {
 	// Setup test git repository
-	tmpDir := testutil.TempGitRepo(t)
+	tmpDir, cleanup := setupGitRepo(t)
+	defer cleanup()
 
 	// Change to temp directory
 	originalDir, _ := os.Getwd()
@@ -30,8 +80,7 @@ func TestRealExecutor_Run(t *testing.T) {
 	os.Chdir(tmpDir)
 
 	// Create a test file and commit
-	testutil.CreateTestFile(t, tmpDir, "test.txt", "test content\n")
-	testutil.GitCommit(t, tmpDir, "Test commit")
+	createFileAndCommit(t, tmpDir, "test.txt", "test content\n", "Test commit")
 
 	executor := NewExecutor()
 
@@ -96,11 +145,11 @@ func TestRealExecutor_Run(t *testing.T) {
 
 func TestRealExecutor_RunInDir(t *testing.T) {
 	// Setup test git repository
-	tmpDir := testutil.TempGitRepo(t)
+	tmpDir, cleanup := setupGitRepo(t)
+	defer cleanup()
 
 	// Create a test file and commit
-	testutil.CreateTestFile(t, tmpDir, "test.txt", "test content\n")
-	testutil.GitCommit(t, tmpDir, "Test commit")
+	createFileAndCommit(t, tmpDir, "test.txt", "test content\n", "Test commit")
 
 	executor := NewExecutor()
 
