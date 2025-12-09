@@ -6,11 +6,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
 	"github.com/y-hirakaw/ai-code-tracker/internal/storage"
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
@@ -44,10 +44,10 @@ func handleCheckpoint() {
 			authorName = config.DefaultAuthor
 		} else {
 			// git config から取得を試みる
-			cmd := exec.Command("git", "config", "user.name")
-			output, err := cmd.Output()
+			executor := gitexec.NewExecutor()
+			output, err := executor.Run("config", "user.name")
 			if err == nil {
-				authorName = strings.TrimSpace(string(output))
+				authorName = output
 			} else {
 				fmt.Fprintf(os.Stderr, "Error: Author name not specified and default_author not configured\n")
 				fmt.Fprintf(os.Stderr, "Use --author flag or configure default_author\n")
@@ -136,8 +136,8 @@ func captureSnapshot(trackedExtensions []string) (map[string]tracker.FileSnapsho
 	snapshot := make(map[string]tracker.FileSnapshot)
 
 	// Git管理下のファイル一覧を取得（追跡されているファイル + 変更されたファイル）
-	cmd := exec.Command("git", "ls-files")
-	output, err := cmd.Output()
+	executor := gitexec.NewExecutor()
+	output, err := executor.Run("ls-files")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list git files: %w", err)
 	}
@@ -148,7 +148,7 @@ func captureSnapshot(trackedExtensions []string) (map[string]tracker.FileSnapsho
 		extMap[ext] = true
 	}
 
-	files := strings.Split(strings.TrimSpace(string(output)), "\n")
+	files := strings.Split(output, "\n")
 	for _, filepath := range files {
 		if filepath == "" {
 			continue
@@ -258,8 +258,8 @@ func getDetailedDiff(filepath string) (added, deleted int, lineRanges [][]int, e
 	}
 
 	// HEADのファイル内容を取得（git show HEAD:filepath）
-	cmd := exec.Command("git", "show", fmt.Sprintf("HEAD:%s", filepath))
-	headContent, err := cmd.Output()
+	executor := gitexec.NewExecutor()
+	headContentStr, err := executor.Run("show", fmt.Sprintf("HEAD:%s", filepath))
 	if err != nil {
 		// HEADに存在しない（新規ファイル）の場合
 		currentLines := strings.Split(string(currentContent), "\n")
@@ -269,7 +269,7 @@ func getDetailedDiff(filepath string) (added, deleted int, lineRanges [][]int, e
 
 	// 両方の内容を行単位で比較
 	currentLines := strings.Split(string(currentContent), "\n")
-	headLines := strings.Split(string(headContent), "\n")
+	headLines := strings.Split(headContentStr, "\n")
 
 	// 簡易的なdiff計算（追加・削除行数）
 	currentLineCount := len(currentLines)
@@ -313,8 +313,8 @@ func getDetailedDiff(filepath string) (added, deleted int, lineRanges [][]int, e
 
 // getLineRangesFromDiff extracts line ranges using git diff
 func getLineRangesFromDiff(filepath string) ([][]int, error) {
-	cmd := exec.Command("git", "diff", "--unified=0", "HEAD", "--", filepath)
-	output, err := cmd.Output()
+	executor := gitexec.NewExecutor()
+	output, err := executor.Run("diff", "--unified=0", "HEAD", "--", filepath)
 	if err != nil {
 		return nil, err
 	}
@@ -322,7 +322,7 @@ func getLineRangesFromDiff(filepath string) ([][]int, error) {
 	var ranges [][]int
 
 	// @@ -1,2 +3,4 @@ 形式の行範囲を解析
-	for _, line := range strings.Split(string(output), "\n") {
+	for _, line := range strings.Split(output, "\n") {
 		if !strings.HasPrefix(line, "@@") {
 			continue
 		}
