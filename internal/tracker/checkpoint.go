@@ -6,20 +6,31 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
 )
 
 type CheckpointManager struct {
-	baseDir string
+	baseDir  string
+	executor gitexec.Executor
 }
 
 func NewCheckpointManager(baseDir string) *CheckpointManager {
 	return &CheckpointManager{
-		baseDir: baseDir,
+		baseDir:  baseDir,
+		executor: gitexec.NewExecutor(),
+	}
+}
+
+// NewCheckpointManagerWithExecutor creates a CheckpointManager with a custom executor (for testing)
+func NewCheckpointManagerWithExecutor(baseDir string, executor gitexec.Executor) *CheckpointManager {
+	return &CheckpointManager{
+		baseDir:  baseDir,
+		executor: executor,
 	}
 }
 
@@ -33,10 +44,9 @@ func (cm *CheckpointManager) CreateCheckpoint(author string, extensions []string
 	}
 
 	// Try to get current commit hash
-	cmd := exec.Command("git", "rev-parse", "HEAD")
-	output, err := cmd.Output()
+	output, err := cm.executor.Run("rev-parse", "HEAD")
 	if err == nil {
-		checkpoint.CommitHash = strings.TrimSpace(string(output))
+		checkpoint.CommitHash = output
 	}
 
 	// Collect numstat data (diff from HEAD)
@@ -118,13 +128,12 @@ func (cm *CheckpointManager) GetLatestCheckpoints(author string, count int) ([]*
 
 // collectNumstatData collects current git diff --numstat data from HEAD
 func (cm *CheckpointManager) collectNumstatData(checkpoint *Checkpoint) error {
-	cmd := exec.Command("git", "diff", "HEAD", "--numstat")
-	output, err := cmd.Output()
+	output, err := cm.executor.Run("diff", "HEAD", "--numstat")
 	if err != nil {
 		return fmt.Errorf("failed to run git diff --numstat: %w", err)
 	}
 
-	lines := strings.Split(string(output), "\n")
+	lines := strings.Split(output, "\n")
 	for _, line := range lines {
 		if line == "" {
 			continue
