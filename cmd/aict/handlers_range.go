@@ -5,10 +5,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/y-hirakaw/ai-code-tracker/internal/authorship"
+	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
 	"github.com/y-hirakaw/ai-code-tracker/internal/gitnotes"
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
@@ -202,16 +202,13 @@ func convertSinceToRange(since string) (string, error) {
 	expandedSince := expandShorthandDate(since)
 
 	// git log --since でコミットハッシュリストを取得（古い順）
-	cmd := exec.Command("git", "log", "--since="+expandedSince, "--format=%H", "--reverse")
-	output, err := cmd.Output()
+	executor := gitexec.NewExecutor()
+	output, err := executor.Run("log", "--since="+expandedSince, "--format=%H", "--reverse")
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return "", fmt.Errorf("git log failed: %s", string(exitErr.Stderr))
-		}
 		return "", fmt.Errorf("failed to get commits since %s: %w", since, err)
 	}
 
-	commits := strings.Split(strings.TrimSpace(string(output)), "\n")
+	commits := strings.Split(output, "\n")
 	if len(commits) == 0 || commits[0] == "" {
 		return "", fmt.Errorf("no commits found since %s", since)
 	}
@@ -220,8 +217,8 @@ func convertSinceToRange(since string) (string, error) {
 	firstCommit := commits[0]
 
 	// 最初のコミットの親が存在するか確認
-	parentCmd := exec.Command("git", "rev-parse", firstCommit+"^")
-	_, err = parentCmd.Output()
+	executor2 := gitexec.NewExecutor()
+	_, err = executor2.Run("rev-parse", firstCommit+"^")
 	if err != nil {
 		// 親がない（初回コミット、またはリポジトリ初期化直後）場合
 		// 最初のコミット自体から開始: firstCommit..HEAD
@@ -278,14 +275,14 @@ func isNumeric(s string) bool {
 
 // getCommitsInRange retrieves commit hashes in the given range
 func getCommitsInRange(rangeSpec string) ([]string, error) {
-	cmd := exec.Command("git", "log", "--format=%H", rangeSpec)
-	output, err := cmd.Output()
+	executor := gitexec.NewExecutor()
+	output, err := executor.Run("log", "--format=%H", rangeSpec)
 	if err != nil {
 		return nil, err
 	}
 
 	var commits []string
-	for _, line := range strings.Split(string(output), "\n") {
+	for _, line := range strings.Split(output, "\n") {
 		line = strings.TrimSpace(line)
 		if line != "" {
 			commits = append(commits, line)
