@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/exec"
 
+	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
 	"github.com/y-hirakaw/ai-code-tracker/internal/gitnotes"
 )
 
@@ -31,10 +31,10 @@ func handleSync() {
 func handleSyncPush() {
 	// refs/aict/authorship/* をリモートにpush
 	refspec := gitnotes.AuthorshipNotesRef + "/*:" + gitnotes.AuthorshipNotesRef + "/*"
-	cmd := exec.Command("git", "push", "origin", refspec)
-	output, err := cmd.CombinedOutput()
+	executor := gitexec.NewExecutor()
+	_, err := executor.Run("push", "origin", refspec)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error pushing authorship logs: %v\n%s\n", err, output)
+		fmt.Fprintf(os.Stderr, "Error pushing authorship logs: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -44,10 +44,10 @@ func handleSyncPush() {
 func handleSyncFetch() {
 	// リモートから refs/aict/authorship/* をfetch
 	refspec := gitnotes.AuthorshipNotesRef + "/*:" + gitnotes.AuthorshipNotesRef + "/*"
-	cmd := exec.Command("git", "fetch", "origin", refspec)
-	output, err := cmd.CombinedOutput()
+	executor := gitexec.NewExecutor()
+	_, err := executor.Run("fetch", "origin", refspec)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error fetching authorship logs: %v\n%s\n", err, output)
+		fmt.Fprintf(os.Stderr, "Error fetching authorship logs: %v\n", err)
 		os.Exit(1)
 	}
 
