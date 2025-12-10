@@ -2,9 +2,9 @@ package tracker
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
+	"github.com/y-hirakaw/ai-code-tracker/internal/git"
 	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
 )
 
@@ -127,46 +127,7 @@ func (a *Analyzer) compareFiles(before, after FileContent, isAIAuthor bool) File
 
 // getGitNumstat runs git diff --numstat between two commits
 func (a *Analyzer) getGitNumstat(fromCommit, toCommit string) (map[string][2]int, error) {
-	// Result: map[filepath] -> [added_lines, deleted_lines]
-	result := make(map[string][2]int)
-
-	output, err := a.executor.Run("diff", "--numstat", fromCommit, toCommit)
-	if err != nil {
-		return nil, fmt.Errorf("failed to run git diff --numstat: %w", err)
-	}
-
-	lines := strings.Split(output, "\n")
-	for _, line := range lines {
-		if line == "" {
-			continue
-		}
-
-		// Format: "added\tdeleted\tfilepath"
-		parts := strings.Fields(line)
-		if len(parts) < 3 {
-			continue
-		}
-
-		added, err := strconv.Atoi(parts[0])
-		if err != nil {
-			continue // Skip binary files which show "-"
-		}
-
-		deleted, err := strconv.Atoi(parts[1])
-		if err != nil {
-			continue
-		}
-
-		// Handle renames: "path1 => path2" becomes just "path2"
-		filepath := strings.Join(parts[2:], " ")
-		if idx := strings.Index(filepath, " => "); idx != -1 {
-			filepath = filepath[idx+4:]
-		}
-
-		result[filepath] = [2]int{added, deleted}
-	}
-
-	return result, nil
+	return git.GetNumstatBetweenCommits(a.executor, fromCommit, toCommit)
 }
 
 // shouldTrackFile checks if a file should be tracked based on config

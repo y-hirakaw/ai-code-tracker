@@ -7,10 +7,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
+	"github.com/y-hirakaw/ai-code-tracker/internal/git"
 	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
 )
 
@@ -128,42 +128,12 @@ func (cm *CheckpointManager) GetLatestCheckpoints(author string, count int) ([]*
 
 // collectNumstatData collects current git diff --numstat data from HEAD
 func (cm *CheckpointManager) collectNumstatData(checkpoint *Checkpoint) error {
-	output, err := cm.executor.Run("diff", "HEAD", "--numstat")
+	numstatData, err := git.GetNumstatFromHead(cm.executor)
 	if err != nil {
-		return fmt.Errorf("failed to run git diff --numstat: %w", err)
+		return err
 	}
 
-	lines := strings.Split(output, "\n")
-	for _, line := range lines {
-		if line == "" {
-			continue
-		}
-
-		// Format: "added\tdeleted\tfilepath"
-		parts := strings.Fields(line)
-		if len(parts) < 3 {
-			continue
-		}
-
-		added, err := strconv.Atoi(parts[0])
-		if err != nil {
-			continue // Skip binary files which show "-"
-		}
-
-		deleted, err := strconv.Atoi(parts[1])
-		if err != nil {
-			continue
-		}
-
-		// Handle renames: "path1 => path2" becomes just "path2"
-		filepath := strings.Join(parts[2:], " ")
-		if idx := strings.Index(filepath, " => "); idx != -1 {
-			filepath = filepath[idx+4:]
-		}
-
-		checkpoint.NumstatData[filepath] = [2]int{added, deleted}
-	}
-
+	checkpoint.NumstatData = numstatData
 	return nil
 }
 

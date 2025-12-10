@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/y-hirakaw/ai-code-tracker/internal/testutil"
 )
 
 func TestNewDiffAnalyzer(t *testing.T) {
@@ -46,16 +44,36 @@ func TestIsGitRepository(t *testing.T) {
 }
 
 func setupTestGitRepo(t *testing.T) (string, func()) {
-	// Use testutil.TempGitRepo for git setup
-	tmpDir := testutil.TempGitRepo(t)
+	t.Helper()
+
+	// Create temp directory
+	tmpDir := t.TempDir()
 
 	// Change to temp directory
 	originalDir, _ := os.Getwd()
 	os.Chdir(tmpDir)
 
+	// Initialize git repository
+	cmd := exec.Command("git", "init")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Failed to init git repo: %v", err)
+	}
+
+	// Configure git user (required for commits)
+	exec.Command("git", "config", "user.name", "Test User").Run()
+	exec.Command("git", "config", "user.email", "test@example.com").Run()
+
 	// Create initial commit
-	testutil.CreateTestFile(t, tmpDir, "test.txt", "initial content\n")
-	testutil.GitCommit(t, tmpDir, "Initial commit")
+	testFile := filepath.Join(tmpDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte("initial content\n"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	exec.Command("git", "add", "test.txt").Run()
+	cmd = exec.Command("git", "commit", "-m", "Initial commit")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Failed to create initial commit: %v", err)
+	}
 
 	cleanup := func() {
 		os.Chdir(originalDir)
