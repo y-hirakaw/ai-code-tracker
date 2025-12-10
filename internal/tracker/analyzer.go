@@ -40,28 +40,10 @@ func (a *Analyzer) AnalyzeCheckpoints(before, after *Checkpoint) (*AnalysisResul
 		return a.analyzeFromNumstat(before, after, isAIAuthor)
 	}
 
-	// Fall back to commit-based or file-based comparison
+	// Fall back to commit-based comparison
 	if before.CommitHash != "" && after.CommitHash != "" {
-		numstatData, err := a.getGitNumstat(before.CommitHash, after.CommitHash)
+		result, err := a.analyzeFromCommits(before, after, isAIAuthor)
 		if err == nil {
-			// Use git numstat data for accurate counting
-			for filepath, stats := range numstatData {
-				// Check if file should be tracked
-				if !a.shouldTrackFile(filepath) {
-					continue
-				}
-
-				addedLines := stats[0]
-				a.aggregateLinesByAuthor(addedLines, isAIAuthor, &result.AILines, &result.HumanLines)
-			}
-
-			// Calculate total lines from current checkpoint
-			for _, file := range after.Files {
-				result.TotalLines += len(file.Lines)
-			}
-
-			result.Percentage = calculatePercentage(result.AILines, result.HumanLines)
-
 			return result, nil
 		}
 		// Fall back to line-by-line comparison if git numstat fails
@@ -292,6 +274,37 @@ func (a *Analyzer) analyzeFromNumstat(before, after *Checkpoint, isAI bool) (*An
 		if _, existed := before.NumstatData[filepath]; !existed {
 			a.aggregateLinesByAuthor(afterStats[0], isAI, &result.AILines, &result.HumanLines)
 		}
+	}
+
+	// Calculate total lines
+	for _, file := range after.Files {
+		result.TotalLines += len(file.Lines)
+	}
+
+	result.Percentage = calculatePercentage(result.AILines, result.HumanLines)
+	return result, nil
+}
+
+// analyzeFromCommits analyzes checkpoints using git diff between commit hashes
+func (a *Analyzer) analyzeFromCommits(before, after *Checkpoint, isAI bool) (*AnalysisResult, error) {
+	result := &AnalysisResult{
+		LastUpdated: after.Timestamp,
+	}
+
+	// Get git numstat between commits
+	numstatData, err := a.getGitNumstat(before.CommitHash, after.CommitHash)
+	if err != nil {
+		return nil, err
+	}
+
+	// Process files from git diff
+	for filepath, stats := range numstatData {
+		if !a.shouldTrackFile(filepath) {
+			continue
+		}
+
+		addedLines := stats[0]
+		a.aggregateLinesByAuthor(addedLines, isAI, &result.AILines, &result.HumanLines)
 	}
 
 	// Calculate total lines
