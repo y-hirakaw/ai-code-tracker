@@ -35,9 +35,11 @@ ai-code-tracker/
 │   ├── authorship/        # Authorship line tracking
 │   ├── checkpoint/        # Checkpoint management
 │   ├── config/            # Configuration handling
+│   ├── gitexec/           # Git command execution abstraction (Phase 2)
 │   ├── gitnotes/          # Git notes integration (refs/aict/authorship)
 │   ├── hooks/             # Hook template generation
-│   └── tracker/           # Core tracking types
+│   ├── storage/           # .git/aict/ storage management (Phase 3)
+│   └── tracker/           # Core tracking types and analysis (Phase 4 refactored)
 ├── .git/aict/             # Created by 'aict init'
 │   ├── config.json        # Project configuration
 │   └── checkpoints/       # Checkpoint snapshots
@@ -294,3 +296,63 @@ go install github.com/y-hirakaw/ai-code-tracker/cmd/aict@v[バージョン]
 - 新機能追加の場合はマイナーバージョンを上げる
 - バグ修正の場合はパッチバージョンを上げる
 - Go Module Proxy のキャッシュ更新には時間がかかる場合がある
+
+## リファクタリング進捗状況
+
+プロジェクトは継続的な品質改善を行っています。詳細は `.claude/plans/recursive-churning-corbato.md` を参照してください。
+
+### 完了済みフェーズ
+
+#### フェーズ1: テストインフラの基盤整備 ✅ (2025-12-09完了)
+- 共有テストユーティリティ作成 (`internal/testutil/`)
+- テストカバレッジ: 73.8%
+- スキップされたテスト有効化（`handlers_commit_test.go`, `handlers_range_test.go`）
+- 成果: テストセットアップコード60%削減、全テスト通過
+
+#### フェーズ2: Gitコマンド抽象化 ✅ (2025-12-10完了)
+- Git実行インターフェース作成 (`internal/gitexec/`)
+- 9ファイルで20+箇所のgitコマンド移行
+- os/exec依存削除、テスト容易性向上
+- 成果: 40行以上の重複削除、全テスト通過
+
+#### フェーズ3: ストレージ抽象化評価 ✅ (2025-12-10評価完了)
+- `internal/storage/aict_storage.go` が既に完全実装済み
+- 3ファイルのみで使用、適切に抽象化済み
+- 結論: 追加作業不要、実質完了
+
+#### フェーズ4.1: 高複雑度関数のリファクタリング ✅ (2025-12-10完了)
+**対象**: `internal/tracker/analyzer.go:AnalyzeCheckpoints()`
+- **改善前**: CC=11, 145行
+- **改善後**: CC=3, 20行（**86%削減、73%超過達成**）
+
+**抽出されたメソッド**:
+- `calculatePercentage()` - パーセンテージ計算ヘルパー (6行)
+- `aggregateLinesByAuthor()` - 作成者別集計ヘルパー (7行)
+- `analyzeFromNumstat()` - チェックポイントNumstatデータ処理 (42行)
+- `analyzeFromCommits()` - コミット間git diff処理 (29行)
+- `analyzeFromFiles()` - ファイル行比較フォールバック (33行)
+
+**成果**:
+- 循環的複雑度: CC=11 → CC=3（目標CC≤7を大幅達成）
+- コード行数: 145行 → 20行（86%削減）
+- 可読性: 3つの明確な処理パスに分離
+- テスト容易性: 各メソッドが独立してテスト可能
+- 全テスト通過: 20テスト、0.4秒
+
+### 今後の予定フェーズ
+
+#### フェーズ4.2: Numstat解析の集約化 (予定)
+- `internal/git/numstat.go` 作成
+- Numstat解析ロジックの統合
+
+#### フェーズ4.3: 作成者分類インターフェース作成 (予定)
+- `internal/authorship/classifier.go` 作成
+- AI/人間判定のインターフェース化
+
+#### フェーズ4.4: GetCurrentBranch()簡素化 (予定)
+- `internal/git/diff.go:GetCurrentBranch()` の複雑度削減
+- 目標: CC=7 → CC≤5
+
+#### フェーズ4.5: 複数メトリクス対応 (予定)
+- コードベース貢献、作業量貢献、新規ファイルの3視点測定
+- レポート表示の拡張
