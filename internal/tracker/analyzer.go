@@ -29,10 +29,6 @@ func NewAnalyzerWithExecutor(config *Config, executor gitexec.Executor) *Analyze
 }
 
 func (a *Analyzer) AnalyzeCheckpoints(before, after *Checkpoint) (*AnalysisResult, error) {
-	result := &AnalysisResult{
-		LastUpdated: after.Timestamp,
-	}
-
 	isAIAuthor := a.IsAIAuthor(after.Author)
 
 	// Try to use numstat data from checkpoints for accurate counting
@@ -49,33 +45,8 @@ func (a *Analyzer) AnalyzeCheckpoints(before, after *Checkpoint) (*AnalysisResul
 		// Fall back to line-by-line comparison if git numstat fails
 	}
 
-	// Original implementation (fallback)
-	for path, afterFile := range after.Files {
-		beforeFile, exists := before.Files[path]
-		if !exists {
-			// New file
-			lineCount := len(afterFile.Lines)
-			a.aggregateLinesByAuthor(lineCount, isAIAuthor, &result.AILines, &result.HumanLines)
-			result.TotalLines += lineCount
-			continue
-		}
-
-		// Modified file - count added lines
-		stats := a.compareFiles(beforeFile, afterFile, isAIAuthor)
-		result.AILines += stats.AILines
-		result.HumanLines += stats.HumanLines
-		// Don't add total lines here - we only want the diff
-	}
-
-	for path, beforeFile := range before.Files {
-		if _, exists := after.Files[path]; !exists {
-			result.TotalLines -= len(beforeFile.Lines)
-		}
-	}
-
-	result.Percentage = calculatePercentage(result.AILines, result.HumanLines)
-
-	return result, nil
+	// Final fallback: line-by-line file comparison
+	return a.analyzeFromFiles(before, after, isAIAuthor), nil
 }
 
 func (a *Analyzer) AnalyzeFromGitDiff(diff string, currentMetrics *AnalysisResult) (*AnalysisResult, error) {
@@ -331,6 +302,41 @@ func (a *Analyzer) IsAIAuthor(author string) bool {
 	}
 
 	return false
+}
+
+// analyzeFromFiles analyzes checkpoints using line-by-line file comparison (fallback)
+func (a *Analyzer) analyzeFromFiles(before, after *Checkpoint, isAI bool) *AnalysisResult {
+	result := &AnalysisResult{
+		LastUpdated: after.Timestamp,
+	}
+
+	// Process files: new and modified
+	for path, afterFile := range after.Files {
+		beforeFile, exists := before.Files[path]
+		if !exists {
+			// New file
+			lineCount := len(afterFile.Lines)
+			a.aggregateLinesByAuthor(lineCount, isAI, &result.AILines, &result.HumanLines)
+			result.TotalLines += lineCount
+			continue
+		}
+
+		// Modified file - count added lines
+		stats := a.compareFiles(beforeFile, afterFile, isAI)
+		result.AILines += stats.AILines
+		result.HumanLines += stats.HumanLines
+		// Don't add total lines here - we only want the diff
+	}
+
+	// Process deleted files
+	for path, beforeFile := range before.Files {
+		if _, exists := after.Files[path]; !exists {
+			result.TotalLines -= len(beforeFile.Lines)
+		}
+	}
+
+	result.Percentage = calculatePercentage(result.AILines, result.HumanLines)
+	return result
 }
 
 func (a *Analyzer) GenerateReport(result *AnalysisResult) string {
