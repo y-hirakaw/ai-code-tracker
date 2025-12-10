@@ -37,45 +37,7 @@ func (a *Analyzer) AnalyzeCheckpoints(before, after *Checkpoint) (*AnalysisResul
 
 	// Try to use numstat data from checkpoints for accurate counting
 	if before.NumstatData != nil && after.NumstatData != nil {
-		for filepath, afterStats := range after.NumstatData {
-			// Check if file should be tracked
-			if !a.shouldTrackFile(filepath) {
-				continue
-			}
-
-			beforeStats, existed := before.NumstatData[filepath]
-			if !existed {
-				beforeStats = [2]int{0, 0} // File didn't exist in previous checkpoint
-			}
-
-			// Calculate the difference in added lines between checkpoints
-			addedLinesDiff := afterStats[0] - beforeStats[0]
-
-			if addedLinesDiff > 0 {
-				a.aggregateLinesByAuthor(addedLinesDiff, isAIAuthor, &result.AILines, &result.HumanLines)
-			}
-		}
-
-		// Check for new files in after that weren't in before
-		for filepath, afterStats := range after.NumstatData {
-			if !a.shouldTrackFile(filepath) {
-				continue
-			}
-
-			if _, existed := before.NumstatData[filepath]; !existed {
-				// New file
-				a.aggregateLinesByAuthor(afterStats[0], isAIAuthor, &result.AILines, &result.HumanLines)
-			}
-		}
-
-		// Calculate total lines from current checkpoint
-		for _, file := range after.Files {
-			result.TotalLines += len(file.Lines)
-		}
-
-		result.Percentage = calculatePercentage(result.AILines, result.HumanLines)
-
-		return result, nil
+		return a.analyzeFromNumstat(before, after, isAIAuthor)
 	}
 
 	// Fall back to commit-based or file-based comparison
@@ -296,6 +258,49 @@ func (a *Analyzer) aggregateLinesByAuthor(lines int, isAI bool, aiLines, humanLi
 	} else {
 		*humanLines += lines
 	}
+}
+
+// analyzeFromNumstat analyzes checkpoints using numstat data from checkpoints
+func (a *Analyzer) analyzeFromNumstat(before, after *Checkpoint, isAI bool) (*AnalysisResult, error) {
+	result := &AnalysisResult{
+		LastUpdated: after.Timestamp,
+	}
+
+	// Process modified files
+	for filepath, afterStats := range after.NumstatData {
+		if !a.shouldTrackFile(filepath) {
+			continue
+		}
+
+		beforeStats, existed := before.NumstatData[filepath]
+		if !existed {
+			beforeStats = [2]int{0, 0}
+		}
+
+		addedLinesDiff := afterStats[0] - beforeStats[0]
+		if addedLinesDiff > 0 {
+			a.aggregateLinesByAuthor(addedLinesDiff, isAI, &result.AILines, &result.HumanLines)
+		}
+	}
+
+	// Process new files
+	for filepath, afterStats := range after.NumstatData {
+		if !a.shouldTrackFile(filepath) {
+			continue
+		}
+
+		if _, existed := before.NumstatData[filepath]; !existed {
+			a.aggregateLinesByAuthor(afterStats[0], isAI, &result.AILines, &result.HumanLines)
+		}
+	}
+
+	// Calculate total lines
+	for _, file := range after.Files {
+		result.TotalLines += len(file.Lines)
+	}
+
+	result.Percentage = calculatePercentage(result.AILines, result.HumanLines)
+	return result, nil
 }
 
 func (a *Analyzer) IsAIAuthor(author string) bool {
