@@ -92,11 +92,15 @@ func handleRangeReportWithOptions(opts *ReportOptions) {
 
 	// 2. 各コミットのAuthorship Logを読み込み
 	nm := gitnotes.NewNotesManager()
+	executor := gitexec.NewExecutor()
 
 	totalAI := 0
 	totalHuman := 0
 	byAuthor := make(map[string]*tracker.AuthorStats)
 	byFile := make(map[string]*FileStatsRange)
+
+	// 詳細メトリクス用
+	var detailedMetrics tracker.DetailedMetrics
 
 	for _, commitHash := range commits {
 		log, err := nm.GetAuthorshipLog(commitHash)
@@ -107,6 +111,16 @@ func handleRangeReportWithOptions(opts *ReportOptions) {
 		if log == nil {
 			continue
 		}
+
+		// git show --numstat でコミットの追加/削除行数を取得
+		numstatOutput, err := executor.Run("show", "--numstat", "--format=", commitHash)
+		if err != nil {
+			// numstatが取得できない場合はスキップ
+			continue
+		}
+
+		// numstatデータをパース (filepath -> [added, deleted])
+		numstatMap := parseNumstatOutput(numstatOutput)
 
 		// 3. 集計
 		for filepath, fileInfo := range log.Files {
@@ -139,6 +153,24 @@ func handleRangeReportWithOptions(opts *ReportOptions) {
 				} else {
 					totalHuman += lineCount
 					fileStats.HumanLines += lineCount
+				}
+
+				// 詳細メトリクス: numstatデータから追加/削除を取得
+				if numstat, found := numstatMap[filepath]; found {
+					added := numstat[0]
+					deleted := numstat[1]
+
+					if author.Type == tracker.AuthorTypeAI {
+						detailedMetrics.WorkVolume.AIAdded += added
+						detailedMetrics.WorkVolume.AIDeleted += deleted
+						detailedMetrics.WorkVolume.AIChanges += added + deleted
+						detailedMetrics.Contributions.AIAdditions += added
+					} else {
+						detailedMetrics.WorkVolume.HumanAdded += added
+						detailedMetrics.WorkVolume.HumanDeleted += deleted
+						detailedMetrics.WorkVolume.HumanChanges += added + deleted
+						detailedMetrics.Contributions.HumanAdditions += added
+					}
 				}
 			}
 		}
@@ -186,7 +218,7 @@ func handleRangeReportWithOptions(opts *ReportOptions) {
 	}
 
 	// 5. フォーマットに応じて出力
-	formatRangeReport(report, opts.Format, opts.Detailed)
+	formatRangeReport(report, opts.Format, opts.Detailed, &detailedMetrics)
 }
 
 // FileStatsRange is a temporary struct for file statistics during range report
@@ -294,8 +326,44 @@ func getCommitsInRange(rangeSpec string) ([]string, error) {
 	return commits, nil
 }
 
+// parseNumstatOutput parses git show --numstat output
+// Returns map[filepath][added, deleted]
+func parseNumstatOutput(output string) map[string][2]int {
+	result := make(map[string][2]int)
+	lines := strings.Split(output, "\n")
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		// numstat format: <added>\t<deleted>\t<filepath>
+		parts := strings.Split(line, "\t")
+		if len(parts) != 3 {
+			continue
+		}
+
+		added := 0
+		deleted := 0
+
+		// "-" means binary file
+		if parts[0] != "-" {
+			fmt.Sscanf(parts[0], "%d", &added)
+		}
+		if parts[1] != "-" {
+			fmt.Sscanf(parts[1], "%d", &deleted)
+		}
+
+		filepath := parts[2]
+		result[filepath] = [2]int{added, deleted}
+	}
+
+	return result
+}
+
 // formatRangeReport formats and displays the range report
-func formatRangeReport(report *tracker.Report, format string, detailed bool) {
+func formatRangeReport(report *tracker.Report, format string, detailed bool, metrics *tracker.DetailedMetrics) {
 	switch format {
 	case "json":
 		data, err := json.MarshalIndent(report, "", "  ")
@@ -346,19 +414,22 @@ func formatRangeReport(report *tracker.Report, format string, detailed bool) {
 			}
 		}
 
+		// 詳細メトリクスを表示
+		if detailed && metrics != nil {
+			printDetailedMetrics(metrics)
+		}
+
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown format: %s\n", format)
 		os.Exit(1)
 	}
 }
 
-// printDetailedMetrics prints detailed metrics from an AnalysisResult
-func printDetailedMetrics(result *tracker.AnalysisResult) {
-	if result == nil {
+// printDetailedMetrics prints detailed metrics
+func printDetailedMetrics(metrics *tracker.DetailedMetrics) {
+	if metrics == nil {
 		return
 	}
-
-	metrics := result.Metrics
 
 	fmt.Println()
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
