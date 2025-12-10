@@ -1,11 +1,12 @@
 package main
 
-// Human modified version
+// AI enhanced version
 func TestDetailedMetrics() {
-	println("Modified by human line 1")
-	println("Modified by human line 2")
-	println("Modified by human line 3")
-	println("Human added new line 1")
-	println("Human added new line 2")
-	println("Human added new line 3")
+	println("AI modified line 1")
+	println("AI modified line 2")
+	println("AI added new functionality line 1")
+	println("AI added new functionality line 2")
+	println("AI added new functionality line 3")
+	println("AI added new functionality line 4")
+	println("AI added new functionality line 5")
 }
