@@ -15,10 +15,9 @@ import (
 
 // ReportOptions holds options for the report command
 type ReportOptions struct {
-	Range    string
-	Since    string
-	Format   string
-	Detailed bool
+	Range  string
+	Since  string
+	Format string
 }
 
 // handleRangeReport is the entry point called from main
@@ -29,7 +28,6 @@ func handleRangeReport() {
 	fs.StringVar(&opts.Range, "range", "", "Commit range (e.g., 'origin/main..HEAD')")
 	fs.StringVar(&opts.Since, "since", "", "Show commits since date (e.g., '7 days ago', '2025-01-01')")
 	fs.StringVar(&opts.Format, "format", "table", "Output format: table or json")
-	fs.BoolVar(&opts.Detailed, "detailed", false, "Show detailed metrics (contributions, work volume, new files)")
 
 	fs.Parse(os.Args[2:])
 
@@ -218,7 +216,7 @@ func handleRangeReportWithOptions(opts *ReportOptions) {
 	}
 
 	// 5. フォーマットに応じて出力
-	formatRangeReport(report, opts.Format, opts.Detailed, &detailedMetrics)
+	formatRangeReport(report, opts.Format, &detailedMetrics)
 }
 
 // FileStatsRange is a temporary struct for file statistics during range report
@@ -363,7 +361,7 @@ func parseNumstatOutput(output string) map[string][2]int {
 }
 
 // formatRangeReport formats and displays the range report
-func formatRangeReport(report *tracker.Report, format string, detailed bool, metrics *tracker.DetailedMetrics) {
+func formatRangeReport(report *tracker.Report, format string, metrics *tracker.DetailedMetrics) {
 	switch format {
 	case "json":
 		data, err := json.MarshalIndent(report, "", "  ")
@@ -415,7 +413,7 @@ func formatRangeReport(report *tracker.Report, format string, detailed bool, met
 		}
 
 		// 詳細メトリクスを表示
-		if detailed && metrics != nil {
+		if metrics != nil {
 			printDetailedMetrics(metrics)
 		}
 
