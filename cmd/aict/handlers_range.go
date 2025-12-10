@@ -15,9 +15,10 @@ import (
 
 // ReportOptions holds options for the report command
 type ReportOptions struct {
-	Range  string
-	Since  string
-	Format string
+	Range    string
+	Since    string
+	Format   string
+	Detailed bool
 }
 
 // handleRangeReport is the entry point called from main
@@ -28,6 +29,7 @@ func handleRangeReport() {
 	fs.StringVar(&opts.Range, "range", "", "Commit range (e.g., 'origin/main..HEAD')")
 	fs.StringVar(&opts.Since, "since", "", "Show commits since date (e.g., '7 days ago', '2025-01-01')")
 	fs.StringVar(&opts.Format, "format", "table", "Output format: table or json")
+	fs.BoolVar(&opts.Detailed, "detailed", false, "Show detailed metrics (contributions, work volume, new files)")
 
 	fs.Parse(os.Args[2:])
 
@@ -184,7 +186,7 @@ func handleRangeReportWithOptions(opts *ReportOptions) {
 	}
 
 	// 5. フォーマットに応じて出力
-	formatRangeReport(report, opts.Format)
+	formatRangeReport(report, opts.Format, opts.Detailed)
 }
 
 // FileStatsRange is a temporary struct for file statistics during range report
@@ -293,7 +295,7 @@ func getCommitsInRange(rangeSpec string) ([]string, error) {
 }
 
 // formatRangeReport formats and displays the range report
-func formatRangeReport(report *tracker.Report, format string) {
+func formatRangeReport(report *tracker.Report, format string, detailed bool) {
 	switch format {
 	case "json":
 		data, err := json.MarshalIndent(report, "", "  ")
@@ -347,5 +349,65 @@ func formatRangeReport(report *tracker.Report, format string) {
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown format: %s\n", format)
 		os.Exit(1)
+	}
+}
+
+// printDetailedMetrics prints detailed metrics from an AnalysisResult
+func printDetailedMetrics(result *tracker.AnalysisResult) {
+	if result == nil {
+		return
+	}
+
+	metrics := result.Metrics
+
+	fmt.Println()
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Println("📈 Detailed Metrics")
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Println()
+
+	// コードベース貢献（純粋な追加）
+	totalContributions := metrics.Contributions.AIAdditions + metrics.Contributions.HumanAdditions
+	aiContribPct := 0.0
+	humanContribPct := 0.0
+	if totalContributions > 0 {
+		aiContribPct = float64(metrics.Contributions.AIAdditions) / float64(totalContributions) * 100
+		humanContribPct = float64(metrics.Contributions.HumanAdditions) / float64(totalContributions) * 100
+	}
+
+	fmt.Println("【コードベース貢献】（最終的なコード量への寄与）")
+	fmt.Printf("  総変更行数: %d行\n", totalContributions)
+	fmt.Printf("    🤖 AI追加:   %6d行 (%.1f%%)\n", metrics.Contributions.AIAdditions, aiContribPct)
+	fmt.Printf("    👤 人間追加: %6d行 (%.1f%%)\n", metrics.Contributions.HumanAdditions, humanContribPct)
+	fmt.Println()
+
+	// 作業量貢献（追加+削除）
+	totalWork := metrics.WorkVolume.AIChanges + metrics.WorkVolume.HumanChanges
+	aiWorkPct := 0.0
+	humanWorkPct := 0.0
+	if totalWork > 0 {
+		aiWorkPct = float64(metrics.WorkVolume.AIChanges) / float64(totalWork) * 100
+		humanWorkPct = float64(metrics.WorkVolume.HumanChanges) / float64(totalWork) * 100
+	}
+
+	fmt.Println("【作業量貢献】（実際の作業量）")
+	fmt.Printf("  総作業量: %d行\n", totalWork)
+	fmt.Printf("    🤖 AI作業:   %6d行 (%.1f%%)\n", metrics.WorkVolume.AIChanges, aiWorkPct)
+	fmt.Printf("       └ 追加: %d行, 削除: %d行\n", metrics.WorkVolume.AIAdded, metrics.WorkVolume.AIDeleted)
+	fmt.Printf("    👤 人間作業: %6d行 (%.1f%%)\n", metrics.WorkVolume.HumanChanges, humanWorkPct)
+	fmt.Printf("       └ 追加: %d行, 削除: %d行\n", metrics.WorkVolume.HumanAdded, metrics.WorkVolume.HumanDeleted)
+	fmt.Println()
+
+	// 新規ファイル（オプション）
+	totalNewFiles := metrics.NewFiles.AINewLines + metrics.NewFiles.HumanNewLines
+	if totalNewFiles > 0 {
+		aiNewPct := float64(metrics.NewFiles.AINewLines) / float64(totalNewFiles) * 100
+		humanNewPct := float64(metrics.NewFiles.HumanNewLines) / float64(totalNewFiles) * 100
+
+		fmt.Println("【新規ファイル】（完全新規のコードのみ）")
+		fmt.Printf("  新規コード: %d行\n", totalNewFiles)
+		fmt.Printf("    🤖 AI新規:   %6d行 (%.1f%%)\n", metrics.NewFiles.AINewLines, aiNewPct)
+		fmt.Printf("    👤 人間新規: %6d行 (%.1f%%)\n", metrics.NewFiles.HumanNewLines, humanNewPct)
+		fmt.Println()
 	}
 }

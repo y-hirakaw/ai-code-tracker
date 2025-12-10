@@ -50,11 +50,49 @@ type FileContent struct {
 }
 
 type AnalysisResult struct {
+	// 既存フィールド（後方互換性維持）
 	TotalLines  int       `json:"total_lines"`
 	AILines     int       `json:"ai_lines"`
 	HumanLines  int       `json:"human_lines"`
 	Percentage  float64   `json:"percentage"`
 	LastUpdated time.Time `json:"last_updated"`
+
+	// 詳細メトリクス（新規）
+	Metrics DetailedMetrics `json:"metrics,omitempty"`
+}
+
+// DetailedMetrics contains detailed code contribution metrics
+type DetailedMetrics struct {
+	// コードベース貢献（純粋な追加 - 最終的なコード量への寄与）
+	Contributions ContributionMetrics `json:"contributions"`
+
+	// 作業量貢献（変更全体 - 実際の作業量）
+	WorkVolume WorkVolumeMetrics `json:"work_volume"`
+
+	// 新規作成（完全新規のコードのみ）
+	NewFiles NewFileMetrics `json:"new_files,omitempty"`
+}
+
+// ContributionMetrics represents code contributions (net additions)
+type ContributionMetrics struct {
+	AIAdditions    int `json:"ai_additions"`
+	HumanAdditions int `json:"human_additions"`
+}
+
+// WorkVolumeMetrics represents total work volume (additions + deletions)
+type WorkVolumeMetrics struct {
+	AIChanges    int `json:"ai_changes"`     // 追加+削除の合計
+	HumanChanges int `json:"human_changes"`  // 追加+削除の合計
+	AIAdded      int `json:"ai_added"`       // 追加のみ
+	AIDeleted    int `json:"ai_deleted"`     // 削除のみ
+	HumanAdded   int `json:"human_added"`    // 追加のみ
+	HumanDeleted int `json:"human_deleted"`  // 削除のみ
+}
+
+// NewFileMetrics represents metrics for newly created files
+type NewFileMetrics struct {
+	AINewLines    int `json:"ai_new_lines"`
+	HumanNewLines int `json:"human_new_lines"`
 }
 
 type FileStats struct {

@@ -195,6 +195,28 @@ func (a *Analyzer) analyzeFromNumstat(before, after *Checkpoint, isAI bool) (*An
 		if addedLinesDiff > 0 {
 			a.aggregateLinesByAuthor(addedLinesDiff, isAI, &result.AILines, &result.HumanLines)
 		}
+
+		// 詳細メトリクス: 作業量貢献（追加+削除）
+		added := afterStats[0]
+		deleted := afterStats[1]
+		if isAI {
+			result.Metrics.WorkVolume.AIAdded += added
+			result.Metrics.WorkVolume.AIDeleted += deleted
+			result.Metrics.WorkVolume.AIChanges += added + deleted
+		} else {
+			result.Metrics.WorkVolume.HumanAdded += added
+			result.Metrics.WorkVolume.HumanDeleted += deleted
+			result.Metrics.WorkVolume.HumanChanges += added + deleted
+		}
+
+		// 詳細メトリクス: コードベース貢献（純粋な追加）
+		if addedLinesDiff > 0 {
+			if isAI {
+				result.Metrics.Contributions.AIAdditions += addedLinesDiff
+			} else {
+				result.Metrics.Contributions.HumanAdditions += addedLinesDiff
+			}
+		}
 	}
 
 	// Process new files
@@ -204,7 +226,15 @@ func (a *Analyzer) analyzeFromNumstat(before, after *Checkpoint, isAI bool) (*An
 		}
 
 		if _, existed := before.NumstatData[filepath]; !existed {
+			// 新規ファイル
 			a.aggregateLinesByAuthor(afterStats[0], isAI, &result.AILines, &result.HumanLines)
+
+			// 詳細メトリクス: 新規ファイル
+			if isAI {
+				result.Metrics.NewFiles.AINewLines += afterStats[0]
+			} else {
+				result.Metrics.NewFiles.HumanNewLines += afterStats[0]
+			}
 		}
 	}
 
@@ -236,7 +266,21 @@ func (a *Analyzer) analyzeFromCommits(before, after *Checkpoint, isAI bool) (*An
 		}
 
 		addedLines := stats[0]
+		deletedLines := stats[1]
 		a.aggregateLinesByAuthor(addedLines, isAI, &result.AILines, &result.HumanLines)
+
+		// 詳細メトリクス: 作業量貢献（追加+削除）
+		if isAI {
+			result.Metrics.WorkVolume.AIAdded += addedLines
+			result.Metrics.WorkVolume.AIDeleted += deletedLines
+			result.Metrics.WorkVolume.AIChanges += addedLines + deletedLines
+			result.Metrics.Contributions.AIAdditions += addedLines
+		} else {
+			result.Metrics.WorkVolume.HumanAdded += addedLines
+			result.Metrics.WorkVolume.HumanDeleted += deletedLines
+			result.Metrics.WorkVolume.HumanChanges += addedLines + deletedLines
+			result.Metrics.Contributions.HumanAdditions += addedLines
+		}
 	}
 
 	// Calculate total lines
