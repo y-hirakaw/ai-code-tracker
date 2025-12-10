@@ -339,20 +339,35 @@ go install github.com/y-hirakaw/ai-code-tracker/cmd/aict@v[バージョン]
 - テスト容易性: 各メソッドが独立してテスト可能
 - 全テスト通過: 20テスト、0.4秒
 
+#### フェーズ4.2: Numstat解析の集約化 ✅ (2025-12-10完了)
+**対象**: Numstat解析ロジックの重複削除
+
+**新規ファイル**:
+- `internal/git/numstat.go` (75行) - 統合numstat解析
+- `internal/git/numstat_test.go` (174行) - 包括的テスト
+
+**リファクタリング**:
+- `checkpoint.go`: `collectNumstatData()` 簡素化（39行 → 7行、82%削減）
+- `analyzer.go`: `getGitNumstat()` 簡素化（42行 → 3行、93%削減）
+- `diff_test.go`: testutil依存削除、インポートサイクル解決
+
+**成果**:
+- コード重複削減: 2ファイルから25行の重複削除
+- 保守性向上: 単一箇所への集約
+- テストカバレッジ: 12テスト追加、全テスト通過
+- アーキテクチャ: 依存関係整理完了
+
+#### フェーズ4.3: 作成者分類インターフェース ⏭️ (スキップ - 循環依存)
+**スキップ理由**: `authorship` ↔ `tracker` 間の循環依存により実装不可能
+
+**代替案**: 現在の `IsAIAuthor()` 実装で十分（テスト済み）
+
+#### フェーズ4.4: GetCurrentBranch()簡素化 ⏭️ (スキップ - 既に実施済)
+**確認結果**: フェーズ2で `handleDetachedHead()` と `normalizeBranchName()` が既に抽出済み
+
 ### 今後の予定フェーズ
 
-#### フェーズ4.2: Numstat解析の集約化 (予定)
-- `internal/git/numstat.go` 作成
-- Numstat解析ロジックの統合
-
-#### フェーズ4.3: 作成者分類インターフェース作成 (予定)
-- `internal/authorship/classifier.go` 作成
-- AI/人間判定のインターフェース化
-
-#### フェーズ4.4: GetCurrentBranch()簡素化 (予定)
-- `internal/git/diff.go:GetCurrentBranch()` の複雑度削減
-- 目標: CC=7 → CC≤5
-
-#### フェーズ4.5: 複数メトリクス対応 (予定)
+#### フェーズ4.5: 複数メトリクス対応 (計画中)
 - コードベース貢献、作業量貢献、新規ファイルの3視点測定
 - レポート表示の拡張
+- 別セッションで実施予定
