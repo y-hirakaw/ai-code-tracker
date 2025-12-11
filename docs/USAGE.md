@@ -380,6 +380,81 @@ Top Files:
    aict sync fetch
    ```
 
+## データの削除・リセット
+
+AICTのトラッキングデータを削除したい場合（他ツールへの移行、テストデータのクリア等）は、以下のコマンドを使用します。
+
+### チェックポイントのみ削除
+
+```bash
+aict debug clean
+```
+
+**削除されるもの**:
+- `.git/aict/checkpoints/latest.json` (作業中のチェックポイント)
+
+**残るもの**:
+- Git notes (`refs/aict/authorship`) - コミット済みのAuthorship Log
+- 設定ファイル (`.git/aict/config.json`)
+
+**用途**:
+- 開発中の不要なチェックポイントをクリア
+- コミット前に記録をリセット
+
+### Git notesを削除
+
+```bash
+aict debug clear-notes
+```
+
+**削除されるもの**:
+- `refs/aict/authorship` - Authorship Log
+- `refs/notes/aict` など、AICT関連のすべてのGit notes
+
+**残るもの**:
+- チェックポイント (`.git/aict/checkpoints/`)
+- 設定ファイル (`.git/aict/config.json`)
+
+**用途**:
+- コミット済みのAuthorship Log履歴を完全削除
+- プロジェクトのトラッキング履歴をリセット
+
+### 完全削除（AICTを完全にアンインストール）
+
+```bash
+# 1. チェックポイントを削除
+aict debug clean
+
+# 2. Git notesを削除
+aict debug clear-notes
+
+# 3. 設定ファイルとディレクトリを削除
+rm -rf .git/aict
+
+# 4. フックを削除（必要に応じて）
+rm .git/hooks/post-commit
+rm .claude/hooks/pre-tool-use.sh
+rm .claude/hooks/post-tool-use.sh
+```
+
+**用途**:
+- AICTを完全にアンインストール
+- 他のツール（Claude Code公式機能等）への移行
+
+### リモートのGit notesも削除
+
+ローカルで`aict debug clear-notes`を実行後、リモートにもプッシュ済みの場合：
+
+```bash
+# リモートのGit notesを削除
+git push origin :refs/aict/authorship
+git push origin :refs/notes/aict
+```
+
+**注意**: チームで使用している場合は、他のメンバーに事前に通知してください。
+
+---
+
 ## トラブルシューティング
 
 ### 既存コードが誤ってカウントされている
