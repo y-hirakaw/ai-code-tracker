@@ -7,7 +7,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/y-hirakaw/ai-code-tracker/internal/authorship"
 	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
 	"github.com/y-hirakaw/ai-code-tracker/internal/gitnotes"
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
@@ -120,12 +119,19 @@ func handleRangeReportWithOptions(opts *ReportOptions) {
 		// numstatデータをパース (filepath -> [added, deleted])
 		numstatMap := parseNumstatOutput(numstatOutput)
 
-		// 3. 集計
+		// 3. 集計（numstatベースのみ - 差分追跡方式）
 		for filepath, fileInfo := range log.Files {
-			for _, author := range fileInfo.Authors {
-				lineCount := authorship.CountLines(author.Lines)
+			// numstatデータから追加/削除を取得
+			numstat, found := numstatMap[filepath]
+			if !found {
+				continue // numstatがないファイルはスキップ
+			}
 
-				// 作成者別集計
+			added := numstat[0]
+			deleted := numstat[1]
+
+			for _, author := range fileInfo.Authors {
+				// 作成者別集計（追加行数のみ）
 				stats, exists := byAuthor[author.Name]
 				if !exists {
 					stats = &tracker.AuthorStats{
@@ -134,41 +140,22 @@ func handleRangeReportWithOptions(opts *ReportOptions) {
 					}
 					byAuthor[author.Name] = stats
 				}
-				stats.Lines += lineCount
+				stats.Lines += added // 追加行数のみカウント
 				stats.Commits++
 
-				// ファイル別集計
-				fileStats, exists := byFile[filepath]
-				if !exists {
-					fileStats = &FileStatsRange{Path: filepath}
-					byFile[filepath] = fileStats
-				}
-				fileStats.TotalLines += lineCount
-
+				// 詳細メトリクス
 				if author.Type == tracker.AuthorTypeAI {
-					totalAI += lineCount
-					fileStats.AILines += lineCount
+					detailedMetrics.WorkVolume.AIAdded += added
+					detailedMetrics.WorkVolume.AIDeleted += deleted
+					detailedMetrics.WorkVolume.AIChanges += added + deleted
+					detailedMetrics.Contributions.AIAdditions += added
+					totalAI += added
 				} else {
-					totalHuman += lineCount
-					fileStats.HumanLines += lineCount
-				}
-
-				// 詳細メトリクス: numstatデータから追加/削除を取得
-				if numstat, found := numstatMap[filepath]; found {
-					added := numstat[0]
-					deleted := numstat[1]
-
-					if author.Type == tracker.AuthorTypeAI {
-						detailedMetrics.WorkVolume.AIAdded += added
-						detailedMetrics.WorkVolume.AIDeleted += deleted
-						detailedMetrics.WorkVolume.AIChanges += added + deleted
-						detailedMetrics.Contributions.AIAdditions += added
-					} else {
-						detailedMetrics.WorkVolume.HumanAdded += added
-						detailedMetrics.WorkVolume.HumanDeleted += deleted
-						detailedMetrics.WorkVolume.HumanChanges += added + deleted
-						detailedMetrics.Contributions.HumanAdditions += added
-					}
+					detailedMetrics.WorkVolume.HumanAdded += added
+					detailedMetrics.WorkVolume.HumanDeleted += deleted
+					detailedMetrics.WorkVolume.HumanChanges += added + deleted
+					detailedMetrics.Contributions.HumanAdditions += added
+					totalHuman += added
 				}
 			}
 		}
@@ -373,17 +360,18 @@ func formatRangeReport(report *tracker.Report, format string, metrics *tracker.D
 
 	case "table", "graph":
 		// Table format
-		fmt.Println("📊 AI Code Generation Report")
+		fmt.Printf("📊 AI Code Generation Report (%s)\n", report.Range)
 		fmt.Println()
-		fmt.Printf("Range: %s (%d commits)\n", report.Range, report.Commits)
+		fmt.Printf("Commits: %d\n", report.Commits)
 		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 		fmt.Println()
-		fmt.Println("Summary:")
-		fmt.Printf("  Total Lines:        %d\n", report.Summary.TotalLines)
-		fmt.Printf("  🤖 AI Generated:    %d (%.1f%%)\n", report.Summary.AILines, report.Summary.AIPercentage)
-		fmt.Printf("  👤 Human Written:   %d (%.1f%%)\n", report.Summary.HumanLines, 100-report.Summary.AIPercentage)
-		fmt.Println()
 
+		// 詳細メトリクスを常時表示
+		if metrics != nil {
+			printDetailedMetrics(metrics)
+		}
+
+		// By Author（追加行数ベース）
 		if len(report.ByAuthor) > 0 {
 			fmt.Println("By Author:")
 			for _, author := range report.ByAuthor {
@@ -391,30 +379,10 @@ func formatRangeReport(report *tracker.Report, format string, metrics *tracker.D
 				if author.Type == tracker.AuthorTypeAI {
 					icon = "🤖"
 				}
-				fmt.Printf("  %s %-20s %6d lines (%.1f%%) - %d commits\n",
+				fmt.Printf("  %s %-20s %6d行追加 (%.1f%%) - %d commits\n",
 					icon, author.Name, author.Lines, author.Percentage, author.Commits)
 			}
 			fmt.Println()
-		}
-
-		if len(report.ByFile) > 0 && len(report.ByFile) <= 10 {
-			fmt.Println("Top Files:")
-			for i, file := range report.ByFile {
-				if i >= 10 {
-					break
-				}
-				aiPct := 0.0
-				if file.TotalLines > 0 {
-					aiPct = float64(file.AILines) / float64(file.TotalLines) * 100
-				}
-				fmt.Printf("  %-40s %5d lines (%.0f%% AI)\n",
-					file.Path, file.TotalLines, aiPct)
-			}
-		}
-
-		// 詳細メトリクスを表示
-		if metrics != nil {
-			printDetailedMetrics(metrics)
 		}
 
 	default:
@@ -428,12 +396,6 @@ func printDetailedMetrics(metrics *tracker.DetailedMetrics) {
 	if metrics == nil {
 		return
 	}
-
-	fmt.Println()
-	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Println("📈 Detailed Metrics")
-	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Println()
 
 	// コードベース貢献（純粋な追加）
 	totalContributions := metrics.Contributions.AIAdditions + metrics.Contributions.HumanAdditions
