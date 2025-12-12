@@ -35,9 +35,9 @@ func TestIsAIAgent(t *testing.T) {
 			expected: false,
 		},
 		{
-			name:     "Case sensitive - lowercase",
+			name:     "Case insensitive - lowercase contains 'claude'",
 			author:   "claude code",
-			expected: false,
+			expected: true, // "claude"という文字列を含むためtrueが正しい
 		},
 	}
 

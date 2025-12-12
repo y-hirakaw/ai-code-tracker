@@ -37,7 +37,7 @@ func TestBuildAuthorshipLog(t *testing.T) {
 		},
 	}
 
-	log, err := BuildAuthorshipLog(checkpoints, "abc123")
+	log, err := BuildAuthorshipLog(checkpoints, "abc123", nil)
 	if err != nil {
 		t.Fatalf("BuildAuthorshipLog failed: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestBuildAuthorshipLogMultipleFiles(t *testing.T) {
 		},
 	}
 
-	log, err := BuildAuthorshipLog(checkpoints, "def456")
+	log, err := BuildAuthorshipLog(checkpoints, "def456", nil)
 	if err != nil {
 		t.Fatalf("BuildAuthorshipLog failed: %v", err)
 	}

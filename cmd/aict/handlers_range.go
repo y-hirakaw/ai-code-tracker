@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/y-hirakaw/ai-code-tracker/internal/authorship"
 	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
 	"github.com/y-hirakaw/ai-code-tracker/internal/gitnotes"
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
@@ -99,6 +100,9 @@ func handleRangeReportWithOptions(opts *ReportOptions) {
 	// 詳細メトリクス用
 	var detailedMetrics tracker.DetailedMetrics
 
+	// 作成者ごとのコミット参加記録（重複カウント防止）
+	authorCommits := make(map[string]map[string]bool) // author -> commitHash -> bool
+
 	for _, commitHash := range commits {
 		log, err := nm.GetAuthorshipLog(commitHash)
 		if err != nil {
@@ -119,6 +123,9 @@ func handleRangeReportWithOptions(opts *ReportOptions) {
 		// numstatデータをパース (filepath -> [added, deleted])
 		numstatMap := parseNumstatOutput(numstatOutput)
 
+		// このコミットに参加した作成者を追跡
+		authorsInCommit := make(map[string]bool)
+
 		// 3. 集計（numstatベースのみ - 差分追跡方式）
 		for filepath, fileInfo := range log.Files {
 			// numstatデータから追加/削除を取得
@@ -127,11 +134,22 @@ func handleRangeReportWithOptions(opts *ReportOptions) {
 				continue // numstatがないファイルはスキップ
 			}
 
-			added := numstat[0]
-			deleted := numstat[1]
+			totalAdded := numstat[0]
+			totalDeleted := numstat[1]
+
+			// Authorship Logから各作成者の行数を計算
+			// 複数作成者がいる場合は、行範囲から実際の行数を計算して按分
+			authorLineCount := make(map[string]int)
+			totalAuthorLines := 0
 
 			for _, author := range fileInfo.Authors {
-				// 作成者別集計（追加行数のみ）
+				lines := authorship.CountLines(author.Lines)
+				authorLineCount[author.Name] = lines
+				totalAuthorLines += lines
+			}
+
+			// 作成者ごとに集計
+			for _, author := range fileInfo.Authors {
 				stats, exists := byAuthor[author.Name]
 				if !exists {
 					stats = &tracker.AuthorStats{
@@ -140,8 +158,22 @@ func handleRangeReportWithOptions(opts *ReportOptions) {
 					}
 					byAuthor[author.Name] = stats
 				}
-				stats.Lines += added // 追加行数のみカウント
-				stats.Commits++
+
+				// この作成者の行数を取得
+				authorLines := authorLineCount[author.Name]
+
+				// numstatの追加行数を作成者の比率で按分
+				var added, deleted int
+				if totalAuthorLines > 0 {
+					ratio := float64(authorLines) / float64(totalAuthorLines)
+					added = int(float64(totalAdded) * ratio)
+					deleted = int(float64(totalDeleted) * ratio)
+				}
+
+				stats.Lines += added
+
+				// このコミットに参加したことを記録
+				authorsInCommit[author.Name] = true
 
 				// 詳細メトリクス
 				if author.Type == tracker.AuthorTypeAI {
@@ -158,6 +190,21 @@ func handleRangeReportWithOptions(opts *ReportOptions) {
 					totalHuman += added
 				}
 			}
+		}
+
+		// このコミットに参加した作成者のコミット数を更新
+		for authorName := range authorsInCommit {
+			if authorCommits[authorName] == nil {
+				authorCommits[authorName] = make(map[string]bool)
+			}
+			authorCommits[authorName][commitHash] = true
+		}
+	}
+
+	// コミット数を集計（重複なし）
+	for authorName, commits := range authorCommits {
+		if stats, exists := byAuthor[authorName]; exists {
+			stats.Commits = len(commits)
 		}
 	}
 

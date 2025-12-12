@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/y-hirakaw/ai-code-tracker/internal/authorship"
 	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
@@ -38,8 +39,19 @@ func handleCommit() {
 		os.Exit(1)
 	}
 
-	// チェックポイント群をAuthorship Logに変換
-	log, err := authorship.BuildAuthorshipLog(checkpoints, commitHash)
+	// コミットのnumstatを取得してフィルタリング
+	executor := gitexec.NewExecutor()
+	numstatOutput, err := executor.Run("show", "--numstat", "--format=", commitHash)
+	if err != nil {
+		// numstatが取得できない場合は警告を出すが続行
+		fmt.Fprintf(os.Stderr, "Warning: failed to get numstat for commit %s: %v\n", commitHash, err)
+	}
+
+	// numstatでフィルタリング（実際に変更されたファイルのみ）
+	changedFiles := parseNumstatFiles(numstatOutput)
+
+	// チェックポイント群をAuthorship Logに変換（numstatでフィルタリング）
+	log, err := authorship.BuildAuthorshipLog(checkpoints, commitHash, changedFiles)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error building authorship log: %v\n", err)
 		os.Exit(1)
@@ -94,4 +106,29 @@ func getLatestCommitHash() (string, error) {
 		return "", err
 	}
 	return output, nil
+}
+
+// parseNumstatFiles extracts file paths from numstat output
+func parseNumstatFiles(numstatOutput string) map[string]bool {
+	files := make(map[string]bool)
+	if numstatOutput == "" {
+		return files
+	}
+
+	lines := strings.Split(numstatOutput, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		// numstat format: <added>\t<deleted>\t<filepath>
+		parts := strings.Split(line, "\t")
+		if len(parts) >= 3 {
+			filepath := parts[2]
+			files[filepath] = true
+		}
+	}
+
+	return files
 }

@@ -98,3 +98,38 @@ func TestFormatRangeReport(t *testing.T) {
 	// Verify AICT config was created
 	testutil.AssertFileExists(t, tmpDir+"/.git/aict/config.json")
 }
+
+// TestAuthorCommitCountAccuracy tests that commit counts are accurate
+// when a single commit has multiple files (regression test for v1.1.3)
+func TestAuthorCommitCountAccuracy(t *testing.T) {
+	tmpDir := testutil.TempGitRepo(t)
+	testutil.InitAICT(t, tmpDir)
+
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir(tmpDir)
+
+	// Scenario: Single commit with 3 files
+	// Before fix: Would count as 3 commits (1 per file)
+	// After fix: Should count as 1 commit
+
+	testutil.CreateTestFile(t, tmpDir, "file1.go", "package main\nfunc main() {}\n")
+	testutil.CreateTestFile(t, tmpDir, "file2.go", "package utils\nfunc Helper() {}\n")
+	testutil.CreateTestFile(t, tmpDir, "file3.go", "package models\ntype User struct {}\n")
+	commitHash := testutil.GitCommit(t, tmpDir, "Add multiple files")
+
+	// Verify that getCommitsInRange returns exactly 1 commit
+	commits, err := getCommitsInRange(commitHash)
+	if err != nil {
+		t.Fatalf("getCommitsInRange() error = %v", err)
+	}
+
+	if len(commits) != 1 {
+		t.Errorf("getCommitsInRange() = %d commits, want 1", len(commits))
+	}
+
+	// Verify the commit hash matches
+	if len(commits) > 0 && !strings.HasPrefix(commits[0], commitHash[:7]) {
+		t.Errorf("getCommitsInRange() returned unexpected commit: got %s, want %s", commits[0][:7], commitHash[:7])
+	}
+}

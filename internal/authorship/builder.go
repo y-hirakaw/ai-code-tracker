@@ -8,7 +8,8 @@ import (
 
 // BuildAuthorshipLog converts checkpoints to AuthorshipLog
 // SPEC.md § チェックポイント → Authorship Log変換
-func BuildAuthorshipLog(checkpoints []*tracker.CheckpointV2, commitHash string) (*tracker.AuthorshipLog, error) {
+// changedFiles: numstatで実際に変更されたファイルのリスト（nil の場合はフィルタリングなし）
+func BuildAuthorshipLog(checkpoints []*tracker.CheckpointV2, commitHash string, changedFiles map[string]bool) (*tracker.AuthorshipLog, error) {
 	log := &tracker.AuthorshipLog{
 		Version:   AuthorshipLogVersion,
 		Commit:    commitHash,
@@ -19,6 +20,11 @@ func BuildAuthorshipLog(checkpoints []*tracker.CheckpointV2, commitHash string) 
 	// ファイルごとに作成者情報を集約
 	for _, cp := range checkpoints {
 		for filepath, change := range cp.Changes {
+			// numstatフィルタリング: 実際に変更されたファイルのみ含める
+			if changedFiles != nil && !changedFiles[filepath] {
+				continue // このファイルは実際には変更されていないのでスキップ
+			}
+
 			fileInfo, exists := log.Files[filepath]
 			if !exists {
 				fileInfo = tracker.FileInfo{Authors: []tracker.AuthorInfo{}}
