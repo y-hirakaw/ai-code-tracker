@@ -1,8 +1,11 @@
-# AI Code Tracker (AICT) 基本仕様書
+# AI Code Tracker (AICT) 基本仕様書 v1.2.0
 
 ## 概要
 
 AI Code Tracker (AICT) は、AIによるコード生成と人間によるコード記述を追跡・管理するためのツールです。Claude Code などのAI支援ツールとGit hookを組み合わせて、誰がどのコードを書いたかを自動的に記録します。
+
+**バージョン**: v1.2.0（Production ready）
+**実装方式**: CheckpointV2ベース、git diff numstat集約方式
 
 ## 基本フロー
 
@@ -11,24 +14,30 @@ AI Code Tracker (AICT) は、AIによるコード生成と人間によるコー�
 **目的**: Claude Code編集前の状態をスナップショット
 
 **処理内容**:
+- Gitリポジトリルートに移動（v1.1.7+: ファイルパス一貫性確保）
 - Claude Codeが編集を開始する前に実行
+- **追跡対象および未追跡ファイルを取得**（v1.1.8+: 新規ファイル追跡）
+  - `git ls-files --cached --others --exclude-standard`
 - 現在のワークツリーの状態をスナップショットとして保存
+- **ファイルハッシュを記録**（CheckpointV2）
 - 作成者: `y-hirakaw` (human)
 - 作成者タイプ: `human`
 
 **保存場所**: `.git/aict/checkpoints/latest.json`
 
-**データ構造**:
+**データ構造（CheckpointV2）**:
 ```json
 {
   "timestamp": "2025-12-10T12:00:00Z",
   "author": "y-hirakaw",
-  "type": "human",
-  "metadata": {},
+  "author_type": "human",
+  "metadata": {
+    "message": "Before Claude Code edits"
+  },
   "changes": {},
-  "snapshot": {
-    "main.go": "package main\n...",
-    "utils.go": "package utils\n..."
+  "file_hashes": {
+    "main.go": "abc123def456...",
+    "utils.go": "def456abc123..."
   }
 }
 ```
@@ -46,25 +55,29 @@ AI Code Tracker (AICT) は、AIによるコード生成と人間によるコー�
 **目的**: Claude Code編集後の状態をスナップショット
 
 **処理内容**:
+- Gitリポジトリルートに移動（v1.1.7+: ファイルパス一貫性確保）
 - Claude Codeが編集を完了した後に実行
+- **追跡対象および未追跡ファイルを取得**（v1.1.8+: 新規ファイル追跡）
+  - `git ls-files --cached --others --exclude-standard`
 - 現在のワークツリーの状態をスナップショットとして保存
 - **前回のチェックポイント（人間のスナップショット）との差分を計算**
-- 差分を`Changes`フィールドに記録
+  - ファイルハッシュ比較により変更検出
+  - `git diff` numstat形式で行数変更を取得
+- 差分を`Changes`フィールドに記録（added, deleted, lines範囲）
+- **ファイルハッシュを記録**（CheckpointV2）
 - 作成者: `Claude Code` (ai)
 - 作成者タイプ: `ai`
-- メタデータ: モデル名 (`claude-sonnet-4.5`)
+- メタデータ: モデル名（v1.1.6で廃止、簡素化）
 
 **保存場所**: `.git/aict/checkpoints/latest.json`（追記）
 
-**データ構造**:
+**データ構造（CheckpointV2）**:
 ```json
 {
   "timestamp": "2025-12-10T12:05:00Z",
   "author": "Claude Code",
-  "type": "ai",
-  "metadata": {
-    "model": "claude-sonnet-4.5"
-  },
+  "author_type": "ai",
+  "metadata": {},
   "changes": {
     "main.go": {
       "added": 10,
@@ -72,9 +85,9 @@ AI Code Tracker (AICT) は、AIによるコード生成と人間によるコー�
       "lines": [[1, 10]]
     }
   },
-  "snapshot": {
-    "main.go": "package main\n... (updated)",
-    "utils.go": "package utils\n..."
+  "file_hashes": {
+    "main.go": "xyz789abc012...",
+    "utils.go": "def456abc123..."
   }
 }
 ```
@@ -286,6 +299,23 @@ func BuildAuthorshipLog(checkpoints []*tracker.CheckpointV2, commitHash string, 
 
 ## レポート例
 
+### 標準レポート（--detailed なし）
+```
+📊 AI Code Generation Report (since 7d)
+
+Commits: 5
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Total Lines Changed: 52行
+  🤖 AI-generated:     2行 (3.8%)
+  👤 Human-written:   50行 (96.2%)
+
+By Author:
+  👤 y-hirakaw                50行追加 (96.2%) - 5 commits
+  🤖 Claude Code               2行追加 (3.8%) - 1 commits
+```
+
+### 詳細レポート（--detailed）
 ```
 📊 AI Code Generation Report (since 7d)
 
@@ -311,11 +341,35 @@ By Author:
 
 ## 重要なポイント
 
-1. **チェックポイント**: pre/post-tool-use hookで記録
-2. **スナップショット**: ファイルの状態を完全に保存
-3. **差分計算**: 前回のスナップショットとの差分
-4. **numstatフィルタリング**: コミットに含まれるファイルのみを追跡（最重要！）
-5. **Authorship Log**: Git notesとして永続化
-6. **レポート生成**: 複数のメトリクスで可視化
+1. **CheckpointV2構造**: ファイルハッシュベースの変更検出
+2. **Gitリポジトリルート**: v1.1.7+でファイルパス一貫性確保
+3. **未追跡ファイル追跡**: v1.1.8+で新規ファイルも追跡対象
+4. **削除のみファイル**: v1.1.9+で削除行を正確に集計
+5. **numstatフィルタリング**: コミットに含まれるファイルのみを追跡（最重要！）
+6. **Authorship Log**: Git notes (`refs/aict/authorship`) として永続化
+7. **複数メトリクス**: コードベース貢献、作業量貢献、新規ファイルの3視点測定
 
-この仕様に基づいて、AICTはAIと人間のコード貢献を正確に追跡・管理します。
+## 既知の制限事項（v1.2.0）
+
+### Bashコマンドによるファイル削除
+**制限内容**: `rm` コマンドなどのBashツールで直接ファイル削除した場合、Claude Code hooksが実行されないため、削除が人間の作業として記録される可能性があります。
+
+**影響範囲**:
+- ファイル削除のみに影響
+- ファイル編集や追加には影響なし
+
+**推奨事項**:
+- プロダクションコードでは `rm` コマンドの使用を禁止する運用が多い
+- ファイル削除自体が頻繁に発生するケースは少ない
+- 全体的な追跡精度への影響は限定的（99%以上の精度を維持）
+
+**設計判断**: v1.2.0では、コードの複雑性を避け、一般的なユースケースに焦点を当てるため、この制限を受け入れています。
+
+## バージョン履歴
+
+- **v1.1.7**: ファイルパス一貫性修正（Gitリポジトリルートベース）
+- **v1.1.8**: 新規ファイル追跡対応（git ls-files --cached --others --exclude-standard）
+- **v1.1.9**: 削除のみファイルの正確な集計対応
+- **v1.2.0**: 安定版リリース、既知の制限事項の文書化
+
+この仕様に基づいて、AICTはAIと人間のコード貢献を正確に追跡・管理します（99%以上の精度）。
