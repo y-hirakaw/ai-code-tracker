@@ -282,21 +282,6 @@ func buildAuthorshipLogFromDiff(
 			authorName = cp.Author
 			authorType = cp.Type
 			metadata = cp.Metadata
-
-			// 削除のみのファイルで "Before Claude Code edits" がある場合はAIが削除したと判断
-			if change.Added == 0 && change.Deleted > 0 {
-				if msg, ok := metadata["message"]; ok && msg == "Before Claude Code edits" {
-					// pre-tool-use チェックポイント = 次にAIが削除した
-					for _, aiAgent := range cfg.AIAgents {
-						if strings.Contains(strings.ToLower(aiAgent), "claude") {
-							authorName = aiAgent
-							authorType = tracker.AuthorTypeAI
-							metadata = map[string]string{"message": "Claude Code deleted this file"}
-							break
-						}
-					}
-				}
-			}
 		} else {
 			// チェックポイントに記録がない場合はデフォルト作成者
 			authorName = cfg.DefaultAuthor
