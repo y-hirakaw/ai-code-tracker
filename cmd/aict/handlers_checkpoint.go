@@ -92,11 +92,16 @@ func handleCheckpoint() {
 	if len(changes) == 0 {
 		if lastCheckpoint == nil {
 			// 初回チェックポイント: 前回コミットから差分なし = baseline
+			fmt.Fprintf(os.Stderr, "[DEBUG] Initial checkpoint: author=%s, files=0\n", authorName)
 			fmt.Println("✓ Initial checkpoint created (baseline, no changes since last commit)")
 		} else {
 			// 2回目以降: 前回チェックポイントから差分なし
+			fmt.Fprintf(os.Stderr, "[DEBUG] Checkpoint: author=%s, files=0 (no changes)\n", authorName)
 			fmt.Println("✓ Checkpoint created (no changes since last checkpoint)")
 		}
+	} else {
+		// 変更がある場合
+		fmt.Fprintf(os.Stderr, "[DEBUG] Checkpoint: author=%s, files=%d, changes=%v\n", authorName, len(changes), getFileList(changes))
 	}
 
 	// チェックポイントを作成
@@ -383,4 +388,13 @@ func isAIAgent(author string, aiAgents []string) bool {
 	}
 
 	return false
+}
+
+// getFileList returns a list of filenames from changes map
+func getFileList(changes map[string]tracker.Change) []string {
+	files := make([]string, 0, len(changes))
+	for filepath := range changes {
+		files = append(files, filepath)
+	}
+	return files
 }

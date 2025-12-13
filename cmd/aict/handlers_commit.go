@@ -49,6 +49,15 @@ func handleCommit() {
 		os.Exit(1)
 	}
 
+	// デバッグ: チェックポイント詳細を出力
+	fmt.Fprintf(os.Stderr, "[DEBUG] Loaded %d checkpoints\n", len(checkpoints))
+	for i, cp := range checkpoints {
+		fmt.Fprintf(os.Stderr, "[DEBUG] Checkpoint %d: author=%s, type=%s, files=%d\n", i, cp.Author, cp.Type, len(cp.Changes))
+		for filepath := range cp.Changes {
+			fmt.Fprintf(os.Stderr, "[DEBUG]   - %s\n", filepath)
+		}
+	}
+
 	// 前回コミット（HEAD~1）との完全な差分を取得
 	fullDiff, err := getCommitDiff(commitHash)
 	if err != nil {
@@ -58,6 +67,12 @@ func handleCommit() {
 
 	// チェックポイントから作成者マッピングを構築
 	authorshipMap := buildAuthorshipMap(checkpoints, changedFiles)
+
+	// デバッグ: 作成者マッピングを出力
+	fmt.Fprintf(os.Stderr, "[DEBUG] Authorship mapping for %d files:\n", len(authorshipMap))
+	for filepath, cp := range authorshipMap {
+		fmt.Fprintf(os.Stderr, "[DEBUG]   %s -> %s (%s)\n", filepath, cp.Author, cp.Type)
+	}
 
 	// 完全な差分情報と作成者情報を統合してAuthorship Logを生成
 	log, err := buildAuthorshipLogFromDiff(fullDiff, authorshipMap, commitHash, changedFiles)
