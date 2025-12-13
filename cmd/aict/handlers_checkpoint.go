@@ -154,9 +154,9 @@ func handleCheckpoint() {
 func captureSnapshot(trackedExtensions []string) (map[string]tracker.FileSnapshot, error) {
 	snapshot := make(map[string]tracker.FileSnapshot)
 
-	// Git管理下のファイル一覧を取得（追跡されているファイル + 変更されたファイル）
+	// Git管理下のファイル一覧を取得（追跡されているファイル + 未追跡の新規ファイル）
 	executor := gitexec.NewExecutor()
-	output, err := executor.Run("ls-files")
+	output, err := executor.Run("ls-files", "--cached", "--others", "--exclude-standard")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list git files: %w", err)
 	}

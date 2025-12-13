@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-const version = "1.1.7"
+const version = "1.1.8"
 
 // exitFunc is used to mock os.Exit in tests
 var exitFunc = os.Exit
