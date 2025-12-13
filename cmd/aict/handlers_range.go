@@ -162,12 +162,17 @@ func handleRangeReportWithOptions(opts *ReportOptions) {
 				// この作成者の行数を取得
 				authorLines := authorLineCount[author.Name]
 
-				// numstatの追加行数を作成者の比率で按分
+				// numstatの追加行数・削除行数を作成者の比率で按分
 				var added, deleted int
 				if totalAuthorLines > 0 {
+					// 通常のケース: 追加行がある場合、比率で按分
 					ratio := float64(authorLines) / float64(totalAuthorLines)
 					added = int(float64(totalAdded) * ratio)
 					deleted = int(float64(totalDeleted) * ratio)
+				} else if len(fileInfo.Authors) == 1 {
+					// 削除のみのファイル: 作成者が1人の場合、全削除行をその作成者に割り当て
+					added = 0
+					deleted = int(totalDeleted)
 				}
 
 				stats.Lines += added
