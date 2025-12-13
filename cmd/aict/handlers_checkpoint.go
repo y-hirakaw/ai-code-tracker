@@ -22,6 +22,18 @@ func handleCheckpoint() {
 	message := fs.String("message", "", "メモ（オプション）")
 	fs.Parse(os.Args[2:])
 
+	// Gitリポジトリのルートディレクトリに移動
+	executor := gitexec.NewExecutor()
+	repoRoot, err := executor.Run("rev-parse", "--show-toplevel")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Not in a git repository\n")
+		os.Exit(1)
+	}
+	if err := os.Chdir(repoRoot); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to change directory to %s: %v\n", repoRoot, err)
+		os.Exit(1)
+	}
+
 	// ストレージを初期化
 	store, err := storage.NewAIctStorage()
 	if err != nil {
@@ -44,7 +56,6 @@ func handleCheckpoint() {
 			authorName = config.DefaultAuthor
 		} else {
 			// git config から取得を試みる
-			executor := gitexec.NewExecutor()
 			output, err := executor.Run("config", "user.name")
 			if err == nil {
 				authorName = output
