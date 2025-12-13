@@ -11,6 +11,9 @@ set -e
 # Get project directory
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 
+# Log file
+LOG_FILE="$PROJECT_DIR/.git/aict/hook.log"
+
 # Check if AI Code Tracker is initialized
 if [[ ! -d "$PROJECT_DIR/.git/aict" ]]; then
     exit 0
@@ -22,6 +25,7 @@ if command -v aict >/dev/null 2>&1; then
 elif [[ -f "$PROJECT_DIR/bin/aict" ]]; then
     AICT_BIN="$PROJECT_DIR/bin/aict"
 else
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] pre-tool-use: aict binary not found" >> "$LOG_FILE"
     exit 0
 fi
 
@@ -29,7 +33,12 @@ fi
 GIT_USER=$(git config user.name 2>/dev/null || echo "Developer")
 
 # Record human checkpoint before AI edits
-"$AICT_BIN" checkpoint --author "$GIT_USER" --message "Before Claude Code edits" 2>/dev/null || true
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] pre-tool-use: Recording checkpoint for $GIT_USER" >> "$LOG_FILE"
+if "$AICT_BIN" checkpoint --author "$GIT_USER" --message "Before Claude Code edits" 2>> "$LOG_FILE"; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] pre-tool-use: Checkpoint recorded successfully" >> "$LOG_FILE"
+else
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] pre-tool-use: Failed to record checkpoint (exit code: $?)" >> "$LOG_FILE"
+fi
 
 exit 0`
 
@@ -44,6 +53,9 @@ set -e
 # Get project directory
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 
+# Log file
+LOG_FILE="$PROJECT_DIR/.git/aict/hook.log"
+
 # Check if AI Code Tracker is initialized
 if [[ ! -d "$PROJECT_DIR/.git/aict" ]]; then
     exit 0
@@ -55,11 +67,17 @@ if command -v aict >/dev/null 2>&1; then
 elif [[ -f "$PROJECT_DIR/bin/aict" ]]; then
     AICT_BIN="$PROJECT_DIR/bin/aict"
 else
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] post-tool-use: aict binary not found" >> "$LOG_FILE"
     exit 0
 fi
 
 # Record AI checkpoint after edits
-"$AICT_BIN" checkpoint --author "Claude Code" --message "Claude Code edits" 2>/dev/null || true
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] post-tool-use: Recording checkpoint for Claude Code" >> "$LOG_FILE"
+if "$AICT_BIN" checkpoint --author "Claude Code" --message "Claude Code edits" 2>> "$LOG_FILE"; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] post-tool-use: Checkpoint recorded successfully" >> "$LOG_FILE"
+else
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] post-tool-use: Failed to record checkpoint (exit code: $?)" >> "$LOG_FILE"
+fi
 
 exit 0`
 

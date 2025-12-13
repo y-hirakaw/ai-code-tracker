@@ -88,11 +88,14 @@ func handleCheckpoint() {
 		os.Exit(1)
 	}
 
+	// 変更がない場合でもチェックポイントを記録（初回やbaseline）
 	if len(changes) == 0 {
 		if lastCheckpoint == nil {
-			fmt.Println("✓ Initial checkpoint created (baseline snapshot)")
+			// 初回チェックポイント: 前回コミットから差分なし = baseline
+			fmt.Println("✓ Initial checkpoint created (baseline, no changes since last commit)")
 		} else {
-			fmt.Println("No changes detected since last checkpoint")
+			// 2回目以降: 前回チェックポイントから差分なし
+			fmt.Println("✓ Checkpoint created (no changes since last checkpoint)")
 		}
 	}
 
