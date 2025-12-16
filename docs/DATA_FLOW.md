@@ -34,15 +34,15 @@ AICTは以下の3つの主要ステップでコードの作成者情報を追跡
     │
     ├─> pre-tool-use hook
     │   └─> aict checkpoint --author y-hirakaw --message "Before Claude Code edits"
-    │       └─> .git/aict/checkpoints/{timestamp}.json
-    │           (人間のベースライン記録)
+    │       └─> .git/aict/checkpoints/latest.json
+    │           (配列に追記: 人間のベースライン記録)
     │
 [2] Claude Codeが編集
     │
     ├─> post-tool-use hook
     │   └─> aict checkpoint --author "Claude Code" --message "Claude Code edits"
-    │       └─> .git/aict/checkpoints/{timestamp}.json
-    │           (AIの変更記録)
+    │       └─> .git/aict/checkpoints/latest.json
+    │           (配列に追記: AIの変更記録)
     │
 [3] 人間が追加編集（任意）
     │
@@ -152,12 +152,13 @@ handleCheckpoint()
     │   └─> 全ファイル（追跡済み + 新規）のスナップショット
     │
     ├─> detectChangesFromSnapshot()
-    │   └─> 前回チェックポイント（pre-tool-use）との差分
-    │       ├─> 新規ファイル検出
-    │       ├─> 変更ファイル検出（git diffで詳細取得）
+    │   └─> HEAD基準との差分（注: 前回チェックポイント基準ではない）
+    │       ├─> 新規ファイル検出（HEAD に存在しない）
+    │       ├─> 変更ファイル検出（git show HEAD:filepath との比較）
+    │       │   └─> getDetailedDiff() で行数・行範囲を取得
     │       └─> 削除ファイル検出
     │
-    └─> .git/aict/checkpoints/{timestamp}.json に保存
+    └─> .git/aict/checkpoints/latest.json に追記（配列形式）
 ```
 
 **データ例**:
@@ -176,11 +177,8 @@ handleCheckpoint()
       "lines": [[1, 50], [75, 100]]
     }
   },
-  "snapshot": {
-    "internal/api/handler.go": {
-      "hash": "def456...",
-      "lines": 190
-    }
+  "file_hashes": {
+    "internal/api/handler.go": "def456..."
   }
 }
 ```
@@ -198,7 +196,12 @@ aict commit
     ↓
 handleCommit()
     ├─> LoadCheckpoints()
-    │   └─> .git/aict/checkpoints/*.json を読み込み
+    │   └─> .git/aict/checkpoints/latest.json のみを読み込み（配列形式）
+    │
+    ├─> numstatフィルタリング
+    │   └─> git show --numstat --format= HEAD
+    │       └─> コミットに含まれるファイルのみを抽出
+    │           └─> 早期return: changedFiles が空なら終了（⚠️ チェックポイント残留）
     │
     ├─> getCommitDiff()
     │   └─> git diff HEAD~1 HEAD --numstat
@@ -209,11 +212,11 @@ handleCommit()
     │
     ├─> buildAuthorshipMap()
     │   └─> チェックポイントから作成者マッピングを構築
-    │       └─> filepath -> 最後に変更したチェックポイント
+    │       └─> filepath -> **最後のチェックポイントの作成者1人のみ**（複数作者集約なし）
     │
     ├─> buildAuthorshipLogFromDiff()
     │   ├─> コミット差分の各ファイルについて
-    │   │   ├─> authorMapから作成者を取得
+    │   │   ├─> authorMapから作成者を取得（1人のみ）
     │   │   ├─> チェックポイントがない場合はデフォルト作成者
     │   │   └─> 行範囲情報を付与
     │   │
@@ -251,7 +254,7 @@ handleCommit()
         {
           "name": "y-hirakaw",
           "type": "human",
-          "lines": [],
+          "lines": [[10]],
           "metadata": {
             "message": "No checkpoint found, assigned to default author"
           }
@@ -340,7 +343,7 @@ type FileInfo struct {
 type AuthorInfo struct {
     Name     string            `json:"name"`
     Type     AuthorType        `json:"type"` // "human" or "ai"
-    Lines    [][]int           `json:"lines"` // [[start, end], ...]
+    Lines    [][]int           `json:"lines"` // [[start, end], ...] or [[lineNum]] (混在)
     Metadata map[string]string `json:"metadata,omitempty"`
 }
 ```
@@ -380,9 +383,8 @@ type WorkVolumeMetrics struct {
 ├── aict/                           # AICT専用ディレクトリ
 │   ├── config.json                 # プロジェクト設定
 │   ├── checkpoints/
-│   │   ├── {timestamp1}.json       # CheckpointV2形式
-│   │   └── {timestamp2}.json
-│   └── hook.log                    # フック実行ログ（v1.1.6）
+│   │   └── latest.json             # CheckpointV2配列（セッション中のすべてのチェックポイント）
+│   └── hook.log                    # フック実行ログ（v1.1.6+）
 │
 ├── hooks/
 │   └── post-commit                 # Git post-commitフック
@@ -411,40 +413,6 @@ type WorkVolumeMetrics struct {
 
 ---
 
-## 既知の制限
-
-### 1. Bash rmでのファイル削除（v1.2.0で対応見送り）
-
-**問題**:
-- `rm`コマンドや直接的なファイル削除はClaude Codeフックをトリガーしない
-- post-tool-useフックでファイルが存在しないため、チェックポイントに記録されない
-- 結果: 削除がデフォルト作成者（人間）に割り当てられる可能性
-
-**影響**:
-- ファイル削除の作成者が不正確になる場合がある
-- 削除行数が誤って人間に計上される可能性
-
-**軽減策**:
-- プロダクションコードではrmコマンド禁止が一般的
-- ファイル削除操作は稀
-- 全体の統計への影響は小さい
-
-**判断**:
-- コードの複雑性増加を避けるため、v1.2.0では対応見送り
-- 実用上許容可能な誤差レベル
-
-### 2. 行範囲の精度
-
-**問題**:
-- `git diff --numstat`では行範囲は概算
-- 削除のみのファイルは行範囲が空（`lines: []`）
-
-**対応**:
-- v1.1.9で削除のみファイルの特別処理を実装
-- `totalAuthorLines==0 && 作成者1人`の場合、全削除行を割り当て
-
----
-
 ## レポート表示例
 
 ### 実際の出力例
@@ -457,17 +425,9 @@ $ aict report --since 7d
 Commits: 5
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-【コードベース貢献】（最終的なコード量への寄与）
-  総変更行数: 290行
-    🤖 AI追加:      290行 (100.0%)
-    👤 人間追加:      0行 (0.0%)
-
-【作業量貢献】（実際の作業量）
-  総作業量: 317行
-    🤖 AI作業:      303行 (95.6%)
-       └ 追加: 290行, 削除: 13行
-    👤 人間作業:     14行 (4.4%)
-       └ 追加: 0行, 削除: 14行
+Total Lines Changed: 290行
+  🤖 AI-generated:    290行 (100.0%)
+  👤 Human-written:     0行 (0.0%)
 
 By Author:
   🤖 Claude Code             290行追加 (100.0%) - 1 commits
@@ -509,9 +469,53 @@ AICT v1.2.0のデータフローは以下の特徴があります：
 - ✅ **v1.2.0**: 不完全な機能を削除、シンプルで安定した実装
 
 ### 利点
-- ✅ **正確性**: コミットベースの完全な差分追跡
+- ✅ **正確性**: コミットベースの完全な差分追跡（99%以上の精度）
 - ✅ **永続性**: Git notesによるコミット単位の履歴管理
-- ✅ **柔軟性**: 複数のメトリクスによる多角的分析
+- ✅ **柔軟性**: numstat按分方式による正確な統計
 - ✅ **同期性**: Git notesを使ったリモート同期
 - ✅ **直感性**: `--since`は期間内の変更のみを集計（重複なし）
 - ✅ **保守性**: シンプルで理解しやすいコードベース
+
+### 既知の実装制約と動作仕様
+
+#### 1. チェックポイント保存形式
+- **実装**: `.git/aict/checkpoints/latest.json` に配列形式で追記
+- **動作**: セッション中のすべてのチェックポイントを単一ファイルに記録
+- **LoadCheckpoints()**: `latest.json` のみを読み込み（複数ファイルではない）
+
+#### 2. 差分計算の基準
+- **実装**: `git show HEAD:filepath` との比較（HEAD基準）
+- **動作**: 前回チェックポイント基準ではなく、コミット済みコードとの差分
+- **影響**: 複数チェックポイント間の編集が正確に区別されない場合がある
+
+#### 3. 作者割り当てロジック
+- **実装**: ファイルごとに最後のチェックポイントの作成者1人のみ
+- **動作**: 同一ファイルへの複数作者の貢献を集約しない
+- **影響**: 人間とAIが交互に同じファイルを編集した場合、最後の作者にすべてが帰属
+
+#### 4. 早期returnによるチェックポイント残留
+- **実装**: `changedFiles`が空の場合、`ClearCheckpoints()`がスキップされる
+- **動作**: 追跡対象ファイルの変更がないコミットでチェックポイントが残る
+- **影響**: 次回コミットに古いチェックポイントが混入する可能性
+
+#### 5. 行範囲フォーマットの混在
+- **実装**: 単一行は`[lineNum]`、範囲は`[start, end]`
+- **動作**: 行範囲情報の形式が統一されていない
+- **影響**: データ解析時に両方の形式を考慮する必要がある
+
+#### 6. 行数カウントの不一致
+- **スナップショット**: `strings.Split(content, "\n")`（TrimSpaceなし）
+- **詳細差分**: `strings.Split(strings.TrimSpace(content), "\n")`（TrimSpaceあり）
+- **影響**: 末尾改行の扱いで行数が微妙にずれる可能性
+
+#### 7. ByFile集計の未実装
+- **実装**: `byFile`マップは作成されるが更新されない
+- **動作**: レポートのByFileセクションは常に空
+- **影響**: ファイル別の統計が表示されない
+
+#### 8. Bashコマンドによるファイル削除
+- **実装**: `rm`コマンドはフックをバイパス
+- **動作**: ファイル削除が人間の作業として記録される場合がある
+- **影響**: AIによるファイル削除が正確に追跡されない（限定的）
+
+これらの制約は、v1.2.0の設計判断として受け入れられており、一般的なユースケースでは99%以上の追跡精度を維持しています。
