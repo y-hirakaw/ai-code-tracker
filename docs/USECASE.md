@@ -25,13 +25,13 @@ aict report --since 1d
 aict report --since 1d
 
 # 出力例:
-# 📊 AI Code Generation Report
+# AI Code Generation Report
 # Range: since 1d (3 commits)
 #
-# Summary:
-#   Total Lines:        45
-#   🤖 AI Generated:    30 (66.7%)
-#   👤 Human Written:   15 (33.3%)
+# 【コードベース貢献】（最終的なコード量への寄与）
+#   総変更行数: 45行
+#     □ AI生成:    30行 (66.7%)
+#     ○ 開発者:    15行 (33.3%)
 ```
 
 ---
@@ -366,7 +366,7 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '## 📊 AI Code Generation Report\n\n```\n${{ steps.report.outputs.report }}\n```'
+              body: '## AI Code Generation Report\n\n```\n${{ steps.report.outputs.report }}\n```'
             })
 ```
 
@@ -393,7 +393,7 @@ REPORT=$(aict report --range $PREV_VERSION..HEAD)
 git tag -a "$NEW_VERSION" -m "$(cat <<EOF
 Release $NEW_VERSION
 
-📊 AI Code Generation Report ($PREV_VERSION..$NEW_VERSION)
+AI Code Generation Report ($PREV_VERSION..$NEW_VERSION)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 $REPORT
 EOF
