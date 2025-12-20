@@ -412,7 +412,7 @@ func formatRangeReport(report *tracker.Report, format string, metrics *tracker.D
 
 	case "table", "graph":
 		// Table format
-		fmt.Printf("📊 AI Code Generation Report (%s)\n", report.Range)
+		fmt.Printf("AI Code Generation Report (%s)\n", report.Range)
 		fmt.Println()
 		fmt.Printf("Commits: %d\n", report.Commits)
 		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
@@ -427,9 +427,9 @@ func formatRangeReport(report *tracker.Report, format string, metrics *tracker.D
 		if len(report.ByAuthor) > 0 {
 			fmt.Println("By Author:")
 			for _, author := range report.ByAuthor {
-				icon := "👤"
+				icon := "○"
 				if author.Type == tracker.AuthorTypeAI {
-					icon = "🤖"
+					icon = "□"
 				}
 				fmt.Printf("  %s %-20s %6d行追加 (%.1f%%) - %d commits\n",
 					icon, author.Name, author.Lines, author.Percentage, author.Commits)
@@ -460,8 +460,8 @@ func printDetailedMetrics(metrics *tracker.DetailedMetrics) {
 
 	fmt.Println("【コードベース貢献】（最終的なコード量への寄与）")
 	fmt.Printf("  総変更行数: %d行\n", totalContributions)
-	fmt.Printf("    🤖 AI追加:   %6d行 (%.1f%%)\n", metrics.Contributions.AIAdditions, aiContribPct)
-	fmt.Printf("    👤 人間追加: %6d行 (%.1f%%)\n", metrics.Contributions.HumanAdditions, humanContribPct)
+	fmt.Printf("    □ AI生成:   %6d行 (%.1f%%)\n", metrics.Contributions.AIAdditions, aiContribPct)
+	fmt.Printf("    ○ 開発者:   %6d行 (%.1f%%)\n", metrics.Contributions.HumanAdditions, humanContribPct)
 	fmt.Println()
 
 	// 作業量貢献（追加+削除）
@@ -475,9 +475,9 @@ func printDetailedMetrics(metrics *tracker.DetailedMetrics) {
 
 	fmt.Println("【作業量貢献】（実際の作業量）")
 	fmt.Printf("  総作業量: %d行\n", totalWork)
-	fmt.Printf("    🤖 AI作業:   %6d行 (%.1f%%)\n", metrics.WorkVolume.AIChanges, aiWorkPct)
+	fmt.Printf("    □ AI作業:   %6d行 (%.1f%%)\n", metrics.WorkVolume.AIChanges, aiWorkPct)
 	fmt.Printf("       └ 追加: %d行, 削除: %d行\n", metrics.WorkVolume.AIAdded, metrics.WorkVolume.AIDeleted)
-	fmt.Printf("    👤 人間作業: %6d行 (%.1f%%)\n", metrics.WorkVolume.HumanChanges, humanWorkPct)
+	fmt.Printf("    ○ 開発者作業: %6d行 (%.1f%%)\n", metrics.WorkVolume.HumanChanges, humanWorkPct)
 	fmt.Printf("       └ 追加: %d行, 削除: %d行\n", metrics.WorkVolume.HumanAdded, metrics.WorkVolume.HumanDeleted)
 	fmt.Println()
 
@@ -489,8 +489,8 @@ func printDetailedMetrics(metrics *tracker.DetailedMetrics) {
 
 		fmt.Println("【新規ファイル】（完全新規のコードのみ）")
 		fmt.Printf("  新規コード: %d行\n", totalNewFiles)
-		fmt.Printf("    🤖 AI新規:   %6d行 (%.1f%%)\n", metrics.NewFiles.AINewLines, aiNewPct)
-		fmt.Printf("    👤 人間新規: %6d行 (%.1f%%)\n", metrics.NewFiles.HumanNewLines, humanNewPct)
+		fmt.Printf("    □ AI新規:   %6d行 (%.1f%%)\n", metrics.NewFiles.AINewLines, aiNewPct)
+		fmt.Printf("    ○ 開発者新規: %6d行 (%.1f%%)\n", metrics.NewFiles.HumanNewLines, humanNewPct)
 		fmt.Println()
 	}
 }
