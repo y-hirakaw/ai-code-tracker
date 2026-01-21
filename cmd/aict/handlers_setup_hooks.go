@@ -69,7 +69,13 @@ func createClaudeHooks(hooksDir string) error {
 
 func setupPostCommitHook(hooksDir string) error {
 	// post-commit hookを.git/hooks/にコピー
-	gitHookPath := ".git/hooks/post-commit"
+	gitHooksDir := ".git/hooks"
+	gitHookPath := filepath.Join(gitHooksDir, "post-commit")
+
+	// .git/hooks/ディレクトリがなければ作成
+	if err := os.MkdirAll(gitHooksDir, 0755); err != nil {
+		return fmt.Errorf("failed to create .git/hooks directory: %w", err)
+	}
 
 	// 既存のpost-commit hookをチェック
 	if _, err := os.Stat(gitHookPath); err == nil {
