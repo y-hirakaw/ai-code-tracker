@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -165,7 +166,9 @@ func getCommitDiff(commitHash string) (map[string]tracker.Change, error) {
 			parts := strings.Split(line, "\t")
 			if len(parts) >= 3 {
 				added := 0
-				fmt.Sscanf(parts[0], "%d", &added)
+				if v, err := strconv.Atoi(parts[0]); err == nil {
+					added = v
+				}
 				filepath := parts[2]
 
 				diffMap[filepath] = tracker.Change{
@@ -194,10 +197,14 @@ func getCommitDiff(commitHash string) (map[string]tracker.Change, error) {
 				added := 0
 				deleted := 0
 				if parts[0] != "-" {
-					fmt.Sscanf(parts[0], "%d", &added)
+					if v, err := strconv.Atoi(parts[0]); err == nil {
+						added = v
+					}
 				}
 				if parts[1] != "-" {
-					fmt.Sscanf(parts[1], "%d", &deleted)
+					if v, err := strconv.Atoi(parts[1]); err == nil {
+						deleted = v
+					}
 				}
 				filepath := parts[2]
 

@@ -5,7 +5,7 @@
 
 ## Phase 1: データ整合性・正確性
 
-- [ ] **1-2**: `fmt.Sscanf` を `strconv.Atoi` に統一 (Critical)
+- [x] **1-2**: `fmt.Sscanf` を `strconv.Atoi` に統一 (Critical)
   - `cmd/aict/handlers_range.go:389,392`
   - `cmd/aict/handlers_commit.go:168,197,200`
   - パース失敗時のサイレントゼロ扱いを修正

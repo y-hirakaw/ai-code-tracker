@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/y-hirakaw/ai-code-tracker/internal/authorship"
@@ -386,10 +387,14 @@ func parseNumstatOutput(output string) map[string][2]int {
 
 		// "-" means binary file
 		if parts[0] != "-" {
-			fmt.Sscanf(parts[0], "%d", &added)
+			if v, err := strconv.Atoi(parts[0]); err == nil {
+				added = v
+			}
 		}
 		if parts[1] != "-" {
-			fmt.Sscanf(parts[1], "%d", &deleted)
+			if v, err := strconv.Atoi(parts[1]); err == nil {
+				deleted = v
+			}
 		}
 
 		filepath := parts[2]
