@@ -293,20 +293,7 @@ func (a *Analyzer) analyzeFromCommits(before, after *Checkpoint, isAI bool) (*An
 }
 
 func (a *Analyzer) IsAIAuthor(author string) bool {
-	aiAuthors := []string{"claude", "ai", "assistant", "bot"}
-	authorLower := strings.ToLower(author)
-
-	if mapping, exists := a.config.AuthorMappings[author]; exists {
-		authorLower = strings.ToLower(mapping)
-	}
-
-	for _, aiAuthor := range aiAuthors {
-		if strings.Contains(authorLower, aiAuthor) {
-			return true
-		}
-	}
-
-	return false
+	return IsAIAgent(author, a.config.AIAgents, a.config.AuthorMappings)
 }
 
 // analyzeFromFiles analyzes checkpoints using line-by-line file comparison (fallback)

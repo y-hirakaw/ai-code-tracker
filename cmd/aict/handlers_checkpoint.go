@@ -69,7 +69,7 @@ func handleCheckpoint() {
 
 	// 作成者タイプを判定
 	authorType := tracker.AuthorTypeHuman
-	if isAIAgent(authorName, config.AIAgents) {
+	if tracker.IsAIAgent(authorName, config.AIAgents, config.AuthorMappings) {
 		authorType = tracker.AuthorTypeAI
 	}
 
@@ -380,26 +380,6 @@ func getLineRangesFromDiff(filepath string) ([][]int, error) {
 	return ranges, nil
 }
 
-// isAIAgent checks if author is an AI agent
-func isAIAgent(author string, aiAgents []string) bool {
-	// まず、設定ファイルのAIエージェントリストと完全一致でチェック
-	for _, agent := range aiAgents {
-		if author == agent {
-			return true
-		}
-	}
-
-	// 次に、一般的なAI名が含まれているかチェック（大文字小文字を区別しない）
-	authorLower := strings.ToLower(author)
-	commonAINames := []string{"claude", "ai", "assistant", "bot", "copilot", "chatgpt"}
-	for _, aiName := range commonAINames {
-		if strings.Contains(authorLower, aiName) {
-			return true
-		}
-	}
-
-	return false
-}
 
 // getFileList returns a list of filenames from changes map
 func getFileList(changes map[string]tracker.Change) []string {

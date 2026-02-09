@@ -43,9 +43,9 @@ func TestIsAIAgent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := isAIAgent(tt.author, aiAgents)
+			result := tracker.IsAIAgent(tt.author, aiAgents, nil)
 			if result != tt.expected {
-				t.Errorf("isAIAgent(%q) = %v, expected %v", tt.author, result, tt.expected)
+				t.Errorf("IsAIAgent(%q) = %v, expected %v", tt.author, result, tt.expected)
 			}
 		})
 	}

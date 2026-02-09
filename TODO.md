@@ -16,10 +16,10 @@
 - [x] **1-4**: GetAuthorshipLog のエラー区別 (Medium)
   - `internal/gitnotes/notes.go:156-169`
   - 「ノート未存在」と「実行エラー」の区別
-- [ ] **1-3**: AI判定ロジックの統一 (High)
+- [x] **1-3**: AI判定ロジックの統一 (High)
   - `cmd/aict/handlers_checkpoint.go:383-402` (`isAIAgent`)
   - `internal/tracker/analyzer.go:295-310` (`IsAIAuthor`)
-  - 共通パッケージに統一関数を作成
+  - `internal/tracker/ai_agent.go` に統一関数 `IsAIAgent` を作成（循環依存回避のためtrackerパッケージに配置）
 
 ## Phase 2: デッドコード削除
 
