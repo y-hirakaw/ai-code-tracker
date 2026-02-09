@@ -41,19 +41,44 @@ func (s *AIctStorage) SaveCheckpoint(cp *tracker.CheckpointV2) error {
 
 	checkpointsFile := filepath.Join(checkpointsDir, "latest.json")
 
-	// 既存のチェックポイントを読み込み
-	checkpoints, _ := s.LoadCheckpoints()
+	// 既存のチェックポイントを読み込み（エラーを適切に処理）
+	checkpoints, err := s.LoadCheckpoints()
+	if err != nil {
+		return fmt.Errorf("failed to load existing checkpoints: %w", err)
+	}
 
 	// 新しいチェックポイントを追加
 	checkpoints = append(checkpoints, cp)
 
-	// JSON配列として保存
+	// JSON配列としてシリアライズ
 	data, err := json.MarshalIndent(checkpoints, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(checkpointsFile, data, 0644)
+	// 一時ファイルに書き込み後、アトミックにリネーム
+	tmpFile, err := os.CreateTemp(checkpointsDir, "latest-*.tmp")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+
+	if _, err := tmpFile.Write(data); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to write temp file: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, checkpointsFile); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to rename temp file: %w", err)
+	}
+
+	return nil
 }
 
 // LoadCheckpoints loads all checkpoints from latest.json

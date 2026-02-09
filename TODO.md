@@ -9,7 +9,7 @@
   - `cmd/aict/handlers_range.go:389,392`
   - `cmd/aict/handlers_commit.go:168,197,200`
   - パース失敗時のサイレントゼロ扱いを修正
-- [ ] **1-1**: SaveCheckpoint のアトミック書き込み導入 (Critical)
+- [x] **1-1**: SaveCheckpoint のアトミック書き込み導入 (Critical)
   - `internal/storage/aict_storage.go:45`
   - 一時ファイル + `os.Rename` によるアトミック書き込み
   - `LoadCheckpoints()` エラー無視の修正
