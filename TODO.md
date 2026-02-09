@@ -21,6 +21,25 @@
   - `internal/tracker/analyzer.go:295-310` (`IsAIAuthor`)
   - `internal/tracker/ai_agent.go` に統一関数 `IsAIAgent` を作成（循環依存回避のためtrackerパッケージに配置）
 
+## Phase 1.5: 実動作確認
+
+Phase 1 の変更がデータ整合性に影響するため、実環境での動作確認を行う。
+
+- [ ] **1.5-1**: チェックポイント記録の動作確認
+  - `aict checkpoint --author human` / `aict checkpoint --author "Claude Code"` でチェックポイントが正常に保存されるか
+  - `aict debug show` で保存内容を確認
+- [ ] **1.5-2**: レポート生成の動作確認
+  - `aict report --since 7d` でレポートが正常に出力されるか
+  - `aict report --since 7d --detailed` で詳細メトリクスが表示されるか
+- [ ] **1.5-3**: AI判定の統一確認
+  - レポート内のAI/人間の分類が期待通りか
+  - "Claude Code", "copilot", "chatgpt" がAIと判定されるか
+- [ ] **1.5-4**: Git notes操作の確認
+  - `aict commit` でAuthorship Logが正常に生成されるか
+  - `git notes --ref=refs/aict/authorship show HEAD` で内容確認
+- [ ] **1.5-5**: Phase 1 変更箇所のテスト補強
+  - 必要に応じてユニットテストを追加（アトミック書き込み、エラー区別、AI判定統一）
+
 ## Phase 2: デッドコード削除
 
 - [ ] **2-5**: `test_edit.go` を削除 (Low)
