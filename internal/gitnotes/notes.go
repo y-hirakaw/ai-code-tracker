@@ -69,8 +69,10 @@ func (nm *NotesManager) AddNote(note *AIEditNote) error {
 func (nm *NotesManager) GetNote(commitHash string) (*AIEditNote, error) {
 	output, err := nm.executor.Run("notes", "--ref="+nm.ref, "show", commitHash)
 	if err != nil {
-		// No note exists for this commit
-		return nil, nil
+		if isNoteNotFound(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get note for %s: %w", commitHash, err)
 	}
 
 	var note AIEditNote
@@ -134,6 +136,11 @@ func GetCurrentCommit() (string, error) {
 	return output, nil
 }
 
+// isNoteNotFound checks if the error indicates a missing note (not a real git error)
+func isNoteNotFound(err error) bool {
+	return strings.Contains(err.Error(), "no note found")
+}
+
 // SPEC.md準拠: Authorship Log操作
 
 // AddAuthorshipLog adds an AuthorshipLog to Git notes
@@ -156,8 +163,10 @@ func (nm *NotesManager) AddAuthorshipLog(log *tracker.AuthorshipLog) error {
 func (nm *NotesManager) GetAuthorshipLog(commitHash string) (*tracker.AuthorshipLog, error) {
 	output, err := nm.executor.Run("notes", "--ref="+AuthorshipNotesRef, "show", commitHash)
 	if err != nil {
-		// No authorship log exists for this commit
-		return nil, nil
+		if isNoteNotFound(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get authorship log for %s: %w", commitHash, err)
 	}
 
 	var log tracker.AuthorshipLog

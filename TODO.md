@@ -13,7 +13,7 @@
   - `internal/storage/aict_storage.go:45`
   - 一時ファイル + `os.Rename` によるアトミック書き込み
   - `LoadCheckpoints()` エラー無視の修正
-- [ ] **1-4**: GetAuthorshipLog のエラー区別 (Medium)
+- [x] **1-4**: GetAuthorshipLog のエラー区別 (Medium)
   - `internal/gitnotes/notes.go:156-169`
   - 「ノート未存在」と「実行エラー」の区別
 - [ ] **1-3**: AI判定ロジックの統一 (High)
