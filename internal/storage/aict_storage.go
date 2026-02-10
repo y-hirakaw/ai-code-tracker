@@ -9,6 +9,13 @@ import (
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
 
+const (
+	AictDirName        = "aict"
+	CheckpointsDirName = "checkpoints"
+	LatestFileName     = "latest.json"
+	ConfigFileName     = "config.json"
+)
+
 // AIctStorage manages .git/aict/ directory
 type AIctStorage struct {
 	gitDir string // .git/aict/
@@ -23,7 +30,7 @@ func NewAIctStorage() (*AIctStorage, error) {
 	}
 
 	// 2. .git/aict/ を作成
-	aictDir := filepath.Join(gitDir, "aict")
+	aictDir := filepath.Join(gitDir, AictDirName)
 	if err := os.MkdirAll(aictDir, 0755); err != nil {
 		return nil, err
 	}
@@ -34,12 +41,12 @@ func NewAIctStorage() (*AIctStorage, error) {
 // SaveCheckpoint appends a checkpoint to latest.json
 func (s *AIctStorage) SaveCheckpoint(cp *tracker.CheckpointV2) error {
 	// .git/aict/checkpoints/latest.json に追記（配列形式）
-	checkpointsDir := filepath.Join(s.gitDir, "checkpoints")
+	checkpointsDir := filepath.Join(s.gitDir, CheckpointsDirName)
 	if err := os.MkdirAll(checkpointsDir, 0755); err != nil {
 		return err
 	}
 
-	checkpointsFile := filepath.Join(checkpointsDir, "latest.json")
+	checkpointsFile := filepath.Join(checkpointsDir, LatestFileName)
 
 	// 既存のチェックポイントを読み込み（エラーを適切に処理）
 	checkpoints, err := s.LoadCheckpoints()
@@ -83,7 +90,7 @@ func (s *AIctStorage) SaveCheckpoint(cp *tracker.CheckpointV2) error {
 
 // LoadCheckpoints loads all checkpoints from latest.json
 func (s *AIctStorage) LoadCheckpoints() ([]*tracker.CheckpointV2, error) {
-	checkpointsFile := filepath.Join(s.gitDir, "checkpoints", "latest.json")
+	checkpointsFile := filepath.Join(s.gitDir, CheckpointsDirName, LatestFileName)
 
 	data, err := os.ReadFile(checkpointsFile)
 	if err != nil {
@@ -103,7 +110,7 @@ func (s *AIctStorage) LoadCheckpoints() ([]*tracker.CheckpointV2, error) {
 
 // ClearCheckpoints removes all checkpoints
 func (s *AIctStorage) ClearCheckpoints() error {
-	checkpointsFile := filepath.Join(s.gitDir, "checkpoints", "latest.json")
+	checkpointsFile := filepath.Join(s.gitDir, CheckpointsDirName, LatestFileName)
 	err := os.Remove(checkpointsFile)
 	if os.IsNotExist(err) {
 		return nil // Already cleared
@@ -113,7 +120,7 @@ func (s *AIctStorage) ClearCheckpoints() error {
 
 // SaveConfig saves config.json
 func (s *AIctStorage) SaveConfig(cfg *tracker.Config) error {
-	configFile := filepath.Join(s.gitDir, "config.json")
+	configFile := filepath.Join(s.gitDir, ConfigFileName)
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err
@@ -123,7 +130,7 @@ func (s *AIctStorage) SaveConfig(cfg *tracker.Config) error {
 
 // LoadConfig loads config.json
 func (s *AIctStorage) LoadConfig() (*tracker.Config, error) {
-	configFile := filepath.Join(s.gitDir, "config.json")
+	configFile := filepath.Join(s.gitDir, ConfigFileName)
 	data, err := os.ReadFile(configFile)
 	if err != nil {
 		return nil, err

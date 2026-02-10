@@ -77,7 +77,9 @@ Phase 1 の変更がデータ整合性に影響するため、実環境での動
 - [x] **3-4**: デバッグ出力の制御化 (Medium)
   - `debugf()` ヘルパー関数を追加、`AICT_DEBUG` 環境変数で制御
   - 8箇所のハードコードされた `[DEBUG]` 出力を `debugf` に置き換え
-- [ ] **3-5**: マジックストリング/ナンバーの定数化 (Low)
+- [x] **3-5**: マジックストリング/ナンバーの定数化 (Low)
+  - `storage` パッケージにエクスポート定数4つ追加（AictDirName, CheckpointsDirName, LatestFileName, ConfigFileName）
+  - `handlers_debug.go` のハードコードパスを定数参照に置き換え
 
 ## Phase 4: ハンドラリファクタリング
 

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
+	"github.com/y-hirakaw/ai-code-tracker/internal/storage"
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
 
@@ -22,7 +23,7 @@ func handleDebug() {
 		exitFunc(1)
 	}
 
-	aictDir := ".git/aict"
+	aictDir := filepath.Join(".git", storage.AictDirName)
 
 	subcommand := os.Args[2]
 	switch subcommand {
@@ -50,7 +51,7 @@ func handleDebug() {
 
 // handleDebugShow displays detailed checkpoint information for debugging
 func handleDebugShow(aictDir string) error {
-	checkpointsFile := filepath.Join(aictDir, "checkpoints", "latest.json")
+	checkpointsFile := filepath.Join(aictDir, storage.CheckpointsDirName, storage.LatestFileName)
 
 	// Check if checkpoints file exists
 	if _, err := os.Stat(checkpointsFile); os.IsNotExist(err) {
@@ -120,7 +121,7 @@ func displayCheckpoint(index int, cp *tracker.CheckpointV2) {
 
 // handleDebugClean removes all checkpoint data
 func handleDebugClean(aictDir string) error {
-	checkpointsFile := filepath.Join(aictDir, "checkpoints", "latest.json")
+	checkpointsFile := filepath.Join(aictDir, storage.CheckpointsDirName, storage.LatestFileName)
 
 	// Check if checkpoints file exists
 	if _, err := os.Stat(checkpointsFile); os.IsNotExist(err) {
