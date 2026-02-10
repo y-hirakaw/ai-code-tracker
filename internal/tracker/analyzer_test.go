@@ -53,6 +53,63 @@ func TestIsAIAuthor(t *testing.T) {
 	}
 }
 
+func TestIsAIAgent(t *testing.T) {
+	configuredAgents := []string{"My Custom Bot", "Internal AI"}
+	authorMappings := map[string]string{
+		"GPT Helper": "ai-assistant",
+		"Dev Lead":   "human-manager",
+	}
+
+	tests := []struct {
+		name     string
+		author   string
+		expected bool
+	}{
+		// DefaultAINames patterns
+		{"claude lowercase", "claude", true},
+		{"Claude Code", "Claude Code", true},
+		{"copilot", "GitHub Copilot", true},
+		{"chatgpt", "chatgpt-4o", true},
+		{"bot in name", "my-bot", true},
+		{"ai in name", "AI Helper", true},
+		{"assistant", "Code Assistant", true},
+
+		// Human authors
+		{"human name", "John Doe", false},
+		{"empty string", "", false},
+
+		// configuredAgents exact match
+		{"configured agent exact", "My Custom Bot", true},
+		{"configured agent case mismatch", "my custom bot", true}, // "bot" matches DefaultAINames
+
+		// authorMappings resolution
+		{"mapping to ai-like name", "GPT Helper", true}, // resolved to "ai-assistant", contains "ai"
+		{"mapping to human-like name", "Dev Lead", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsAIAgent(tt.author, configuredAgents, authorMappings)
+			if result != tt.expected {
+				t.Errorf("IsAIAgent(%q) = %v, expected %v", tt.author, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsAIAgentNilMappings(t *testing.T) {
+	// authorMappings が nil でもパニックしないことを確認
+	result := IsAIAgent("claude", nil, nil)
+	if !result {
+		t.Error("IsAIAgent('claude', nil, nil) should return true")
+	}
+
+	result = IsAIAgent("John Doe", nil, nil)
+	if result {
+		t.Error("IsAIAgent('John Doe', nil, nil) should return false")
+	}
+}
+
 func TestShouldTrackFile(t *testing.T) {
 	config := &Config{
 		TrackedExtensions: []string{".go", ".js", ".py"},
