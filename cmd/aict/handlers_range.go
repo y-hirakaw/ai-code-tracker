@@ -70,9 +70,16 @@ func handleRangeReport() error {
 	return handleRangeReportWithOptions(opts)
 }
 
+// authorStatsResult holds the aggregated statistics from collectAuthorStats
+type authorStatsResult struct {
+	byAuthor        map[string]*tracker.AuthorStats
+	totalAI         int
+	totalHuman      int
+	detailedMetrics tracker.DetailedMetrics
+}
+
 // handleRangeReportWithOptions handles report for commit range (SPEC.md準拠)
 func handleRangeReportWithOptions(opts *ReportOptions) error {
-	// 1. git log <range> でコミット一覧を取得
 	commits, err := getCommitsInRange(opts.Range)
 	if err != nil {
 		return fmt.Errorf("getting commits: %w", err)
@@ -87,56 +94,48 @@ func handleRangeReportWithOptions(opts *ReportOptions) error {
 		return nil
 	}
 
-	// 2. 各コミットのAuthorship Logを読み込み
+	result := collectAuthorStats(commits)
+	report := buildReport(opts, len(commits), result)
+
+	return formatRangeReport(report, opts.Format, &result.detailedMetrics)
+}
+
+// collectAuthorStats aggregates author statistics from commits' Authorship Logs
+func collectAuthorStats(commits []string) *authorStatsResult {
 	nm := gitnotes.NewNotesManager()
 	executor := gitexec.NewExecutor()
 
-	totalAI := 0
-	totalHuman := 0
-	byAuthor := make(map[string]*tracker.AuthorStats)
-
-	// 詳細メトリクス用
-	var detailedMetrics tracker.DetailedMetrics
+	result := &authorStatsResult{
+		byAuthor: make(map[string]*tracker.AuthorStats),
+	}
 
 	// 作成者ごとのコミット参加記録（重複カウント防止）
-	authorCommits := make(map[string]map[string]bool) // author -> commitHash -> bool
+	authorCommits := make(map[string]map[string]bool)
 
 	for _, commitHash := range commits {
 		log, err := nm.GetAuthorshipLog(commitHash)
-		if err != nil {
-			// Authorship Logがないコミットはスキップ
-			continue
-		}
-		if log == nil {
+		if err != nil || log == nil {
 			continue
 		}
 
-		// git show --numstat でコミットの追加/削除行数を取得
 		numstatOutput, err := executor.Run("show", "--numstat", "--format=", commitHash)
 		if err != nil {
-			// numstatが取得できない場合はスキップ
 			continue
 		}
 
-		// numstatデータをパース (filepath -> [added, deleted])
 		numstatMap, _ := git.ParseNumstat(numstatOutput)
-
-		// このコミットに参加した作成者を追跡
 		authorsInCommit := make(map[string]bool)
 
-		// 3. 集計（numstatベースのみ - 差分追跡方式）
 		for filepath, fileInfo := range log.Files {
-			// numstatデータから追加/削除を取得
 			numstat, found := numstatMap[filepath]
 			if !found {
-				continue // numstatがないファイルはスキップ
+				continue
 			}
 
 			totalAdded := numstat[0]
 			totalDeleted := numstat[1]
 
-			// Authorship Logから各作成者の行数を計算
-			// 複数作成者がいる場合は、行範囲から実際の行数を計算して按分
+			// Authorship Logから各作成者の行数を計算して按分
 			authorLineCount := make(map[string]int)
 			totalAuthorLines := 0
 
@@ -146,56 +145,47 @@ func handleRangeReportWithOptions(opts *ReportOptions) error {
 				totalAuthorLines += lines
 			}
 
-			// 作成者ごとに集計
 			for _, author := range fileInfo.Authors {
-				stats, exists := byAuthor[author.Name]
+				stats, exists := result.byAuthor[author.Name]
 				if !exists {
 					stats = &tracker.AuthorStats{
 						Name: author.Name,
 						Type: author.Type,
 					}
-					byAuthor[author.Name] = stats
+					result.byAuthor[author.Name] = stats
 				}
 
-				// この作成者の行数を取得
 				authorLines := authorLineCount[author.Name]
 
-				// numstatの追加行数・削除行数を作成者の比率で按分
 				var added, deleted int
 				if totalAuthorLines > 0 {
-					// 通常のケース: 追加行がある場合、比率で按分
 					ratio := float64(authorLines) / float64(totalAuthorLines)
 					added = int(float64(totalAdded) * ratio)
 					deleted = int(float64(totalDeleted) * ratio)
 				} else if len(fileInfo.Authors) == 1 {
-					// 削除のみのファイル: 作成者が1人の場合、全削除行をその作成者に割り当て
 					added = 0
 					deleted = int(totalDeleted)
 				}
 
 				stats.Lines += added
-
-				// このコミットに参加したことを記録
 				authorsInCommit[author.Name] = true
 
-				// 詳細メトリクス
 				if author.Type == tracker.AuthorTypeAI {
-					detailedMetrics.WorkVolume.AIAdded += added
-					detailedMetrics.WorkVolume.AIDeleted += deleted
-					detailedMetrics.WorkVolume.AIChanges += added + deleted
-					detailedMetrics.Contributions.AIAdditions += added
-					totalAI += added
+					result.detailedMetrics.WorkVolume.AIAdded += added
+					result.detailedMetrics.WorkVolume.AIDeleted += deleted
+					result.detailedMetrics.WorkVolume.AIChanges += added + deleted
+					result.detailedMetrics.Contributions.AIAdditions += added
+					result.totalAI += added
 				} else {
-					detailedMetrics.WorkVolume.HumanAdded += added
-					detailedMetrics.WorkVolume.HumanDeleted += deleted
-					detailedMetrics.WorkVolume.HumanChanges += added + deleted
-					detailedMetrics.Contributions.HumanAdditions += added
-					totalHuman += added
+					result.detailedMetrics.WorkVolume.HumanAdded += added
+					result.detailedMetrics.WorkVolume.HumanDeleted += deleted
+					result.detailedMetrics.WorkVolume.HumanChanges += added + deleted
+					result.detailedMetrics.Contributions.HumanAdditions += added
+					result.totalHuman += added
 				}
 			}
 		}
 
-		// このコミットに参加した作成者のコミット数を更新
 		for authorName := range authorsInCommit {
 			if authorCommits[authorName] == nil {
 				authorCommits[authorName] = make(map[string]bool)
@@ -206,12 +196,16 @@ func handleRangeReportWithOptions(opts *ReportOptions) error {
 
 	// コミット数を集計（重複なし）
 	for authorName, commits := range authorCommits {
-		if stats, exists := byAuthor[authorName]; exists {
+		if stats, exists := result.byAuthor[authorName]; exists {
 			stats.Commits = len(commits)
 		}
 	}
 
-	// 4. レポート生成
+	return result
+}
+
+// buildReport constructs a Report from aggregated author statistics
+func buildReport(opts *ReportOptions, commitCount int, result *authorStatsResult) *tracker.Report {
 	rangeDisplay := opts.Range
 	if opts.Since != "" {
 		rangeDisplay = "since " + opts.Since
@@ -219,27 +213,25 @@ func handleRangeReportWithOptions(opts *ReportOptions) error {
 
 	report := &tracker.Report{
 		Range:   rangeDisplay,
-		Commits: len(commits),
+		Commits: commitCount,
 		Summary: tracker.SummaryStats{
-			TotalLines:   totalAI + totalHuman,
-			AILines:      totalAI,
-			HumanLines:   totalHuman,
+			TotalLines:   result.totalAI + result.totalHuman,
+			AILines:      result.totalAI,
+			HumanLines:   result.totalHuman,
 			AIPercentage: 0,
 		},
 	}
 
 	if report.Summary.TotalLines > 0 {
-		report.Summary.AIPercentage = float64(totalAI) / float64(totalAI+totalHuman) * 100
+		report.Summary.AIPercentage = float64(result.totalAI) / float64(result.totalAI+result.totalHuman) * 100
 	}
 
-	// ByAuthor を追加
-	for _, stats := range byAuthor {
+	for _, stats := range result.byAuthor {
 		stats.Percentage = float64(stats.Lines) / float64(report.Summary.TotalLines) * 100
 		report.ByAuthor = append(report.ByAuthor, *stats)
 	}
 
-	// 5. フォーマットに応じて出力
-	return formatRangeReport(report, opts.Format, &detailedMetrics)
+	return report
 }
 
 // convertSinceToRange converts --since date to --range format

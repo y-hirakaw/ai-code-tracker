@@ -21,6 +21,12 @@ func handleCommit() error {
 		return fmt.Errorf("initializing storage: %w", err)
 	}
 
+	// 設定を読み込み
+	cfg, err := store.LoadConfig()
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
 	// 最新のコミットハッシュを取得
 	commitHash, err := getLatestCommitHash()
 	if err != nil {
@@ -76,7 +82,7 @@ func handleCommit() error {
 	}
 
 	// 完全な差分情報と作成者情報を統合してAuthorship Logを生成
-	log, err := buildAuthorshipLogFromDiff(fullDiff, authorshipMap, commitHash, changedFiles)
+	log, err := buildAuthorshipLogFromDiff(fullDiff, authorshipMap, commitHash, changedFiles, cfg)
 	if err != nil {
 		return fmt.Errorf("building authorship log: %w", err)
 	}
@@ -180,22 +186,13 @@ func buildAuthorshipLogFromDiff(
 	authorMap map[string]*tracker.CheckpointV2,
 	commitHash string,
 	changedFiles map[string]bool,
+	cfg *tracker.Config,
 ) (*tracker.AuthorshipLog, error) {
 	log := &tracker.AuthorshipLog{
 		Version:   authorship.AuthorshipLogVersion,
 		Commit:    commitHash,
 		Timestamp: time.Now(),
 		Files:     make(map[string]tracker.FileInfo),
-	}
-
-	store, err := storage.NewAIctStorage()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create storage: %w", err)
-	}
-
-	cfg, err := store.LoadConfig()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
 	// 各変更ファイルに対してAuthorship情報を生成

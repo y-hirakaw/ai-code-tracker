@@ -102,10 +102,12 @@ Phase 3 の変更（特にnumstat統一・gitexec移行）がデータパスに�
   - 全7ハンドラファイルを `error` 返却に変更
   - `main()` で一元的にエラー表示 + `exitFunc(1)` に統一
   - `os.Exit(1)` 39箇所を完全除去（main.go の `exitFunc(1)` のみ残存）
-- [ ] **4-2**: handleRangeReportWithOptions の分割 (Medium)
-  - 185行 → `collectAuthorStats()`, `buildReport()` に分割
-- [ ] **4-3**: buildAuthorshipLogFromDiff の重複初期化修正 (High)
-  - `NewAIctStorage()` / `LoadConfig()` の重複呼び出し除去
+- [x] **4-2**: handleRangeReportWithOptions の分割 (Medium)
+  - 170行 → `collectAuthorStats()` + `buildReport()` + `authorStatsResult` 構造体に分割
+  - `handleRangeReportWithOptions` は22行に削減（87%削減）
+- [x] **4-3**: buildAuthorshipLogFromDiff の重複初期化修正 (High)
+  - `handleCommit()` で `LoadConfig()` を呼び、`cfg` をパラメータとして渡すように変更
+  - `buildAuthorshipLogFromDiff` 内の `NewAIctStorage()` / `LoadConfig()` を除去
 
 ## Phase 5: パフォーマンス改善
 
