@@ -3,14 +3,24 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/exec"
-	"strings"
+
+	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
 )
 
 const version = "1.3.1"
 
 // exitFunc is used to mock os.Exit in tests
 var exitFunc = os.Exit
+
+// debugEnabled controls debug output via AICT_DEBUG environment variable
+var debugEnabled = os.Getenv("AICT_DEBUG") != ""
+
+// debugf prints debug messages to stderr when AICT_DEBUG is set
+func debugf(format string, args ...interface{}) {
+	if debugEnabled {
+		fmt.Fprintf(os.Stderr, "[DEBUG] "+format+"\n", args...)
+	}
+}
 
 func main() {
 	if len(os.Args) < 2 {
@@ -86,11 +96,11 @@ func printUsage() {
 }
 
 func getGitUserName() string {
-	cmd := exec.Command("git", "config", "user.name")
-	output, err := cmd.Output()
+	executor := gitexec.NewExecutor()
+	output, err := executor.Run("config", "user.name")
 	if err != nil {
 		return ""
 	}
-	return strings.TrimSpace(string(output))
+	return output
 }
 

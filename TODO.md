@@ -66,15 +66,17 @@ Phase 1 の変更がデータ整合性に影響するため、実環境での動
 
 ## Phase 3: コード重複の解消・品質改善
 
-- [ ] **3-1**: numstat解析ロジックの統一 (High)
-  - `internal/git/numstat.go` の `ParseNumstat` に集約
-  - ハンドラ内の独自実装を削除
-- [ ] **3-2**: Executor インスタンスの使い回し (Medium)
-  - 関数・ループ内での冗長な `NewExecutor()` 生成を整理
-- [ ] **3-3**: main.go の gitexec 迂回修正 (Medium)
-  - `exec.Command("git", ...)` を `gitexec` 経由に変更
-- [ ] **3-4**: デバッグ出力の制御化 (Medium)
-  - `AICT_DEBUG` 環境変数 or `--verbose` フラグで制御
+- [x] **3-1**: numstat解析ロジックの統一 (High)
+  - `parseNumstatOutput`, `parseNumstatFiles` を削除、`git.ParseNumstat` に集約
+  - `getCommitDiff` 内の手動パースも `git.ParseNumstat` に統一
+- [x] **3-2**: Executor インスタンスの使い回し (Medium)
+  - `convertSinceToRange` 内の冗長な `executor2` を削除
+- [x] **3-3**: main.go の gitexec 迂回修正 (Medium)
+  - `exec.Command("git", ...)` を `gitexec.NewExecutor()` 経由に変更
+  - `os/exec` import を削除
+- [x] **3-4**: デバッグ出力の制御化 (Medium)
+  - `debugf()` ヘルパー関数を追加、`AICT_DEBUG` 環境変数で制御
+  - 8箇所のハードコードされた `[DEBUG]` 出力を `debugf` に置き換え
 - [ ] **3-5**: マジックストリング/ナンバーの定数化 (Low)
 
 ## Phase 4: ハンドラリファクタリング

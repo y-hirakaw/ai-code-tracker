@@ -5,10 +5,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/y-hirakaw/ai-code-tracker/internal/authorship"
+	"github.com/y-hirakaw/ai-code-tracker/internal/git"
 	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
 	"github.com/y-hirakaw/ai-code-tracker/internal/gitnotes"
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
@@ -121,7 +121,7 @@ func handleRangeReportWithOptions(opts *ReportOptions) {
 		}
 
 		// numstatデータをパース (filepath -> [added, deleted])
-		numstatMap := parseNumstatOutput(numstatOutput)
+		numstatMap, _ := git.ParseNumstat(numstatOutput)
 
 		// このコミットに参加した作成者を追跡
 		authorsInCommit := make(map[string]bool)
@@ -265,8 +265,7 @@ func convertSinceToRange(since string) (string, error) {
 	firstCommit := commits[0]
 
 	// 最初のコミットの親が存在するか確認
-	executor2 := gitexec.NewExecutor()
-	_, err = executor2.Run("rev-parse", firstCommit+"^")
+	_, err = executor.Run("rev-parse", firstCommit+"^")
 	if err != nil {
 		// 親がない（初回コミット、またはリポジトリ初期化直後）場合
 		// 最初のコミット自体から開始: firstCommit..HEAD
@@ -338,46 +337,6 @@ func getCommitsInRange(rangeSpec string) ([]string, error) {
 	}
 
 	return commits, nil
-}
-
-// parseNumstatOutput parses git show --numstat output
-// Returns map[filepath][added, deleted]
-func parseNumstatOutput(output string) map[string][2]int {
-	result := make(map[string][2]int)
-	lines := strings.Split(output, "\n")
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-
-		// numstat format: <added>\t<deleted>\t<filepath>
-		parts := strings.Split(line, "\t")
-		if len(parts) != 3 {
-			continue
-		}
-
-		added := 0
-		deleted := 0
-
-		// "-" means binary file
-		if parts[0] != "-" {
-			if v, err := strconv.Atoi(parts[0]); err == nil {
-				added = v
-			}
-		}
-		if parts[1] != "-" {
-			if v, err := strconv.Atoi(parts[1]); err == nil {
-				deleted = v
-			}
-		}
-
-		filepath := parts[2]
-		result[filepath] = [2]int{added, deleted}
-	}
-
-	return result
 }
 
 // formatRangeReport formats and displays the range report

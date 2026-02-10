@@ -103,16 +103,16 @@ func handleCheckpoint() {
 	if len(changes) == 0 {
 		if lastCheckpoint == nil {
 			// 初回チェックポイント: 前回コミットから差分なし = baseline
-			fmt.Fprintf(os.Stderr, "[DEBUG] Initial checkpoint: author=%s, files=0\n", authorName)
+			debugf("Initial checkpoint: author=%s, files=0", authorName)
 			fmt.Println("✓ Initial checkpoint created (baseline, no changes since last commit)")
 		} else {
 			// 2回目以降: 前回チェックポイントから差分なし
-			fmt.Fprintf(os.Stderr, "[DEBUG] Checkpoint: author=%s, files=0 (no changes)\n", authorName)
+			debugf("Checkpoint: author=%s, files=0 (no changes)", authorName)
 			fmt.Println("✓ Checkpoint created (no changes since last checkpoint)")
 		}
 	} else {
 		// 変更がある場合
-		fmt.Fprintf(os.Stderr, "[DEBUG] Checkpoint: author=%s, files=%d, changes=%v\n", authorName, len(changes), getFileList(changes))
+		debugf("Checkpoint: author=%s, files=%d, changes=%v", authorName, len(changes), getFileList(changes))
 	}
 
 	// チェックポイントを作成
