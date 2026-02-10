@@ -2,19 +2,17 @@ package main
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/y-hirakaw/ai-code-tracker/internal/storage"
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
 
 // handleInitV2 handles SPEC.md準拠の新しい初期化処理
-func handleInitV2() {
+func handleInitV2() error {
 	// .git/aict/ ディレクトリを作成
 	store, err := storage.NewAIctStorage()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error initializing storage: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("initializing storage: %w", err)
 	}
 
 	// デフォルト設定を作成
@@ -49,8 +47,7 @@ func handleInitV2() {
 
 	// 設定を保存
 	if err := store.SaveConfig(config); err != nil {
-		fmt.Fprintf(os.Stderr, "Error saving config: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("saving config: %w", err)
 	}
 
 	fmt.Println("✓ AI Code Tracker initialized successfully!")
@@ -63,4 +60,5 @@ func handleInitV2() {
 	fmt.Println("  2. Commit your changes with git")
 	fmt.Println("  3. Run 'aict commit' to generate Authorship Log")
 	fmt.Println("  4. Use 'aict report --range <range>' to view statistics")
+	return nil
 }

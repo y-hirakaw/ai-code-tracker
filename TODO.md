@@ -81,11 +81,27 @@ Phase 1 の変更がデータ整合性に影響するため、実環境での動
   - `storage` パッケージにエクスポート定数4つ追加（AictDirName, CheckpointsDirName, LatestFileName, ConfigFileName）
   - `handlers_debug.go` のハードコードパスを定数参照に置き換え
 
+## Phase 3.5: 動作確認
+
+Phase 3 の変更（特にnumstat統一・gitexec移行）がデータパスに影響するため、実環境での動作確認を行う。
+
+- [x] **3.5-1**: レポート生成の動作確認
+  - `aict report --since 7d` → 正常出力（10コミット、作業量1561行）
+  - `aict report --since 1d` → 正常出力（4コミット、作業量1414行）
+  - numstat統一後もデータが正しく集計されていることを確認
+- [x] **3.5-2**: チェックポイント操作の動作確認
+  - `aict checkpoint --author human` → 正常に保存
+  - `aict debug show` → 保存データの表示正常（タイムスタンプ、作成者、メタデータ）
+  - `aict debug clean` → 削除正常
+- [x] **3.5-3**: getGitUserName() の動作確認
+  - gitexec移行後も `git config user.name` の値 (`y-hirakaw`) が正しく取得されていることをレポートのBy Author欄で確認
+
 ## Phase 4: ハンドラリファクタリング
 
-- [ ] **4-1**: ハンドラの error 返却パターンへの移行 (High)
-  - `os.Exit(1)` 33箇所を段階的に移行
-  - 1ファイルずつ移行してテスト確認
+- [x] **4-1**: ハンドラの error 返却パターンへの移行 (High)
+  - 全7ハンドラファイルを `error` 返却に変更
+  - `main()` で一元的にエラー表示 + `exitFunc(1)` に統一
+  - `os.Exit(1)` 39箇所を完全除去（main.go の `exitFunc(1)` のみ残存）
 - [ ] **4-2**: handleRangeReportWithOptions の分割 (Medium)
   - 185行 → `collectAuthorStats()`, `buildReport()` に分割
 - [ ] **4-3**: buildAuthorshipLogFromDiff の重複初期化修正 (High)

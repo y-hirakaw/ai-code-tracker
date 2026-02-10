@@ -22,7 +22,7 @@ type ReportOptions struct {
 }
 
 // handleRangeReport is the entry point called from main
-func handleRangeReport() {
+func handleRangeReport() error {
 	fs := flag.NewFlagSet("report", flag.ExitOnError)
 
 	opts := &ReportOptions{}
@@ -36,7 +36,7 @@ func handleRangeReport() {
 	if opts.Range != "" && opts.Since != "" {
 		fmt.Println("Error: --range and --since are mutually exclusive")
 		fmt.Println("Please use either --range or --since, not both")
-		os.Exit(1)
+		return fmt.Errorf("--range and --since are mutually exclusive")
 	}
 
 	// どちらも指定されていない場合
@@ -55,29 +55,27 @@ func handleRangeReport() {
 		fmt.Println("  aict report --since '7 days ago'")
 		fmt.Println("  aict report --since '2025-01-01'")
 		fmt.Println("  aict report --since yesterday")
-		os.Exit(1)
+		return fmt.Errorf("either --range or --since is required")
 	}
 
 	// --since を --range に変換
 	if opts.Since != "" {
 		convertedRange, err := convertSinceToRange(opts.Since)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		opts.Range = convertedRange
 	}
 
-	handleRangeReportWithOptions(opts)
+	return handleRangeReportWithOptions(opts)
 }
 
 // handleRangeReportWithOptions handles report for commit range (SPEC.md準拠)
-func handleRangeReportWithOptions(opts *ReportOptions) {
+func handleRangeReportWithOptions(opts *ReportOptions) error {
 	// 1. git log <range> でコミット一覧を取得
 	commits, err := getCommitsInRange(opts.Range)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("getting commits: %w", err)
 	}
 
 	if len(commits) == 0 {
@@ -86,7 +84,7 @@ func handleRangeReportWithOptions(opts *ReportOptions) {
 			rangeDisplay = "since " + opts.Since
 		}
 		fmt.Println("No commits found in range:", rangeDisplay)
-		return
+		return nil
 	}
 
 	// 2. 各コミットのAuthorship Logを読み込み
@@ -241,7 +239,7 @@ func handleRangeReportWithOptions(opts *ReportOptions) {
 	}
 
 	// 5. フォーマットに応じて出力
-	formatRangeReport(report, opts.Format, &detailedMetrics)
+	return formatRangeReport(report, opts.Format, &detailedMetrics)
 }
 
 // convertSinceToRange converts --since date to --range format
@@ -340,13 +338,12 @@ func getCommitsInRange(rangeSpec string) ([]string, error) {
 }
 
 // formatRangeReport formats and displays the range report
-func formatRangeReport(report *tracker.Report, format string, metrics *tracker.DetailedMetrics) {
+func formatRangeReport(report *tracker.Report, format string, metrics *tracker.DetailedMetrics) error {
 	switch format {
 	case "json":
 		data, err := json.MarshalIndent(report, "", "  ")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error formatting JSON: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("formatting JSON: %w", err)
 		}
 		fmt.Println(string(data))
 
@@ -378,9 +375,9 @@ func formatRangeReport(report *tracker.Report, format string, metrics *tracker.D
 		}
 
 	default:
-		fmt.Fprintf(os.Stderr, "Unknown format: %s\n", format)
-		os.Exit(1)
+		return fmt.Errorf("unknown format: %s", format)
 	}
+	return nil
 }
 
 // printDetailedMetrics prints detailed metrics

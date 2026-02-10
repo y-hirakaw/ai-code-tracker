@@ -11,32 +11,28 @@ import (
 )
 
 // handleSetupHooksV2 handles SPEC.md準拠のhookセットアップ
-func handleSetupHooksV2() {
+func handleSetupHooksV2() error {
 	fmt.Println("Setting up AI Code Tracker hooks (SPEC.md)...")
 
 	// .git/aict/hooks/ ディレクトリを作成
 	hooksDir := ".git/aict/hooks"
 	if err := os.MkdirAll(hooksDir, 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating hooks directory: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("creating hooks directory: %w", err)
 	}
 
 	// Claude Code hooksを作成
 	if err := createClaudeHooks(hooksDir); err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating Claude Code hooks: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("creating Claude Code hooks: %w", err)
 	}
 
 	// Git post-commit hookを作成
 	if err := setupPostCommitHook(hooksDir); err != nil {
-		fmt.Fprintf(os.Stderr, "Error setting up post-commit hook: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("setting up post-commit hook: %w", err)
 	}
 
 	// .claude/settings.json を更新
 	if err := setupClaudeSettings(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error setting up Claude Code settings: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("setting up Claude Code settings: %w", err)
 	}
 
 	fmt.Println()
@@ -48,6 +44,7 @@ func handleSetupHooksV2() {
 	fmt.Println("  - .git/hooks/post-commit           (generates Authorship Log)")
 	fmt.Println()
 	fmt.Println("Claude Code will now automatically track AI vs Human contributions.")
+	return nil
 }
 
 func createClaudeHooks(hooksDir string) error {

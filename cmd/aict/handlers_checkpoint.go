@@ -15,7 +15,7 @@ import (
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
 
-func handleCheckpoint() {
+func handleCheckpoint() error {
 	fs := flag.NewFlagSet("checkpoint", flag.ExitOnError)
 	author := fs.String("author", "", "作成者名（デフォルト: config.default_author）")
 	model := fs.String("model", "", "AIモデル名（AIエージェントの場合）")
@@ -26,27 +26,23 @@ func handleCheckpoint() {
 	executor := gitexec.NewExecutor()
 	repoRoot, err := executor.Run("rev-parse", "--show-toplevel")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Not in a git repository\n")
-		os.Exit(1)
+		return fmt.Errorf("not in a git repository")
 	}
 	if err := os.Chdir(repoRoot); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Failed to change directory to %s: %v\n", repoRoot, err)
-		os.Exit(1)
+		return fmt.Errorf("failed to change directory to %s: %w", repoRoot, err)
 	}
 
 	// ストレージを初期化
 	store, err := storage.NewAIctStorage()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("initializing storage: %w", err)
 	}
 
 	// 設定を読み込み
 	config, err := store.LoadConfig()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		fmt.Fprintf(os.Stderr, "Run 'aict init' first\n")
-		os.Exit(1)
+		return fmt.Errorf("loading config: %w", err)
 	}
 
 	// 作成者名を決定
@@ -60,9 +56,7 @@ func handleCheckpoint() {
 			if err == nil {
 				authorName = output
 			} else {
-				fmt.Fprintf(os.Stderr, "Error: Author name not specified and default_author not configured\n")
-				fmt.Fprintf(os.Stderr, "Use --author flag or configure default_author\n")
-				os.Exit(1)
+				return fmt.Errorf("author name not specified and default_author not configured. Use --author flag or configure default_author")
 			}
 		}
 	}
@@ -76,8 +70,7 @@ func handleCheckpoint() {
 	// 前回のチェックポイントを読み込む
 	checkpoints, err := store.LoadCheckpoints()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading checkpoints: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("loading checkpoints: %w", err)
 	}
 
 	var lastCheckpoint *tracker.CheckpointV2
@@ -88,15 +81,13 @@ func handleCheckpoint() {
 	// 現在のスナップショットを作成
 	currentSnapshot, err := captureSnapshot(config.TrackedExtensions)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error capturing snapshot: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("capturing snapshot: %w", err)
 	}
 
 	// 前回のチェックポイントとの差分を検出
 	changes, err := detectChangesFromSnapshot(lastCheckpoint, currentSnapshot)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error detecting changes: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("detecting changes: %w", err)
 	}
 
 	// 変更がない場合でもチェックポイントを記録（初回やbaseline）
@@ -135,8 +126,7 @@ func handleCheckpoint() {
 
 	// チェックポイントを保存
 	if err := store.SaveCheckpoint(checkpoint); err != nil {
-		fmt.Fprintf(os.Stderr, "Error saving checkpoint: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("saving checkpoint: %w", err)
 	}
 
 	// 変更行数をカウント
@@ -148,6 +138,7 @@ func handleCheckpoint() {
 	}
 
 	fmt.Printf("✓ Checkpoint created (%s, %d files, %d lines added)\n", authorName, totalFiles, totalAdded)
+	return nil
 }
 
 // captureSnapshot creates a snapshot of all tracked files in working directory

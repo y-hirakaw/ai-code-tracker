@@ -13,14 +13,14 @@ import (
 )
 
 // handleDebug handles the debug command
-func handleDebug() {
+func handleDebug() error {
 	if len(os.Args) < 3 {
 		fmt.Println("エラー: debug サブコマンドを指定してください (show, clean, または clear-notes)")
 		fmt.Println("使用法:")
 		fmt.Println("  aict debug show              # チェックポイント情報を表示")
 		fmt.Println("  aict debug clean             # チェックポイントを削除")
 		fmt.Println("  aict debug clear-notes       # Git notesのAuthorship Logをクリア")
-		exitFunc(1)
+		return fmt.Errorf("debug subcommand required")
 	}
 
 	aictDir := filepath.Join(".git", storage.AictDirName)
@@ -28,24 +28,15 @@ func handleDebug() {
 	subcommand := os.Args[2]
 	switch subcommand {
 	case "show":
-		if err := handleDebugShow(aictDir); err != nil {
-			fmt.Fprintf(os.Stderr, "エラー: %v\n", err)
-			exitFunc(1)
-		}
+		return handleDebugShow(aictDir)
 	case "clean":
-		if err := handleDebugClean(aictDir); err != nil {
-			fmt.Fprintf(os.Stderr, "エラー: %v\n", err)
-			exitFunc(1)
-		}
+		return handleDebugClean(aictDir)
 	case "clear-notes":
-		if err := handleDebugClearNotes(); err != nil {
-			fmt.Fprintf(os.Stderr, "エラー: %v\n", err)
-			exitFunc(1)
-		}
+		return handleDebugClearNotes()
 	default:
 		fmt.Printf("エラー: 不明なサブコマンド '%s'\n", subcommand)
 		fmt.Println("利用可能なサブコマンド: show, clean, clear-notes")
-		exitFunc(1)
+		return fmt.Errorf("unknown subcommand: %s", subcommand)
 	}
 }
 

@@ -14,19 +14,17 @@ import (
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
 
-func handleCommit() {
+func handleCommit() error {
 	// ストレージを初期化
 	store, err := storage.NewAIctStorage()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("initializing storage: %w", err)
 	}
 
 	// 最新のコミットハッシュを取得
 	commitHash, err := getLatestCommitHash()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error getting commit hash: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("getting commit hash: %w", err)
 	}
 
 	// コミットのnumstatを取得
@@ -44,14 +42,13 @@ func handleCommit() {
 	}
 	if len(changedFiles) == 0 {
 		fmt.Println("No tracked files changed in this commit")
-		return
+		return nil
 	}
 
 	// チェックポイントを読み込み
 	checkpoints, err := store.LoadCheckpoints()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading checkpoints: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("loading checkpoints: %w", err)
 	}
 
 	// デバッグ: チェックポイント詳細を出力
@@ -66,8 +63,7 @@ func handleCommit() {
 	// 前回コミット（HEAD~1）との完全な差分を取得
 	fullDiff, err := getCommitDiff(commitHash)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error getting commit diff: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("getting commit diff: %w", err)
 	}
 
 	// チェックポイントから作成者マッピングを構築
@@ -82,21 +78,18 @@ func handleCommit() {
 	// 完全な差分情報と作成者情報を統合してAuthorship Logを生成
 	log, err := buildAuthorshipLogFromDiff(fullDiff, authorshipMap, commitHash, changedFiles)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error building authorship log: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("building authorship log: %w", err)
 	}
 
 	// バリデーション
 	if err := authorship.ValidateAuthorshipLog(log); err != nil {
-		fmt.Fprintf(os.Stderr, "Error validating authorship log: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("validating authorship log: %w", err)
 	}
 
 	// Git notesに保存
 	nm := gitnotes.NewNotesManager()
 	if err := nm.AddAuthorshipLog(log); err != nil {
-		fmt.Fprintf(os.Stderr, "Error saving authorship log: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("saving authorship log: %w", err)
 	}
 
 	// チェックポイントをクリア
@@ -105,6 +98,7 @@ func handleCommit() {
 	}
 
 	fmt.Println("✓ Authorship log created")
+	return nil
 }
 
 // getLatestCommitHash retrieves the latest commit hash

@@ -29,21 +29,23 @@ func main() {
 	}
 
 	command := os.Args[1]
+
+	var err error
 	switch command {
 	case "init":
-		handleInitV2()
+		err = handleInitV2()
 	case "checkpoint":
-		handleCheckpoint()
+		err = handleCheckpoint()
 	case "commit":
-		handleCommit()
+		err = handleCommit()
 	case "report":
-		handleRangeReport()
+		err = handleRangeReport()
 	case "sync":
-		handleSync()
+		err = handleSync()
 	case "setup-hooks":
-		handleSetupHooksV2()
+		err = handleSetupHooksV2()
 	case "debug":
-		handleDebug()
+		err = handleDebug()
 	case "version", "--version", "-v":
 		fmt.Printf("AI Code Tracker (aict) version %s\n", version)
 	case "help", "--help", "-h":
@@ -51,6 +53,11 @@ func main() {
 	default:
 		fmt.Printf("Unknown command: %s\n", command)
 		printUsage()
+		exitFunc(1)
+	}
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		exitFunc(1)
 	}
 }
