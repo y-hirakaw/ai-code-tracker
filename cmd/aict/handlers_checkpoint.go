@@ -141,7 +141,7 @@ func handleCheckpoint() error {
 	return nil
 }
 
-// captureSnapshot creates a snapshot of all tracked files in working directory
+// captureSnapshot は作業ディレクトリ内のすべての追跡対象ファイルのスナップショットを作成します
 func captureSnapshot(trackedExtensions []string) (map[string]tracker.FileSnapshot, error) {
 	snapshot := make(map[string]tracker.FileSnapshot)
 
@@ -195,7 +195,7 @@ func captureSnapshot(trackedExtensions []string) (map[string]tracker.FileSnapsho
 	return snapshot, nil
 }
 
-// detectChangesFromSnapshot detects changes between two snapshots
+// detectChangesFromSnapshot は2つのスナップショット間の変更を検出します
 func detectChangesFromSnapshot(lastCheckpoint *tracker.CheckpointV2, currentSnapshot map[string]tracker.FileSnapshot) (map[string]tracker.Change, error) {
 	changes := make(map[string]tracker.Change)
 
@@ -370,7 +370,6 @@ func getLineRangesFromDiff(filepath string) ([][]int, error) {
 
 	return ranges, nil
 }
-
 
 // getFileList returns a list of filenames from changes map
 func getFileList(changes map[string]tracker.Change) []string {

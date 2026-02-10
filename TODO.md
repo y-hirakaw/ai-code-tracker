@@ -156,6 +156,6 @@ Phase 4 の変更（error返却パターン・関数分割・Config読み込み�
 
 ## Phase 8: その他
 
-- [ ] **8-1**: コメント言語の統一 (Low)
-- [ ] **8-2**: AuthorMappings の初期化 (Low)
-- [ ] **8-3**: 変数名 filepath のシャドウイング解消 (Low)
+- [x] **8-1**: コメント言語の統一 (Low)
+- [x] **8-2**: AuthorMappings の初期化 (Low)
+- [x] **8-3**: 変数名 filepath のシャドウイング解消 (Low)

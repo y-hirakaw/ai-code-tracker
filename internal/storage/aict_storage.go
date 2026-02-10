@@ -141,6 +141,11 @@ func (s *AIctStorage) LoadConfig() (*tracker.Config, error) {
 		return nil, err
 	}
 
+	// AuthorMappingsの初期化（nil書き込み防止）
+	if cfg.AuthorMappings == nil {
+		cfg.AuthorMappings = make(map[string]string)
+	}
+
 	return &cfg, nil
 }
 

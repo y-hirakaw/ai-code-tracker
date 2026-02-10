@@ -107,7 +107,7 @@ func handleCommit() error {
 	return nil
 }
 
-// getLatestCommitHash retrieves the latest commit hash
+// getLatestCommitHash は最新のコミットハッシュを取得します
 func getLatestCommitHash() (string, error) {
 	executor := gitexec.NewExecutor()
 	output, err := executor.Run("rev-parse", "HEAD")
@@ -117,8 +117,8 @@ func getLatestCommitHash() (string, error) {
 	return output, nil
 }
 
-// getCommitDiff gets the complete diff between HEAD~1 and HEAD
-// Returns map[filepath]Change with line ranges
+// getCommitDiff はHEAD~1とHEADの間の完全なdiffを取得します
+// 戻り値: map[filepath]Change (行範囲付き)
 func getCommitDiff(commitHash string) (map[string]tracker.Change, error) {
 	executor := gitexec.NewExecutor()
 
@@ -144,7 +144,7 @@ func getCommitDiff(commitHash string) (map[string]tracker.Change, error) {
 	numstatMap, _ := git.ParseNumstat(numstatOutput)
 	diffMap := make(map[string]tracker.Change, len(numstatMap))
 
-	for filepath, stats := range numstatMap {
+	for fpath, stats := range numstatMap {
 		added := stats[0]
 		deleted := stats[1]
 
@@ -153,7 +153,7 @@ func getCommitDiff(commitHash string) (map[string]tracker.Change, error) {
 			lineRanges = append(lineRanges, []int{1, added})
 		}
 
-		diffMap[filepath] = tracker.Change{
+		diffMap[fpath] = tracker.Change{
 			Added:   added,
 			Deleted: deleted,
 			Lines:   lineRanges,
@@ -163,16 +163,16 @@ func getCommitDiff(commitHash string) (map[string]tracker.Change, error) {
 	return diffMap, nil
 }
 
-// buildAuthorshipMap builds a map of filepath -> author from checkpoints
+// buildAuthorshipMap はチェックポイントから filepath -> author のマップを構築します
 func buildAuthorshipMap(checkpoints []*tracker.CheckpointV2, changedFiles map[string]bool) map[string]*tracker.CheckpointV2 {
 	authorMap := make(map[string]*tracker.CheckpointV2)
 
 	// 各ファイルについて、最後に変更したチェックポイントを記録
 	for _, cp := range checkpoints {
-		for filepath := range cp.Changes {
+		for fpath := range cp.Changes {
 			// changedFilesに含まれるファイルのみ処理
-			if changedFiles[filepath] {
-				authorMap[filepath] = cp
+			if changedFiles[fpath] {
+				authorMap[fpath] = cp
 			}
 		}
 	}
@@ -180,7 +180,7 @@ func buildAuthorshipMap(checkpoints []*tracker.CheckpointV2, changedFiles map[st
 	return authorMap
 }
 
-// buildAuthorshipLogFromDiff creates Authorship Log from diff and authorship mapping
+// buildAuthorshipLogFromDiff はdiffとauthorshipマッピングからAuthorship Logを作成します
 func buildAuthorshipLogFromDiff(
 	diffMap map[string]tracker.Change,
 	authorMap map[string]*tracker.CheckpointV2,
@@ -196,14 +196,14 @@ func buildAuthorshipLogFromDiff(
 	}
 
 	// 各変更ファイルに対してAuthorship情報を生成
-	for filepath, change := range diffMap {
+	for fpath, change := range diffMap {
 		// numstatフィルタリング
-		if !changedFiles[filepath] {
+		if !changedFiles[fpath] {
 			continue
 		}
 
 		// 追跡対象の拡張子かチェック
-		if !isTrackedFile(filepath, cfg) {
+		if !isTrackedFile(fpath, cfg) {
 			continue
 		}
 
@@ -212,7 +212,7 @@ func buildAuthorshipLogFromDiff(
 		var authorType tracker.AuthorType
 		var metadata map[string]string
 
-		if cp, exists := authorMap[filepath]; exists {
+		if cp, exists := authorMap[fpath]; exists {
 			// チェックポイントに記録がある場合
 			authorName = cp.Author
 			authorType = cp.Type
@@ -236,21 +236,21 @@ func buildAuthorshipLogFromDiff(
 			},
 		}
 
-		log.Files[filepath] = fileInfo
+		log.Files[fpath] = fileInfo
 	}
 
 	return log, nil
 }
 
-// isTrackedFile checks if a file should be tracked based on config
-func isTrackedFile(filepath string, cfg *tracker.Config) bool {
-	// Check tracked extensions
+// isTrackedFile は設定に基づいてファイルが追跡対象かどうかを判定します
+func isTrackedFile(fpath string, cfg *tracker.Config) bool {
+	// 追跡対象の拡張子をチェック
 	for _, ext := range cfg.TrackedExtensions {
-		if strings.HasSuffix(filepath, ext) {
-			// Check exclude patterns
+		if strings.HasSuffix(fpath, ext) {
+			// 除外パターンをチェック
 			for _, pattern := range cfg.ExcludePatterns {
-				// Simple pattern matching (supports * wildcard)
-				if matchesPattern(filepath, pattern) {
+				// 単純なパターンマッチング（* ワイルドカード対応）
+				if matchesPattern(fpath, pattern) {
 					return false
 				}
 			}
@@ -260,14 +260,14 @@ func isTrackedFile(filepath string, cfg *tracker.Config) bool {
 	return false
 }
 
-// matchesPattern performs simple wildcard pattern matching
-func matchesPattern(filepath, pattern string) bool {
+// matchesPattern は単純なワイルドカードパターンマッチングを行います
+func matchesPattern(fpath, pattern string) bool {
 	// Simple implementation: exact match or suffix match with *
 	if strings.HasPrefix(pattern, "*") {
-		return strings.HasSuffix(filepath, pattern[1:])
+		return strings.HasSuffix(fpath, pattern[1:])
 	}
 	if strings.HasSuffix(pattern, "*") {
-		return strings.HasPrefix(filepath, pattern[:len(pattern)-1])
+		return strings.HasPrefix(fpath, pattern[:len(pattern)-1])
 	}
-	return filepath == pattern
+	return fpath == pattern
 }
