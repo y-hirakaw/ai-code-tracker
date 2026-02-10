@@ -45,24 +45,24 @@ Phase 1 の変更がデータ整合性に影響するため、実環境での動
 
 ## Phase 2: デッドコード削除
 
-- [ ] **2-5**: `test_edit.go` を削除 (Low)
-- [ ] **2-4**: 未使用変数・構造体の削除 (Medium)
-  - `handlers_range.go:98` の `byFile`
-  - `handlers_range.go:261-268` の `FileStatsRange`
-- [ ] **2-1**: 未使用パッケージの削除 (High)
-  - `internal/interfaces/storage.go`
-  - `internal/git/diff_context.go`
-  - `internal/git/diff.go` 内の未使用メソッド
-- [ ] **2-2**: レガシーコードの削除 (High)
-  - `internal/tracker/checkpoint.go`
-  - `internal/storage/json.go`
-  - `internal/templates/hooks.go:84-87`
-  - `internal/errors/errors.go:99-107`
-  - `internal/gitnotes/notes.go:21-27`
-- [ ] **2-3**: セキュリティ/バリデーションモジュールの判断 (High)
-  - `internal/security/safe_operations.go`
-  - `internal/validation/config.go`
-  - Phase 5/6 で統合するか削除するか判断
+- [x] **2-5**: `test_edit.go` を削除 (Low)
+  - 既に削除済み（以前のリファクタリングで対応済み）
+- [x] **2-4**: 未使用変数・構造体の削除 (Medium)
+  - `handlers_range.go` の `byFile` 変数、`FileStatsRange` 構造体、関連ループを削除
+- [x] **2-1**: 未使用パッケージの削除 (High)
+  - `internal/interfaces/` パッケージ全体を削除
+  - `internal/git/diff.go`, `diff_context.go`, `diff_test.go` を削除（DiffAnalyzer系）
+- [x] **2-2**: レガシーコードの削除 (High)
+  - `internal/tracker/checkpoint.go` + テスト（旧CheckpointManager）
+  - `internal/storage/json.go` + テスト（旧JSONStorage）
+  - `internal/templates/hooks.go` の `PreCommitHook` 定数
+  - `internal/errors/errors.go` の `NewAnalysisError` + `ErrTypeAnalysis`
+  - `internal/gitnotes/notes.go` の `AIEditNote` + 旧メソッド群（AddNote, GetNote, ListNotes, RemoveNote）
+- [x] **2-3**: セキュリティ/バリデーションモジュールの判断 (High)
+  - `internal/security/` パッケージ全体を削除（外部から未使用）
+  - `internal/validation/` パッケージ全体を削除（外部から未使用）
+  - `internal/errors/` パッケージ全体を削除（上記2パッケージ削除後に未使用化）
+  - 必要時にPhase 5/6で適切な形で再実装
 
 ## Phase 3: コード重複の解消・品質改善
 

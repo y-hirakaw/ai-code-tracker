@@ -96,7 +96,6 @@ func handleRangeReportWithOptions(opts *ReportOptions) {
 	totalAI := 0
 	totalHuman := 0
 	byAuthor := make(map[string]*tracker.AuthorStats)
-	byFile := make(map[string]*FileStatsRange)
 
 	// 詳細メトリクス用
 	var detailedMetrics tracker.DetailedMetrics
@@ -241,31 +240,8 @@ func handleRangeReportWithOptions(opts *ReportOptions) {
 		report.ByAuthor = append(report.ByAuthor, *stats)
 	}
 
-	// ByFile を追加
-	for _, stats := range byFile {
-		if stats.TotalLines > 0 {
-			stats.AIPercentage = float64(stats.AILines) / float64(stats.TotalLines) * 100
-		}
-		// FileStatsにはAIPercentageフィールドがないので、別途計算
-		report.ByFile = append(report.ByFile, tracker.FileStats{
-			Path:       stats.Path,
-			TotalLines: stats.TotalLines,
-			AILines:    stats.AILines,
-			HumanLines: stats.HumanLines,
-		})
-	}
-
 	// 5. フォーマットに応じて出力
 	formatRangeReport(report, opts.Format, &detailedMetrics)
-}
-
-// FileStatsRange is a temporary struct for file statistics during range report
-type FileStatsRange struct {
-	Path         string
-	TotalLines   int
-	AILines      int
-	HumanLines   int
-	AIPercentage float64
 }
 
 // convertSinceToRange converts --since date to --range format

@@ -81,11 +81,6 @@ fi
 
 exit 0`
 
-// PreCommitHook template - no longer needed for SPEC.md approach
-const PreCommitHook = `#!/bin/bash
-# AI Code Tracker - Pre-Commit Hook (not used in SPEC.md)
-exit 0`
-
 // PostCommitHook template - generates Authorship Log after commit
 const PostCommitHook = `#!/bin/bash
 
