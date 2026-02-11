@@ -1,5 +1,9 @@
 # SPEC.md Implementation Status
 
+> **アーカイブ**: このドキュメントはv0.7.0時点のSPEC.md実装記録です。
+> 現在のバージョンはv1.4.1であり、このドキュメントは更新されていません。
+> 最新の開発状況は `TODO.md` を参照してください。
+
 **Version**: v0.7.0
 **Completion Date**: 2025-11-23
 **Implementation Approach**: Breaking changes (no backward compatibility)

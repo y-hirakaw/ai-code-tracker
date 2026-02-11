@@ -32,14 +32,14 @@ ai-code-tracker/
 │   ├── handlers_debug.go  # Debug command handlers
 │   └── *_test.go          # Unit tests
 ├── internal/
-│   ├── authorship/        # Authorship line tracking
-│   ├── checkpoint/        # Checkpoint management
-│   ├── config/            # Configuration handling
-│   ├── gitexec/           # Git command execution abstraction (Phase 2)
-│   ├── gitnotes/          # Git notes integration (refs/aict/authorship)
-│   ├── hooks/             # Hook template generation
-│   ├── storage/           # .git/aict/ storage management (Phase 3)
-│   └── tracker/           # Core tracking types and analysis (Phase 4 refactored)
+│   ├── authorship/        # Authorship Log構築・パース
+│   ├── git/               # numstat解析ユーティリティ
+│   ├── gitexec/           # Git実行抽象化・モックサポート
+│   ├── gitnotes/          # Git notes操作 (refs/aict/authorship)
+│   ├── storage/           # .git/aict/ ストレージ管理
+│   ├── templates/         # Hook/設定テンプレート定数
+│   ├── testutil/          # テスト共通ユーティリティ
+│   └── tracker/           # 追跡型定義・分析エンジン
 ├── .git/aict/             # Created by 'aict init'
 │   ├── config.json        # Project configuration
 │   └── checkpoints/       # Checkpoint snapshots
@@ -76,7 +76,7 @@ go mod tidy
 
 ### 1. Checkpoint System
 - Records code state before/after Claude Code edits
-- Stores in `.git/aict/checkpoints/` as JSON
+- Stores in `.git/aict/checkpoints/` as JSONL (旧JSON array形式も自動マイグレーション)
 - Tracks author (human/AI), timestamp, and git diff
 
 ### 2. Authorship Tracking
@@ -323,7 +323,7 @@ go install github.com/y-hirakaw/ai-code-tracker/cmd/aict@v[バージョン]
 ### テスト時の注意点
 
 - **偽テストを書かない**: テスト名と実際に検証する内容を一致させること。環境セットアップだけのテストは `_EnvironmentSetup` サフィックスを付ける
-- **cmd/aict/ のカバレッジ**: 現在13.2%と低い。純粋関数（`isTrackedFile`, `matchesPattern`, `buildAuthorshipMap` 等）はモック不要でテスト可能
+- **cmd/aict/ のカバレッジ**: 現在56.7%。`newExecutor` のDIパターンによりモック注入でテスト可能
 - **os.Chdir パターン**: テスト内で `os.Chdir` する場合は必ず `defer os.Chdir(originalDir)` でリストアする
 - **`--since` 入力バリデーション**: `expandShorthandDate` は未知の形式をそのままgitに渡す。gitは不正日付を「コミットなし」として扱うため、エラーにならない
 
@@ -342,141 +342,22 @@ go test ./cmd/aict/ -v
 
 ## リファクタリング進捗状況
 
-プロジェクトは継続的な品質改善を行っています。詳細は `.claude/plans/recursive-churning-corbato.md` を参照してください。
+プロジェクトは継続的な品質改善を行っています。詳細は `TODO.md` を参照してください。
 
-### 完了済みフェーズ
+### 完了済みフェーズサマリー
 
-#### フェーズ1: テストインフラの基盤整備 ✅ (2025-12-09完了)
-- 共有テストユーティリティ作成 (`internal/testutil/`)
-- テストカバレッジ: 73.8%
-- スキップされたテスト有効化（`handlers_commit_test.go`, `handlers_range_test.go`）
-- 成果: テストセットアップコード60%削減、全テスト通過
-
-#### フェーズ2: Gitコマンド抽象化 ✅ (2025-12-10完了)
-- Git実行インターフェース作成 (`internal/gitexec/`)
-- 9ファイルで20+箇所のgitコマンド移行
-- os/exec依存削除、テスト容易性向上
-- 成果: 40行以上の重複削除、全テスト通過
-
-#### フェーズ3: ストレージ抽象化評価 ✅ (2025-12-10評価完了)
-- `internal/storage/aict_storage.go` が既に完全実装済み
-- 3ファイルのみで使用、適切に抽象化済み
-- 結論: 追加作業不要、実質完了
-
-#### フェーズ4.1: 高複雑度関数のリファクタリング ✅ (2025-12-10完了)
-**対象**: `internal/tracker/analyzer.go:AnalyzeCheckpoints()`
-- **改善前**: CC=11, 145行
-- **改善後**: CC=3, 20行（**86%削減、73%超過達成**）
-
-**抽出されたメソッド**:
-- `calculatePercentage()` - パーセンテージ計算ヘルパー (6行)
-- `aggregateLinesByAuthor()` - 作成者別集計ヘルパー (7行)
-- `analyzeFromNumstat()` - チェックポイントNumstatデータ処理 (42行)
-- `analyzeFromCommits()` - コミット間git diff処理 (29行)
-- `analyzeFromFiles()` - ファイル行比較フォールバック (33行)
-
-**成果**:
-- 循環的複雑度: CC=11 → CC=3（目標CC≤7を大幅達成）
-- コード行数: 145行 → 20行（86%削減）
-- 可読性: 3つの明確な処理パスに分離
-- テスト容易性: 各メソッドが独立してテスト可能
-- 全テスト通過: 20テスト、0.4秒
-
-#### フェーズ4.2: Numstat解析の集約化 ✅ (2025-12-10完了)
-**対象**: Numstat解析ロジックの重複削除
-
-**新規ファイル**:
-- `internal/git/numstat.go` (75行) - 統合numstat解析
-- `internal/git/numstat_test.go` (174行) - 包括的テスト
-
-**リファクタリング**:
-- `checkpoint.go`: `collectNumstatData()` 簡素化（39行 → 7行、82%削減）
-- `analyzer.go`: `getGitNumstat()` 簡素化（42行 → 3行、93%削減）
-- `diff_test.go`: testutil依存削除、インポートサイクル解決
-
-**成果**:
-- コード重複削減: 2ファイルから25行の重複削除
-- 保守性向上: 単一箇所への集約
-- テストカバレッジ: 12テスト追加、全テスト通過
-- アーキテクチャ: 依存関係整理完了
-
-#### フェーズ4.3: 作成者分類インターフェース ⏭️ (スキップ - 循環依存)
-**スキップ理由**: `authorship` ↔ `tracker` 間の循環依存により実装不可能
-
-**代替案**: 現在の `IsAIAuthor()` 実装で十分（テスト済み）
-
-#### フェーズ4.4: GetCurrentBranch()簡素化 ⏭️ (スキップ - 既に実施済)
-**確認結果**: フェーズ2で `handleDetachedHead()` と `normalizeBranchName()` が既に抽出済み
-
-#### フェーズ4.5: 複数メトリクス対応 ✅ (2025-12-10完了)
-**対象**: AI/人間の作業貢献度を複数の視点で測定
-
-**背景**:
-従来は「追加行数のみ」をカウントしていたため、以下の問題がありました：
-- リファクタリング作業（削除+書き直し）が適切に評価されない
-- 純粋な削除作業（コード整理）がカウントされない
-- AI/人間の実際の「作業貢献度」が見えない
-
-**実装内容**:
-
-1. **AnalysisResult構造体の拡張** ([types.go:52-96](internal/tracker/types.go#L52-L96))
-   - `DetailedMetrics`フィールド追加（後方互換性維持）
-   - 3つの新しいメトリクス型:
-     - `ContributionMetrics`: コードベース貢献（純粋な追加）
-     - `WorkVolumeMetrics`: 作業量貢献（追加+削除）
-     - `NewFileMetrics`: 新規ファイル貢献
-
-2. **analyzer.goの更新** ([analyzer.go:183-284](internal/tracker/analyzer.go#L183-L284))
-   - `analyzeFromNumstat()`: 詳細メトリクス計算追加（39行）
-   - `analyzeFromCommits()`: 詳細メトリクス計算追加（16行）
-   - 既存の互換性を完全維持
-
-3. **レポート表示の拡張** ([handlers_range.go:16-414](cmd/aict/handlers_range.go#L16-L414))
-   - `--detailed`フラグ追加
-   - `printDetailedMetrics()`関数実装（58行）
-   - 日本語での詳細メトリクス表示:
-     - コードベース貢献（最終的なコード量への寄与）
-     - 作業量貢献（実際の作業量）
-     - 新規ファイル（完全新規のコードのみ）
-
-**使用例**:
-```bash
-# 詳細メトリクス付きレポート
-aict report --since 7d --detailed
-
-# 出力例:
-# 【コードベース貢献】（最終的なコード量への寄与）
-#   総変更行数: 350行
-#     🤖 AI追加:   200行 (57.1%)
-#     👤 人間追加: 150行 (42.9%)
-#
-# 【作業量貢献】（実際の作業量）
-#   総作業量: 550行
-#     🤖 AI作業:   350行 (63.6%)
-#        └ 追加: 200行, 削除: 150行
-#     👤 人間作業: 200行 (36.4%)
-#        └ 追加: 150行, 削除: 50行
-```
-
-**成果**:
-- ✅ リファクタリング作業が適切に評価される
-- ✅ AI/人間の実際の作業貢献度が可視化される
-- ✅ より正確なコード所有権の把握が可能
-- ✅ 後方互換性を完全に維持（既存レポート形式に影響なし）
-- ✅ 全テスト通過（13パッケージ）
-
-### リファクタリング完了サマリー
-
-**Phase 4完了**: 2025-12-10
-- Phase 4.1: 高複雑度関数リファクタリング（CC=11→3、86%削減）
-- Phase 4.2: Numstat解析集約化（25行重複削除、82-93%削減）
-- Phase 4.3: スキップ（循環依存）
-- Phase 4.4: スキップ（既に完了済み）
-- Phase 4.5: 複数メトリクス対応（3視点測定、142行追加）
-
-**全体成果**:
-- コード品質: CC最大値11→3（73%改善）
-- コード重複: 65行以上削減
-- テスト: 全パッケージ通過、カバレッジ維持
-- 保守性: 大幅向上、単一責任の原則適用
-- 機能性: 測定精度向上、後方互換性維持
+| Phase | 内容 | 成果 |
+|-------|------|------|
+| 1 | テストインフラ基盤整備 | `internal/testutil/` 作成、テストセットアップ60%削減 |
+| 2 | Gitコマンド抽象化 | `internal/gitexec/` 作成、os/exec依存削除 |
+| 3 | ストレージ抽象化評価 | 既に完了済みと確認 |
+| 4.1 | 高複雑度関数リファクタリング | CC=11→3（86%削減） |
+| 4.2 | Numstat解析集約化 | `internal/git/` に統合、82-93%削減 |
+| 4.5 | 複数メトリクス対応 | 3視点測定（コードベース貢献・作業量・新規ファイル） |
+| 5 | パフォーマンス改善 | N+1問題解消、JSONL化 |
+| 6 | セキュリティ強化 | Git引数注入防止、ValidateRevisionArg |
+| 7 | テスト品質向上 | gitnotes/templates/handlers_range テスト追加 |
+| 8 | その他 | コメント言語統一、変数シャドウイング解消 |
+| 9 | データ整合性・バグリスク | ファイルフィルタ統一、ゼロ除算ガード |
+| 10 | コード品質・アーキテクチャ | collectAuthorStats分割、DIパターン化 |
+| 11 | テスト品質向上 | cmd/aictカバレッジ27.3%→56.7% |

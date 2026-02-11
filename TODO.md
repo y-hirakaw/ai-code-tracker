@@ -289,26 +289,27 @@ Phase 4 の変更（error返却パターン・関数分割・Config読み込み�
 
 ### Phase 12: ドキュメント整合性
 
-- [ ] **12-1**: CLAUDE.md のディレクトリ構造更新 (High)
-  - `internal/config/`, `internal/hooks/`, `internal/checkpoint/` は存在しない（削除済み）
-  - `internal/git/`（numstat.go）が未記載
-  - チェックポイント保存形式を「JSON array」→「JSONL」に修正
-  - `--detailed` フラグの記載を常時表示仕様に修正
+- [x] **12-1**: CLAUDE.md のディレクトリ構造更新 (High)
+  - 存在しないディレクトリ（`config/`, `hooks/`, `checkpoint/`）を削除
+  - 未記載ディレクトリ（`git/`, `templates/`, `testutil/`）を追加
+  - チェックポイント保存形式を「JSON」→「JSONL」に修正
+  - カバレッジ記載を13.2%→56.7%に更新
+  - リファクタリング進捗セクションをサマリーテーブルに簡素化
 
-- [ ] **12-2**: README.md の英語化と充実 (High)
-  - CLAUDE.mdの「README.mdだけは英語で記載すること」指示に違反（現在日本語）
-  - `go install` コマンド、基本コマンド一覧、バッジ等の追加
+- [x] **12-2**: README.md の英語化と充実 (High)
+  - 全文英語に書き直し（CLAUDE.md指示に準拠）
+  - Installation、Quick Start、Commands一覧、Report Output例、How It Works、Development セクション追加
 
-- [ ] **12-3**: SPEC.md の整理 (Medium)
-  - ロードマップが全て未チェック `[ ]` のまま（実装済み機能多数）
-  - 未実装オプション（`--branch`, `--last`, `--by-file` 等）が仕様として残存
-  - 初期仕様書として凍結するか、実装状況を反映するか判断
+- [x] **12-3**: SPEC.md の整理 (Medium)
+  - 初期設計仕様書として凍結する方針に決定
+  - ファイル先頭に注記追加（現在の実装との差異を明記）
+  - 未実装オプション・ロードマップの状態は歴史的記録として保持
 
-- [ ] **12-4**: IMPLEMENTATION_STATUS.md のアーカイブ化 (Low)
-  - v0.7.0で凍結されており現在v1.4.1との乖離が大きい
-  - ファイル先頭に注記を追加するか、`docs/archive/` へ移動
+- [x] **12-4**: IMPLEMENTATION_STATUS.md のアーカイブ化 (Low)
+  - ファイル先頭にアーカイブ注記を追加（v0.7.0時点の記録であることを明記）
+  - 最新の開発状況はTODO.md参照を案内
 
-- [ ] **12-5**: go.mod のモジュール名確認 (Low)
-  - モジュール名 `github.com/y-hirakaw/ai-code-tracker`（`a`なし）
-  - ローカルディレクトリ名 `y-hirakawa`（`a`あり）
-  - GitHubリポジトリ名との整合性確認が必要
+- [x] **12-5**: go.mod のモジュール名確認 (Low)
+  - モジュール名 `github.com/y-hirakaw/ai-code-tracker` はGitHub remote URLと一致
+  - ローカルディレクトリ名 `y-hirakawa` は単なるローカル名で問題なし
+  - 対応不要
