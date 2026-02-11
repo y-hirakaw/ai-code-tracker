@@ -13,12 +13,11 @@ import (
 // handleDebug handles the debug command
 func handleDebug() error {
 	if len(os.Args) < 3 {
-		fmt.Println("エラー: debug サブコマンドを指定してください (show, clean, または clear-notes)")
 		fmt.Println("使用法:")
 		fmt.Println("  aict debug show              # チェックポイント情報を表示")
 		fmt.Println("  aict debug clean             # チェックポイントを削除")
 		fmt.Println("  aict debug clear-notes       # Git notesのAuthorship Logをクリア")
-		return fmt.Errorf("debug subcommand required")
+		return fmt.Errorf("debug subcommand required (show, clean, clear-notes)")
 	}
 
 	subcommand := os.Args[2]
@@ -30,9 +29,7 @@ func handleDebug() error {
 	case "clear-notes":
 		return handleDebugClearNotes()
 	default:
-		fmt.Printf("エラー: 不明なサブコマンド '%s'\n", subcommand)
-		fmt.Println("利用可能なサブコマンド: show, clean, clear-notes")
-		return fmt.Errorf("unknown subcommand: %s", subcommand)
+		return fmt.Errorf("unknown debug subcommand: %s (available: show, clean, clear-notes)", subcommand)
 	}
 }
 
@@ -132,11 +129,19 @@ func handleDebugClearNotes() error {
 	var aictRefs []string
 	lines := strings.Split(output, "\n")
 	for _, line := range lines {
-		if strings.Contains(line, "aict") {
-			parts := strings.Fields(line)
-			if len(parts) >= 2 {
-				aictRefs = append(aictRefs, parts[1])
-			}
+		parts := strings.Fields(line)
+		if len(parts) < 2 {
+			continue
+		}
+		ref := parts[1]
+		// aict専用のnotes/refsのみ対象（ブランチ名に"aict"を含むものを誤削除しない）
+		// refs/aict/* : 直接refとして作成された場合
+		// refs/notes/aict* : git notes --ref=aict で作成された場合
+		// refs/notes/refs/aict/* : git notes --ref=refs/aict/... で作成された場合
+		if strings.HasPrefix(ref, "refs/aict/") ||
+			strings.HasPrefix(ref, "refs/notes/aict") ||
+			strings.HasPrefix(ref, "refs/notes/refs/aict/") {
+			aictRefs = append(aictRefs, ref)
 		}
 	}
 

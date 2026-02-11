@@ -34,15 +34,11 @@ func handleRangeReport() error {
 
 	// --range と --since の排他チェック
 	if opts.Range != "" && opts.Since != "" {
-		fmt.Println("Error: --range and --since are mutually exclusive")
-		fmt.Println("Please use either --range or --since, not both")
-		return fmt.Errorf("--range and --since are mutually exclusive")
+		return fmt.Errorf("--range and --since are mutually exclusive. Please use either --range or --since, not both")
 	}
 
 	// どちらも指定されていない場合
 	if opts.Range == "" && opts.Since == "" {
-		fmt.Println("Error: either --range or --since is required")
-		fmt.Println()
 		fmt.Println("Usage:")
 		fmt.Println("  aict report --range <base>..<head>")
 		fmt.Println("  aict report --since <date>")
@@ -243,7 +239,9 @@ func buildReport(opts *ReportOptions, commitCount int, result *authorStatsResult
 	}
 
 	for _, stats := range result.byAuthor {
-		stats.Percentage = float64(stats.Lines) / float64(report.Summary.TotalLines) * 100
+		if report.Summary.TotalLines > 0 {
+			stats.Percentage = float64(stats.Lines) / float64(report.Summary.TotalLines) * 100
+		}
 		report.ByAuthor = append(report.ByAuthor, *stats)
 	}
 

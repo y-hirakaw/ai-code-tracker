@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/y-hirakaw/ai-code-tracker/internal/authorship"
@@ -203,7 +202,7 @@ func buildAuthorshipLogFromDiff(
 		}
 
 		// 追跡対象の拡張子かチェック
-		if !isTrackedFile(fpath, cfg) {
+		if !tracker.IsTrackedFile(fpath, cfg) {
 			continue
 		}
 
@@ -242,32 +241,3 @@ func buildAuthorshipLogFromDiff(
 	return log, nil
 }
 
-// isTrackedFile は設定に基づいてファイルが追跡対象かどうかを判定します
-func isTrackedFile(fpath string, cfg *tracker.Config) bool {
-	// 追跡対象の拡張子をチェック
-	for _, ext := range cfg.TrackedExtensions {
-		if strings.HasSuffix(fpath, ext) {
-			// 除外パターンをチェック
-			for _, pattern := range cfg.ExcludePatterns {
-				// 単純なパターンマッチング（* ワイルドカード対応）
-				if matchesPattern(fpath, pattern) {
-					return false
-				}
-			}
-			return true
-		}
-	}
-	return false
-}
-
-// matchesPattern は単純なワイルドカードパターンマッチングを行います
-func matchesPattern(fpath, pattern string) bool {
-	// Simple implementation: exact match or suffix match with *
-	if strings.HasPrefix(pattern, "*") {
-		return strings.HasSuffix(fpath, pattern[1:])
-	}
-	if strings.HasSuffix(pattern, "*") {
-		return strings.HasPrefix(fpath, pattern[:len(pattern)-1])
-	}
-	return fpath == pattern
-}

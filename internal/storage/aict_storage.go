@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -112,6 +113,7 @@ func loadCheckpointsFromFile(path string) ([]*tracker.CheckpointV2, error) {
 		}
 		var cp tracker.CheckpointV2
 		if err := json.Unmarshal(line, &cp); err != nil {
+			log.Printf("Warning: skipping invalid JSONL line in checkpoints: %v", err)
 			continue
 		}
 		checkpoints = append(checkpoints, &cp)

@@ -113,32 +113,36 @@ func TestIsAIAgentNilMappings(t *testing.T) {
 func TestShouldTrackFile(t *testing.T) {
 	config := &Config{
 		TrackedExtensions: []string{".go", ".js", ".py"},
-		ExcludePatterns:   []string{"test", "vendor", "_generated"},
+		ExcludePatterns:   []string{"*_test.go", "vendor/*", "*_generated.go"},
 	}
 
 	analyzer := NewAnalyzer(config)
 
 	tests := []struct {
+		name     string
 		filepath string
 		expected bool
 	}{
-		{"main.go", true},
-		{"src/app.js", true},
-		{"lib/helper.py", true},
-		{"test/main_test.go", false},  // Contains "test"
-		{"vendor/lib/code.go", false}, // Contains "vendor"
-		{"code_generated.go", false},  // Contains "_generated"
-		{"README.md", false},          // Wrong extension
-		{"config.json", false},        // Wrong extension
-		{"src/valid.go", true},
-		{"src/test_file.go", false}, // Contains "test"
+		{"go file tracked", "main.go", true},
+		{"js file tracked", "src/app.js", true},
+		{"py file tracked", "lib/helper.py", true},
+		{"test file excluded", "main_test.go", false},
+		{"nested test excluded", "pkg/handler_test.go", false},
+		{"vendor excluded", "vendor/lib/code.go", false},
+		{"generated excluded", "code_generated.go", false},
+		{"wrong extension md", "README.md", false},
+		{"wrong extension json", "config.json", false},
+		{"nested go tracked", "src/valid.go", true},
+		{"non-test file with test in path", "src/test_helper.go", true},
 	}
 
-	for _, test := range tests {
-		result := analyzer.shouldTrackFile(test.filepath)
-		if result != test.expected {
-			t.Errorf("shouldTrackFile(%s) = %v, expected %v", test.filepath, result, test.expected)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := analyzer.shouldTrackFile(tt.filepath)
+			if result != tt.expected {
+				t.Errorf("shouldTrackFile(%s) = %v, expected %v", tt.filepath, result, tt.expected)
+			}
+		})
 	}
 }
 

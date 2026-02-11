@@ -3,6 +3,7 @@ package gitnotes
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
@@ -130,12 +131,13 @@ func parseAuthorshipLogsOutput(output string) map[string]*tracker.AuthorshipLog 
 			continue
 		}
 
-		var log tracker.AuthorshipLog
-		if err := json.Unmarshal([]byte(noteContent), &log); err != nil {
+		var alog tracker.AuthorshipLog
+		if err := json.Unmarshal([]byte(noteContent), &alog); err != nil {
+			log.Printf("Warning: skipping invalid authorship log JSON for commit %s: %v", commitHash, err)
 			continue
 		}
 
-		logs[commitHash] = &log
+		logs[commitHash] = &alog
 	}
 
 	return logs
@@ -164,13 +166,14 @@ func (nm *NotesManager) ListAuthorshipLogs() (map[string]*tracker.AuthorshipLog,
 		}
 
 		commitHash := parts[1]
-		log, err := nm.GetAuthorshipLog(commitHash)
+		alog, err := nm.GetAuthorshipLog(commitHash)
 		if err != nil {
+			log.Printf("Warning: failed to get authorship log for commit %s: %v", commitHash, err)
 			continue
 		}
 
-		if log != nil {
-			logs[commitHash] = log
+		if alog != nil {
+			logs[commitHash] = alog
 		}
 	}
 

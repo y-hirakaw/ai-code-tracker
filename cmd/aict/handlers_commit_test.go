@@ -97,9 +97,9 @@ func TestMatchesPattern(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := matchesPattern(tt.fpath, tt.pattern)
+			result := tracker.MatchesPattern(tt.fpath, tt.pattern)
 			if result != tt.expected {
-				t.Errorf("matchesPattern(%q, %q) = %v, want %v", tt.fpath, tt.pattern, result, tt.expected)
+				t.Errorf("MatchesPattern(%q, %q) = %v, want %v", tt.fpath, tt.pattern, result, tt.expected)
 			}
 		})
 	}
@@ -136,9 +136,9 @@ func TestIsTrackedFile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := isTrackedFile(tt.fpath, cfg)
+			result := tracker.IsTrackedFile(tt.fpath, cfg)
 			if result != tt.expected {
-				t.Errorf("isTrackedFile(%q) = %v, want %v", tt.fpath, result, tt.expected)
+				t.Errorf("IsTrackedFile(%q) = %v, want %v", tt.fpath, result, tt.expected)
 			}
 		})
 	}
@@ -150,8 +150,8 @@ func TestIsTrackedFile_EmptyConfig(t *testing.T) {
 		ExcludePatterns:   []string{},
 	}
 
-	if isTrackedFile("main.go", cfg) {
-		t.Error("isTrackedFile should return false when no extensions are configured")
+	if tracker.IsTrackedFile("main.go", cfg) {
+		t.Error("IsTrackedFile should return false when no extensions are configured")
 	}
 }
 

@@ -203,3 +203,110 @@ Phase 4 の変更（error返却パターン・関数分割・Config読み込み�
 - [x] **V-2**: `--format` フラグの不正値エラー改善 (Low)
   - エラーメッセージに `(available: table, json)` を追加
   - テスト: 利用可能フォーマット一覧が含まれることを検証
+
+---
+
+## 多角的評価で検出された課題（v1.4.1）
+
+4つの専門エージェント（コード品質・テスト品質・セキュリティ・ドキュメント）による並行分析で検出。
+
+### Phase 9: データ整合性・バグリスク (Critical)
+
+- [x] **9-1**: `isTrackedFile` / `shouldTrackFile` の統一 (Critical)
+  - `internal/tracker/file_filter.go` に `IsTrackedFile()` / `MatchesPattern()` を作成
+  - `analyzer.go` の `shouldTrackFile()` を `IsTrackedFile()` に委譲（`strings.Contains` バグを修正）
+  - `handlers_commit.go` のローカル実装を削除し `tracker.IsTrackedFile()` を使用
+  - テスト: `file_filter_test.go` 追加、既存テストをワイルドカードパターンに修正
+
+- [x] **9-2**: JSONパースエラーのログ出力追加 (High)
+  - `internal/storage/aict_storage.go`: JSONL行パースエラー時に `log.Printf` でwarning出力
+  - `internal/gitnotes/notes.go`: Authorship Log JSONパースエラー・取得エラー時に `log.Printf` でwarning出力
+  - 変数名 `log` → `alog` に変更（`log` パッケージとの衝突回避）
+
+- [x] **9-3**: エラー二重出力の解消 (Medium)
+  - `handlers_range.go`: 排他チェックの `fmt.Println("Error: ...")` を削除、エラーメッセージを統合
+  - `handlers_debug.go`: サブコマンド未指定・不明時の `fmt.Println("エラー: ...")` を削除、`fmt.Errorf` に一本化
+
+- [x] **9-4**: `handleDebugClearNotes()` の ref フィルタリング改善 (Medium)
+  - `strings.Contains(line, "aict")` → プレフィックスベースのマッチングに変更
+  - 対象: `refs/aict/*`, `refs/notes/aict*`, `refs/notes/refs/aict/*`
+  - ブランチ名に"aict"を含むrefの誤削除を防止（動作確認済み）
+
+- [x] **9-5**: `buildReport()` のゼロ除算ガード追加 (Medium)
+  - byAuthorループ内に `report.Summary.TotalLines > 0` ガードを追加
+  - `TotalLines == 0` 時の `+Inf` によるJSON出力エラーを防止
+
+### Phase 10: コード品質・アーキテクチャ改善
+
+- [ ] **10-1**: `collectAuthorStats()` の分割 (High, CC=12)
+  - `cmd/aict/handlers_range.go:108-221`: 3重ネストループ + 6つのif分岐
+  - データ取得・集計・整形の3段階に分離してCC≤7を目指す
+
+- [ ] **10-2**: `cmd/aict/` のビジネスロジック分離 (High)
+  - `buildAuthorshipMap()`, `isTrackedFile()`, `matchesPattern()` 等の純粋関数を `internal/` に移動
+  - CLIハンドラーはパラメータ解析とロジック呼び出しに専念
+  - 段階的に実施（まず純粋関数から、次にstateful関数）
+
+- [ ] **10-3**: `gitexec.NewExecutor()` のDIパターン化 (Medium)
+  - `handlers_checkpoint.go`(4箇所), `handlers_commit.go`(3箇所), `handlers_range.go`(3箇所), `handlers_debug.go`(2箇所) の計12箇所
+  - ハンドラ関数の引数として `gitexec.Executor` を注入するか、コンテキスト構造体を導入
+
+- [ ] **10-4**: ストレージ初期化+設定読み込みの共通化 (Low)
+  - `NewAIctStorage()` + `LoadConfig()` の同一パターンが4箇所で重複
+  - ヘルパー関数 `loadStorageAndConfig()` の作成を検討
+
+- [ ] **10-5**: `config.json` 読み込み時のバリデーション追加 (Medium)
+  - `internal/storage/aict_storage.go:178-196` の `LoadConfig()`
+  - `TargetAIPercentage` の範囲チェック（0-100）
+  - `TrackedExtensions` が空でないことの確認
+  - `DefaultAuthor` が空文字列でないことの確認
+
+### Phase 11: テスト品質向上
+
+- [ ] **11-1**: `cmd/aict` のCLIハンドラーテスト追加 (High)
+  - `handleInit`, `handleSync`, `handleDebug` のテスト追加
+  - 目標: カバレッジ 27.3% → 50%+
+
+- [ ] **11-2**: 偽テストの整理 (Medium)
+  - `internal/tracker/types_test.go`: 5つの構造体テスト（`TestCheckpointStructure` 等）はGo基本機能の確認のみ
+  - メソッドテスト（`GetBranch`, `HasBranchInfo` 等）への置換、または削除を検討
+
+- [ ] **11-3**: スキップされたテストの有効化 (Medium)
+  - `cmd/aict/handlers_checkpoint_test.go:54`: `TestDetectChanges` が `t.Skip()`
+  - `cmd/aict/handlers_checkpoint_test.go:60`: `TestGetLineRanges` が `t.Skip()`
+  - MockExecutor活用で有効化
+
+- [ ] **11-4**: 空テストの対応 (Low)
+  - `internal/gitnotes/notes_test.go`: `TestGetCurrentCommit` のテスト本体が空
+  - 実装するか、TODOコメント付きで明示化
+
+- [ ] **11-5**: `t.Run` 未使用テストの改善 (Low)
+  - `internal/tracker/analyzer_test.go:48`: `TestIsAIAuthor` がループ内で `t.Run` なし
+  - `internal/tracker/analyzer_test.go:137`: `TestShouldTrackFile` が同様
+  - 失敗時のケース特定が困難なため `t.Run` 追加
+
+### Phase 12: ドキュメント整合性
+
+- [ ] **12-1**: CLAUDE.md のディレクトリ構造更新 (High)
+  - `internal/config/`, `internal/hooks/`, `internal/checkpoint/` は存在しない（削除済み）
+  - `internal/git/`（numstat.go）が未記載
+  - チェックポイント保存形式を「JSON array」→「JSONL」に修正
+  - `--detailed` フラグの記載を常時表示仕様に修正
+
+- [ ] **12-2**: README.md の英語化と充実 (High)
+  - CLAUDE.mdの「README.mdだけは英語で記載すること」指示に違反（現在日本語）
+  - `go install` コマンド、基本コマンド一覧、バッジ等の追加
+
+- [ ] **12-3**: SPEC.md の整理 (Medium)
+  - ロードマップが全て未チェック `[ ]` のまま（実装済み機能多数）
+  - 未実装オプション（`--branch`, `--last`, `--by-file` 等）が仕様として残存
+  - 初期仕様書として凍結するか、実装状況を反映するか判断
+
+- [ ] **12-4**: IMPLEMENTATION_STATUS.md のアーカイブ化 (Low)
+  - v0.7.0で凍結されており現在v1.4.1との乖離が大きい
+  - ファイル先頭に注記を追加するか、`docs/archive/` へ移動
+
+- [ ] **12-5**: go.mod のモジュール名確認 (Low)
+  - モジュール名 `github.com/y-hirakaw/ai-code-tracker`（`a`なし）
+  - ローカルディレクトリ名 `y-hirakawa`（`a`あり）
+  - GitHubリポジトリ名との整合性確認が必要

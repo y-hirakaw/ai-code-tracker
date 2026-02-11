@@ -130,30 +130,10 @@ func (a *Analyzer) getGitNumstat(fromCommit, toCommit string) (map[string][2]int
 	return git.GetNumstatBetweenCommits(a.executor, fromCommit, toCommit)
 }
 
-// shouldTrackFile checks if a file should be tracked based on config
+// shouldTrackFile checks if a file should be tracked based on config.
+// Delegates to the shared IsTrackedFile function.
 func (a *Analyzer) shouldTrackFile(filepath string) bool {
-	// Check extension
-	hasValidExt := false
-	for _, ext := range a.config.TrackedExtensions {
-		if strings.HasSuffix(filepath, ext) {
-			hasValidExt = true
-			break
-		}
-	}
-
-	if !hasValidExt {
-		return false
-	}
-
-	// Check exclusion patterns
-	for _, pattern := range a.config.ExcludePatterns {
-		// Simple pattern matching (can be improved with glob)
-		if strings.Contains(filepath, pattern) {
-			return false
-		}
-	}
-
-	return true
+	return IsTrackedFile(filepath, a.config)
 }
 
 // calculatePercentage calculates AI percentage from AI and human lines
