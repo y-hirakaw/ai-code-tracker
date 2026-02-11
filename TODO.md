@@ -238,52 +238,54 @@ Phase 4 の変更（error返却パターン・関数分割・Config読み込み�
 
 ### Phase 10: コード品質・アーキテクチャ改善
 
-- [ ] **10-1**: `collectAuthorStats()` の分割 (High, CC=12)
-  - `cmd/aict/handlers_range.go:108-221`: 3重ネストループ + 6つのif分岐
-  - データ取得・集計・整形の3段階に分離してCC≤7を目指す
+- [x] **10-1**: `collectAuthorStats()` の分割 (High, CC=12)
+  - `processCommitFiles()`, `processFileAuthors()`, `calculateAuthorContribution()`, `accumulateMetrics()` に分割
+  - CC=12 → CC≤5 に削減
 
-- [ ] **10-2**: `cmd/aict/` のビジネスロジック分離 (High)
-  - `buildAuthorshipMap()`, `isTrackedFile()`, `matchesPattern()` 等の純粋関数を `internal/` に移動
+- [x] **10-2**: `cmd/aict/` のビジネスロジック分離 (High)
+  - `buildAuthorshipMap()`, `buildAuthorshipLogFromDiff()` を `internal/authorship/builder.go` に移動
+  - テストも `internal/authorship/builder_test.go` に移動
   - CLIハンドラーはパラメータ解析とロジック呼び出しに専念
-  - 段階的に実施（まず純粋関数から、次にstateful関数）
 
-- [ ] **10-3**: `gitexec.NewExecutor()` のDIパターン化 (Medium)
-  - `handlers_checkpoint.go`(4箇所), `handlers_commit.go`(3箇所), `handlers_range.go`(3箇所), `handlers_debug.go`(2箇所) の計12箇所
-  - ハンドラ関数の引数として `gitexec.Executor` を注入するか、コンテキスト構造体を導入
+- [x] **10-3**: `gitexec.NewExecutor()` のDIパターン化 (Medium)
+  - `cmd/aict/executor.go` にパッケージレベル `newExecutor` ファクトリ変数を導入
+  - 全16箇所の `gitexec.NewExecutor()` を `newExecutor()` に置換
+  - テスト時にモック注入可能、各ファイルから `gitexec` インポートを削除
 
-- [ ] **10-4**: ストレージ初期化+設定読み込みの共通化 (Low)
-  - `NewAIctStorage()` + `LoadConfig()` の同一パターンが4箇所で重複
-  - ヘルパー関数 `loadStorageAndConfig()` の作成を検討
+- [x] **10-4**: ストレージ初期化+設定読み込みの共通化 (Low)
+  - `cmd/aict/helpers.go` に `loadStorageAndConfig()` ヘルパー関数を作成
+  - `handlers_checkpoint.go`, `handlers_commit.go` の重複パターンを共通化
 
-- [ ] **10-5**: `config.json` 読み込み時のバリデーション追加 (Medium)
-  - `internal/storage/aict_storage.go:178-196` の `LoadConfig()`
+- [x] **10-5**: `config.json` 読み込み時のバリデーション追加 (Medium)
+  - `internal/storage/aict_storage.go` に `validateConfig()` 関数を追加
   - `TargetAIPercentage` の範囲チェック（0-100）
   - `TrackedExtensions` が空でないことの確認
   - `DefaultAuthor` が空文字列でないことの確認
+  - テスト: 8ケース（正常3、異常5）
 
 ### Phase 11: テスト品質向上
 
-- [ ] **11-1**: `cmd/aict` のCLIハンドラーテスト追加 (High)
-  - `handleInit`, `handleSync`, `handleDebug` のテスト追加
-  - 目標: カバレッジ 27.3% → 50%+
+- [x] **11-1**: `cmd/aict` のCLIハンドラーテスト追加 (High)
+  - `handlers_init_test.go`: 3テスト（CreatesConfig, ConfigValues, Idempotent）
+  - `handlers_sync_test.go`: 6テスト（MissingSubcommand, UnknownSubcommand, Push, Fetch, PushError, FetchError）
+  - `handlers_debug_test.go`: 10テスト（MissingSubcommand, UnknownSubcommand, DispatchShow, ShowNoCheckpoints, ShowWithCheckpoints, CleanNoCheckpoints, CleanWithCheckpoints, DisplayCheckpoint, ClearNotesNoAictRefs, ClearNotesWithAictRefs, ClearNotesShowRefError）
+  - `main_test.go`: 10テスト（Debugf Enabled/Disabled, GetGitUserName success/error, main() Version/Help/NoArgs/Unknown/SyncError/DebugError/Checkpoint/VersionFlags/HelpFlag）
+  - カバレッジ: 27.3% → 56.7%（目標50%+達成）
 
-- [ ] **11-2**: 偽テストの整理 (Medium)
-  - `internal/tracker/types_test.go`: 5つの構造体テスト（`TestCheckpointStructure` 等）はGo基本機能の確認のみ
-  - メソッドテスト（`GetBranch`, `HasBranchInfo` 等）への置換、または削除を検討
+- [x] **11-2**: 偽テストの整理 (Medium)
+  - `internal/tracker/types_test.go`: 5つの構造体テスト削除（TestCheckpointStructure等）
+  - `TestGetDisplayBranch` を追加（4ケース、GetDisplayBranchメソッドの実テスト）
 
-- [ ] **11-3**: スキップされたテストの有効化 (Medium)
-  - `cmd/aict/handlers_checkpoint_test.go:54`: `TestDetectChanges` が `t.Skip()`
-  - `cmd/aict/handlers_checkpoint_test.go:60`: `TestGetLineRanges` が `t.Skip()`
-  - MockExecutor活用で有効化
+- [x] **11-3**: スキップされたテストの削除 (Medium)
+  - `TestDetectChanges`, `TestGetLineRanges` を削除（handlers_checkpoint_v2_test.goに同等テスト存在）
 
-- [ ] **11-4**: 空テストの対応 (Low)
-  - `internal/gitnotes/notes_test.go`: `TestGetCurrentCommit` のテスト本体が空
-  - 実装するか、TODOコメント付きで明示化
+- [x] **11-4**: 空テストの実装 (Low)
+  - `TestGetCurrentCommit`: 実Gitリポジトリでコミットハッシュ40文字を検証
 
-- [ ] **11-5**: `t.Run` 未使用テストの改善 (Low)
-  - `internal/tracker/analyzer_test.go:48`: `TestIsAIAuthor` がループ内で `t.Run` なし
-  - `internal/tracker/analyzer_test.go:137`: `TestShouldTrackFile` が同様
-  - 失敗時のケース特定が困難なため `t.Run` 追加
+- [x] **11-5**: `t.Run` 未使用テストの改善 (Low)
+  - `TestIsAIAuthor`: `name`フィールド + `t.Run` 追加
+  - `TestIsNoteNotFound`: `name`フィールド + `t.Run` 追加
+  - `TestShouldTrackFile` は既に `t.Run` 使用済み（対応不要）
 
 ### Phase 12: ドキュメント整合性
 

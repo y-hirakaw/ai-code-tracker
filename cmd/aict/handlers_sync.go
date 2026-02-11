@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
 	"github.com/y-hirakaw/ai-code-tracker/internal/gitnotes"
 )
 
@@ -31,7 +30,7 @@ func handleSync() error {
 func handleSyncPush() error {
 	// refs/aict/authorship/* をリモートにpush
 	refspec := gitnotes.AuthorshipNotesRef + "/*:" + gitnotes.AuthorshipNotesRef + "/*"
-	executor := gitexec.NewExecutor()
+	executor := newExecutor()
 	_, err := executor.Run("push", "origin", refspec)
 	if err != nil {
 		return fmt.Errorf("pushing authorship logs: %w", err)
@@ -44,7 +43,7 @@ func handleSyncPush() error {
 func handleSyncFetch() error {
 	// リモートから refs/aict/authorship/* をfetch
 	refspec := gitnotes.AuthorshipNotesRef + "/*:" + gitnotes.AuthorshipNotesRef + "/*"
-	executor := gitexec.NewExecutor()
+	executor := newExecutor()
 	_, err := executor.Run("fetch", "origin", refspec)
 	if err != nil {
 		return fmt.Errorf("fetching authorship logs: %w", err)

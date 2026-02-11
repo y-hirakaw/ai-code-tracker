@@ -9,7 +9,6 @@ import (
 
 	"github.com/y-hirakaw/ai-code-tracker/internal/authorship"
 	"github.com/y-hirakaw/ai-code-tracker/internal/git"
-	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
 	"github.com/y-hirakaw/ai-code-tracker/internal/gitnotes"
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
@@ -102,7 +101,7 @@ func handleRangeReportWithOptions(opts *ReportOptions) error {
 // 従来の2N回のgitプロセス起動（N×GetAuthorshipLog + N×git show --numstat）を
 // 2回のバッチ呼び出し（GetRangeNumstat + GetAuthorshipLogsForRange）に削減します。
 func collectAuthorStats(rangeSpec string) (*authorStatsResult, int, error) {
-	executor := gitexec.NewExecutor()
+	executor := newExecutor()
 	nm := gitnotes.NewNotesManager()
 
 	// バッチ取得: 全コミットのnumstatを1回のgit呼び出しで取得
@@ -126,8 +125,8 @@ func collectAuthorStats(rangeSpec string) (*authorStatsResult, int, error) {
 	authorCommits := make(map[string]map[string]bool)
 
 	for _, commitHash := range commits {
-		log := allLogs[commitHash]
-		if log == nil {
+		alog := allLogs[commitHash]
+		if alog == nil {
 			continue
 		}
 
@@ -136,67 +135,7 @@ func collectAuthorStats(rangeSpec string) (*authorStatsResult, int, error) {
 			continue
 		}
 
-		authorsInCommit := make(map[string]bool)
-
-		for filePath, fileInfo := range log.Files {
-			numstat, found := numstatMap[filePath]
-			if !found {
-				continue
-			}
-
-			totalAdded := numstat[0]
-			totalDeleted := numstat[1]
-
-			// Authorship Logから各作成者の行数を計算して按分
-			authorLineCount := make(map[string]int)
-			totalAuthorLines := 0
-
-			for _, author := range fileInfo.Authors {
-				lines := authorship.CountLines(author.Lines)
-				authorLineCount[author.Name] = lines
-				totalAuthorLines += lines
-			}
-
-			for _, author := range fileInfo.Authors {
-				stats, exists := result.byAuthor[author.Name]
-				if !exists {
-					stats = &tracker.AuthorStats{
-						Name: author.Name,
-						Type: author.Type,
-					}
-					result.byAuthor[author.Name] = stats
-				}
-
-				authorLines := authorLineCount[author.Name]
-
-				var added, deleted int
-				if totalAuthorLines > 0 {
-					ratio := float64(authorLines) / float64(totalAuthorLines)
-					added = int(float64(totalAdded) * ratio)
-					deleted = int(float64(totalDeleted) * ratio)
-				} else if len(fileInfo.Authors) == 1 {
-					added = 0
-					deleted = int(totalDeleted)
-				}
-
-				stats.Lines += added
-				authorsInCommit[author.Name] = true
-
-				if author.Type == tracker.AuthorTypeAI {
-					result.detailedMetrics.WorkVolume.AIAdded += added
-					result.detailedMetrics.WorkVolume.AIDeleted += deleted
-					result.detailedMetrics.WorkVolume.AIChanges += added + deleted
-					result.detailedMetrics.Contributions.AIAdditions += added
-					result.totalAI += added
-				} else {
-					result.detailedMetrics.WorkVolume.HumanAdded += added
-					result.detailedMetrics.WorkVolume.HumanDeleted += deleted
-					result.detailedMetrics.WorkVolume.HumanChanges += added + deleted
-					result.detailedMetrics.Contributions.HumanAdditions += added
-					result.totalHuman += added
-				}
-			}
-		}
+		authorsInCommit := processCommitFiles(result, alog, numstatMap)
 
 		for authorName := range authorsInCommit {
 			if authorCommits[authorName] == nil {
@@ -214,6 +153,87 @@ func collectAuthorStats(rangeSpec string) (*authorStatsResult, int, error) {
 	}
 
 	return result, len(commits), nil
+}
+
+// processCommitFiles は1つのコミット内の全ファイルの作成者統計を集計します。
+// 戻り値: authorsInCommit（このコミットに参加した作成者の集合）
+func processCommitFiles(result *authorStatsResult, alog *tracker.AuthorshipLog, numstatMap map[string][2]int) map[string]bool {
+	authorsInCommit := make(map[string]bool)
+
+	for filePath, fileInfo := range alog.Files {
+		numstat, found := numstatMap[filePath]
+		if !found {
+			continue
+		}
+
+		processFileAuthors(result, fileInfo, numstat, authorsInCommit)
+	}
+
+	return authorsInCommit
+}
+
+// processFileAuthors は1つのファイルの作成者ごとの行数を按分して集計します。
+func processFileAuthors(result *authorStatsResult, fileInfo tracker.FileInfo, numstat [2]int, authorsInCommit map[string]bool) {
+	totalAdded := numstat[0]
+	totalDeleted := numstat[1]
+
+	// Authorship Logから各作成者の行数を計算
+	authorLineCount := make(map[string]int)
+	totalAuthorLines := 0
+	for _, author := range fileInfo.Authors {
+		lines := authorship.CountLines(author.Lines)
+		authorLineCount[author.Name] = lines
+		totalAuthorLines += lines
+	}
+
+	for _, author := range fileInfo.Authors {
+		stats, exists := result.byAuthor[author.Name]
+		if !exists {
+			stats = &tracker.AuthorStats{
+				Name: author.Name,
+				Type: author.Type,
+			}
+			result.byAuthor[author.Name] = stats
+		}
+
+		added, deleted := calculateAuthorContribution(
+			authorLineCount[author.Name], totalAuthorLines,
+			totalAdded, totalDeleted, len(fileInfo.Authors),
+		)
+
+		stats.Lines += added
+		authorsInCommit[author.Name] = true
+		accumulateMetrics(result, author.Type, added, deleted)
+	}
+}
+
+// calculateAuthorContribution は作成者の按分比率に基づいて追加・削除行数を計算します。
+func calculateAuthorContribution(authorLines, totalAuthorLines, totalAdded, totalDeleted, authorCount int) (added, deleted int) {
+	if totalAuthorLines > 0 {
+		ratio := float64(authorLines) / float64(totalAuthorLines)
+		return int(float64(totalAdded) * ratio), int(float64(totalDeleted) * ratio)
+	}
+	if authorCount == 1 {
+		return 0, totalDeleted
+	}
+	return 0, 0
+}
+
+// accumulateMetrics は作成者タイプに基づいてメトリクスを累積します。
+func accumulateMetrics(result *authorStatsResult, authorType tracker.AuthorType, added, deleted int) {
+	if authorType == tracker.AuthorTypeAI {
+		result.detailedMetrics.WorkVolume.AIAdded += added
+		result.detailedMetrics.WorkVolume.AIDeleted += deleted
+		result.detailedMetrics.WorkVolume.AIChanges += added + deleted
+		result.detailedMetrics.Contributions.AIAdditions += added
+		result.totalAI += added
+	} else {
+		result.detailedMetrics.WorkVolume.HumanAdded += added
+		result.detailedMetrics.WorkVolume.HumanDeleted += deleted
+		result.detailedMetrics.WorkVolume.HumanChanges += added + deleted
+		result.detailedMetrics.Contributions.HumanAdditions += added
+		result.totalHuman += added
+	}
 }
 
 // buildReport constructs a Report from aggregated author statistics
@@ -254,7 +274,7 @@ func convertSinceToRange(since string) (string, error) {
 	expandedSince := expandShorthandDate(since)
 
 	// git log --since でコミットハッシュリストを取得（古い順）
-	executor := gitexec.NewExecutor()
+	executor := newExecutor()
 	output, err := executor.Run("log", "--since="+expandedSince, "--format=%H", "--reverse")
 	if err != nil {
 		return "", fmt.Errorf("failed to get commits since %s: %w", since, err)
@@ -355,7 +375,7 @@ func isNumeric(s string) bool {
 
 // getCommitsInRange retrieves commit hashes in the given range
 func getCommitsInRange(rangeSpec string) ([]string, error) {
-	executor := gitexec.NewExecutor()
+	executor := newExecutor()
 	output, err := executor.Run("log", "--format=%H", "--end-of-options", rangeSpec)
 	if err != nil {
 		return nil, err

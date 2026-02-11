@@ -5,7 +5,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
 	"github.com/y-hirakaw/ai-code-tracker/internal/storage"
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
@@ -120,7 +119,7 @@ func handleDebugClean() error {
 // handleDebugClearNotes removes all Git notes for authorship tracking
 func handleDebugClearNotes() error {
 	// Get all aict-related refs
-	executor := gitexec.NewExecutor()
+	executor := newExecutor()
 	output, err := executor.Run("show-ref")
 	if err != nil {
 		return fmt.Errorf("Git refsの取得に失敗しました: %w", err)
@@ -158,7 +157,7 @@ func handleDebugClearNotes() error {
 	// Remove each ref
 	removed := 0
 	for _, ref := range aictRefs {
-		executor := gitexec.NewExecutor()
+		executor := newExecutor()
 		_, err := executor.Run("update-ref", "-d", ref)
 		if err != nil {
 			fmt.Printf("警告: %s の削除に失敗しました: %v\n", ref, err)

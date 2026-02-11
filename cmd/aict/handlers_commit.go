@@ -3,27 +3,18 @@ package main
 import (
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/y-hirakaw/ai-code-tracker/internal/authorship"
 	"github.com/y-hirakaw/ai-code-tracker/internal/git"
-	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
 	"github.com/y-hirakaw/ai-code-tracker/internal/gitnotes"
-	"github.com/y-hirakaw/ai-code-tracker/internal/storage"
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
 
 func handleCommit() error {
-	// ストレージを初期化
-	store, err := storage.NewAIctStorage()
+	// ストレージと設定を読み込み
+	store, cfg, err := loadStorageAndConfig()
 	if err != nil {
-		return fmt.Errorf("initializing storage: %w", err)
-	}
-
-	// 設定を読み込み
-	cfg, err := store.LoadConfig()
-	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
 
 	// 最新のコミットハッシュを取得
@@ -33,7 +24,7 @@ func handleCommit() error {
 	}
 
 	// コミットのnumstatを取得
-	executor := gitexec.NewExecutor()
+	executor := newExecutor()
 	numstatOutput, err := executor.Run("show", "--numstat", "--format=", commitHash)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to get numstat for commit %s: %v\n", commitHash, err)
@@ -72,7 +63,7 @@ func handleCommit() error {
 	}
 
 	// チェックポイントから作成者マッピングを構築
-	authorshipMap := buildAuthorshipMap(checkpoints, changedFiles)
+	authorshipMap := authorship.BuildAuthorshipMap(checkpoints, changedFiles)
 
 	// デバッグ: 作成者マッピングを出力
 	debugf("Authorship mapping for %d files:", len(authorshipMap))
@@ -81,7 +72,7 @@ func handleCommit() error {
 	}
 
 	// 完全な差分情報と作成者情報を統合してAuthorship Logを生成
-	log, err := buildAuthorshipLogFromDiff(fullDiff, authorshipMap, commitHash, changedFiles, cfg)
+	log, err := authorship.BuildAuthorshipLogFromDiff(fullDiff, authorshipMap, commitHash, changedFiles, cfg)
 	if err != nil {
 		return fmt.Errorf("building authorship log: %w", err)
 	}
@@ -108,7 +99,7 @@ func handleCommit() error {
 
 // getLatestCommitHash は最新のコミットハッシュを取得します
 func getLatestCommitHash() (string, error) {
-	executor := gitexec.NewExecutor()
+	executor := newExecutor()
 	output, err := executor.Run("rev-parse", "HEAD")
 	if err != nil {
 		return "", err
@@ -119,7 +110,7 @@ func getLatestCommitHash() (string, error) {
 // getCommitDiff はHEAD~1とHEADの間の完全なdiffを取得します
 // 戻り値: map[filepath]Change (行範囲付き)
 func getCommitDiff(commitHash string) (map[string]tracker.Change, error) {
-	executor := gitexec.NewExecutor()
+	executor := newExecutor()
 
 	// HEAD~1が存在するかチェック
 	_, err := executor.Run("rev-parse", "HEAD~1")
@@ -161,83 +152,3 @@ func getCommitDiff(commitHash string) (map[string]tracker.Change, error) {
 
 	return diffMap, nil
 }
-
-// buildAuthorshipMap はチェックポイントから filepath -> author のマップを構築します
-func buildAuthorshipMap(checkpoints []*tracker.CheckpointV2, changedFiles map[string]bool) map[string]*tracker.CheckpointV2 {
-	authorMap := make(map[string]*tracker.CheckpointV2)
-
-	// 各ファイルについて、最後に変更したチェックポイントを記録
-	for _, cp := range checkpoints {
-		for fpath := range cp.Changes {
-			// changedFilesに含まれるファイルのみ処理
-			if changedFiles[fpath] {
-				authorMap[fpath] = cp
-			}
-		}
-	}
-
-	return authorMap
-}
-
-// buildAuthorshipLogFromDiff はdiffとauthorshipマッピングからAuthorship Logを作成します
-func buildAuthorshipLogFromDiff(
-	diffMap map[string]tracker.Change,
-	authorMap map[string]*tracker.CheckpointV2,
-	commitHash string,
-	changedFiles map[string]bool,
-	cfg *tracker.Config,
-) (*tracker.AuthorshipLog, error) {
-	log := &tracker.AuthorshipLog{
-		Version:   authorship.AuthorshipLogVersion,
-		Commit:    commitHash,
-		Timestamp: time.Now(),
-		Files:     make(map[string]tracker.FileInfo),
-	}
-
-	// 各変更ファイルに対してAuthorship情報を生成
-	for fpath, change := range diffMap {
-		// numstatフィルタリング
-		if !changedFiles[fpath] {
-			continue
-		}
-
-		// 追跡対象の拡張子かチェック
-		if !tracker.IsTrackedFile(fpath, cfg) {
-			continue
-		}
-
-		// 作成者情報を取得
-		var authorName string
-		var authorType tracker.AuthorType
-		var metadata map[string]string
-
-		if cp, exists := authorMap[fpath]; exists {
-			// チェックポイントに記録がある場合
-			authorName = cp.Author
-			authorType = cp.Type
-			metadata = cp.Metadata
-		} else {
-			// チェックポイントに記録がない場合はデフォルト作成者
-			authorName = cfg.DefaultAuthor
-			authorType = tracker.AuthorTypeHuman
-			metadata = map[string]string{"message": "No checkpoint found, assigned to default author"}
-		}
-
-		// FileInfoを作成
-		fileInfo := tracker.FileInfo{
-			Authors: []tracker.AuthorInfo{
-				{
-					Name:     authorName,
-					Type:     authorType,
-					Lines:    change.Lines,
-					Metadata: metadata,
-				},
-			},
-		}
-
-		log.Files[fpath] = fileInfo
-	}
-
-	return log, nil
-}
-

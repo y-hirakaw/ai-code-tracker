@@ -32,24 +32,27 @@ func TestIsAIAuthor(t *testing.T) {
 	analyzer := NewAnalyzer(config)
 
 	tests := []struct {
+		name     string
 		author   string
 		expected bool
 	}{
-		{"claude", true},
-		{"Claude AI", true},
-		{"AI Assistant", true},
-		{"Bot User", true},
-		{"human-developer", false},
-		{"John Doe", false},
-		{"GPT Assistant", true}, // Mapped to "ai"
-		{"Human Dev", false},    // Mapped to "human"
+		{"claude detected", "claude", true},
+		{"Claude AI detected", "Claude AI", true},
+		{"AI Assistant detected", "AI Assistant", true},
+		{"Bot User detected", "Bot User", true},
+		{"human developer", "human-developer", false},
+		{"human name", "John Doe", false},
+		{"mapped to ai", "GPT Assistant", true},
+		{"mapped to human", "Human Dev", false},
 	}
 
-	for _, test := range tests {
-		result := analyzer.IsAIAuthor(test.author)
-		if result != test.expected {
-			t.Errorf("IsAIAuthor(%s) = %v, expected %v", test.author, result, test.expected)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := analyzer.IsAIAuthor(tt.author)
+			if result != tt.expected {
+				t.Errorf("IsAIAuthor(%s) = %v, expected %v", tt.author, result, tt.expected)
+			}
+		})
 	}
 }
 

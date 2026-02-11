@@ -3,19 +3,35 @@ package gitnotes
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
+	"github.com/y-hirakaw/ai-code-tracker/internal/testutil"
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
 
 func TestGetCurrentCommit(t *testing.T) {
-	// Note: GetCurrentCommit uses NewExecutor internally, so we can't easily mock it
-	// without changing the implementation to accept an executor provider or instance.
-	// For now, skipping mock test for this specific function as it's a simple wrapper.
-	// Or we could refactor GetCurrentCommit to be a method of NotesManager.
+	// GetCurrentCommit は gitexec.NewExecutor() を直接使用するため、実Gitリポジトリでテスト
+	tmpDir := testutil.TempGitRepo(t)
+	testutil.CreateTestFile(t, tmpDir, "test.txt", "hello")
+	testutil.GitCommit(t, tmpDir, "Initial commit")
+
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir(tmpDir)
+
+	commit, err := GetCurrentCommit()
+	if err != nil {
+		t.Fatalf("GetCurrentCommit() error = %v", err)
+	}
+
+	// コミットハッシュは40文字のhex
+	if len(commit) != 40 {
+		t.Errorf("expected 40-char commit hash, got %q (len=%d)", commit, len(commit))
+	}
 }
 
 func TestAddAuthorshipLog(t *testing.T) {
@@ -382,19 +398,22 @@ func TestListAuthorshipLogs_NoNotes(t *testing.T) {
 
 func TestIsNoteNotFound(t *testing.T) {
 	tests := []struct {
+		name     string
 		errMsg   string
 		expected bool
 	}{
-		{"error: no note found for object abc123", true},
-		{"fatal: not a git repository", false},
-		{"no note found", true},
-		{"something else entirely", false},
+		{"note not found message", "error: no note found for object abc123", true},
+		{"not a git repository", "fatal: not a git repository", false},
+		{"no note found bare", "no note found", true},
+		{"unrelated error", "something else entirely", false},
 	}
 
 	for _, tt := range tests {
-		result := isNoteNotFound(fmt.Errorf(tt.errMsg))
-		if result != tt.expected {
-			t.Errorf("isNoteNotFound(%q) = %v, want %v", tt.errMsg, result, tt.expected)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			result := isNoteNotFound(fmt.Errorf(tt.errMsg))
+			if result != tt.expected {
+				t.Errorf("isNoteNotFound(%q) = %v, want %v", tt.errMsg, result, tt.expected)
+			}
+		})
 	}
 }

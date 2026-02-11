@@ -51,17 +51,6 @@ func TestIsAIAgent(t *testing.T) {
 	}
 }
 
-func TestDetectChanges(t *testing.T) {
-	// detectChanges は git diff を実行するため、実際のGitリポジトリが必要
-	// このテストはスキップ（統合テストで検証済み）
-	t.Skip("detectChanges requires actual git repository - covered by integration tests")
-}
-
-func TestGetLineRanges(t *testing.T) {
-	// getLineRanges も git diff を実行するため、実際のGitリポジトリが必要
-	// このテストはスキップ（統合テストで検証済み）
-	t.Skip("getLineRanges requires actual git repository - covered by integration tests")
-}
 
 func TestCheckpointValidation(t *testing.T) {
 	// CheckpointV2の基本的なバリデーションテスト

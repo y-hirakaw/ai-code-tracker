@@ -194,7 +194,29 @@ func (s *AIctStorage) LoadConfig() (*tracker.Config, error) {
 		cfg.AuthorMappings = make(map[string]string)
 	}
 
+	// バリデーション
+	if err := validateConfig(&cfg); err != nil {
+		return nil, fmt.Errorf("invalid config: %w", err)
+	}
+
 	return &cfg, nil
+}
+
+// validateConfig はConfig値の妥当性を検証します。
+func validateConfig(cfg *tracker.Config) error {
+	if cfg.TargetAIPercentage < 0 || cfg.TargetAIPercentage > 100 {
+		return fmt.Errorf("target_ai_percentage must be between 0 and 100, got %.1f", cfg.TargetAIPercentage)
+	}
+
+	if len(cfg.TrackedExtensions) == 0 {
+		return fmt.Errorf("tracked_extensions must not be empty")
+	}
+
+	if cfg.DefaultAuthor == "" {
+		return fmt.Errorf("default_author must not be empty")
+	}
+
+	return nil
 }
 
 // GetAictDir returns the .git/aict directory path

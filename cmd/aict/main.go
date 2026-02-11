@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-
-	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
 )
 
 const version = "1.4.1"
@@ -103,7 +101,7 @@ func printUsage() {
 }
 
 func getGitUserName() string {
-	executor := gitexec.NewExecutor()
+	executor := newExecutor()
 	output, err := executor.Run("config", "user.name")
 	if err != nil {
 		return ""

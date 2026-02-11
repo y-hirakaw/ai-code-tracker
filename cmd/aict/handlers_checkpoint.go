@@ -11,8 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
-	"github.com/y-hirakaw/ai-code-tracker/internal/storage"
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
 
@@ -24,7 +22,7 @@ func handleCheckpoint() error {
 	fs.Parse(os.Args[2:])
 
 	// Gitリポジトリのルートディレクトリに移動
-	executor := gitexec.NewExecutor()
+	executor := newExecutor()
 	repoRoot, err := executor.Run("rev-parse", "--show-toplevel")
 	if err != nil {
 		return fmt.Errorf("not in a git repository")
@@ -33,17 +31,11 @@ func handleCheckpoint() error {
 		return fmt.Errorf("failed to change directory to %s: %w", repoRoot, err)
 	}
 
-	// ストレージを初期化
-	store, err := storage.NewAIctStorage()
-	if err != nil {
-		return fmt.Errorf("initializing storage: %w", err)
-	}
-
-	// 設定を読み込み
-	config, err := store.LoadConfig()
+	// ストレージと設定を読み込み
+	store, config, err := loadStorageAndConfig()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Run 'aict init' first\n")
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
 
 	// 作成者名を決定
@@ -147,7 +139,7 @@ func captureSnapshot(trackedExtensions []string) (map[string]tracker.FileSnapsho
 	snapshot := make(map[string]tracker.FileSnapshot)
 
 	// Git管理下のファイル一覧を取得（追跡されているファイル + 未追跡の新規ファイル）
-	executor := gitexec.NewExecutor()
+	executor := newExecutor()
 	output, err := executor.Run("ls-files", "--cached", "--others", "--exclude-standard")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list git files: %w", err)
@@ -269,7 +261,7 @@ func getDetailedDiff(filepath string) (added, deleted int, lineRanges [][]int, e
 	}
 
 	// HEADのファイル内容を取得（git show HEAD:filepath）
-	executor := gitexec.NewExecutor()
+	executor := newExecutor()
 	headContentStr, err := executor.Run("show", fmt.Sprintf("HEAD:%s", filepath))
 	if err != nil {
 		// HEADに存在しない（新規ファイル）の場合
@@ -323,7 +315,7 @@ func getDetailedDiff(filepath string) (added, deleted int, lineRanges [][]int, e
 
 // getLineRangesFromDiff extracts line ranges using git diff
 func getLineRangesFromDiff(filepath string) ([][]int, error) {
-	executor := gitexec.NewExecutor()
+	executor := newExecutor()
 	output, err := executor.Run("diff", "--unified=0", "HEAD", "--", filepath)
 	if err != nil {
 		return nil, err

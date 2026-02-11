@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
 	"github.com/y-hirakaw/ai-code-tracker/internal/templates"
 )
 
@@ -16,7 +15,7 @@ func handleSetupHooksV2() error {
 	fmt.Println("Setting up AI Code Tracker hooks (SPEC.md)...")
 
 	// Gitリポジトリのルートディレクトリを取得
-	executor := gitexec.NewExecutor()
+	executor := newExecutor()
 	repoRoot, err := executor.Run("rev-parse", "--show-toplevel")
 	if err != nil {
 		return fmt.Errorf("failed to get repository root (are you in a git repo?): %w", err)

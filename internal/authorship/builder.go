@@ -6,6 +6,78 @@ import (
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
 
+// BuildAuthorshipMap はチェックポイントから filepath -> author のマップを構築します。
+// 各ファイルについて最後に変更したチェックポイントが優先されます。
+func BuildAuthorshipMap(checkpoints []*tracker.CheckpointV2, changedFiles map[string]bool) map[string]*tracker.CheckpointV2 {
+	authorMap := make(map[string]*tracker.CheckpointV2)
+
+	for _, cp := range checkpoints {
+		for fpath := range cp.Changes {
+			if changedFiles[fpath] {
+				authorMap[fpath] = cp
+			}
+		}
+	}
+
+	return authorMap
+}
+
+// BuildAuthorshipLogFromDiff はdiffとauthorshipマッピングからAuthorship Logを作成します。
+// changedFiles内のファイルのうち、追跡対象の拡張子かつ除外パターンに該当しないもののみ含めます。
+func BuildAuthorshipLogFromDiff(
+	diffMap map[string]tracker.Change,
+	authorMap map[string]*tracker.CheckpointV2,
+	commitHash string,
+	changedFiles map[string]bool,
+	cfg *tracker.Config,
+) (*tracker.AuthorshipLog, error) {
+	log := &tracker.AuthorshipLog{
+		Version:   AuthorshipLogVersion,
+		Commit:    commitHash,
+		Timestamp: time.Now(),
+		Files:     make(map[string]tracker.FileInfo),
+	}
+
+	for fpath, change := range diffMap {
+		if !changedFiles[fpath] {
+			continue
+		}
+
+		if !tracker.IsTrackedFile(fpath, cfg) {
+			continue
+		}
+
+		var authorName string
+		var authorType tracker.AuthorType
+		var metadata map[string]string
+
+		if cp, exists := authorMap[fpath]; exists {
+			authorName = cp.Author
+			authorType = cp.Type
+			metadata = cp.Metadata
+		} else {
+			authorName = cfg.DefaultAuthor
+			authorType = tracker.AuthorTypeHuman
+			metadata = map[string]string{"message": "No checkpoint found, assigned to default author"}
+		}
+
+		fileInfo := tracker.FileInfo{
+			Authors: []tracker.AuthorInfo{
+				{
+					Name:     authorName,
+					Type:     authorType,
+					Lines:    change.Lines,
+					Metadata: metadata,
+				},
+			},
+		}
+
+		log.Files[fpath] = fileInfo
+	}
+
+	return log, nil
+}
+
 // BuildAuthorshipLog converts checkpoints to AuthorshipLog
 // SPEC.md § チェックポイント → Authorship Log変換
 // changedFiles: numstatで実際に変更されたファイルのリスト（nil の場合はフィルタリングなし）

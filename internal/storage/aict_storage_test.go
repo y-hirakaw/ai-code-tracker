@@ -3,6 +3,7 @@ package storage
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -360,6 +361,97 @@ func TestSaveCheckpointJSONLFormat(t *testing.T) {
 	}
 	if lines != 2 {
 		t.Errorf("Expected 2 JSONL lines, got %d", lines)
+	}
+}
+
+func TestValidateConfig(t *testing.T) {
+	tests := []struct {
+		name    string
+		cfg     *tracker.Config
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "valid config",
+			cfg: &tracker.Config{
+				TargetAIPercentage: 80.0,
+				TrackedExtensions:  []string{".go"},
+				DefaultAuthor:      "dev",
+			},
+			wantErr: false,
+		},
+		{
+			name: "zero percentage is valid",
+			cfg: &tracker.Config{
+				TargetAIPercentage: 0,
+				TrackedExtensions:  []string{".go"},
+				DefaultAuthor:      "dev",
+			},
+			wantErr: false,
+		},
+		{
+			name: "100 percentage is valid",
+			cfg: &tracker.Config{
+				TargetAIPercentage: 100,
+				TrackedExtensions:  []string{".go"},
+				DefaultAuthor:      "dev",
+			},
+			wantErr: false,
+		},
+		{
+			name: "negative percentage",
+			cfg: &tracker.Config{
+				TargetAIPercentage: -1,
+				TrackedExtensions:  []string{".go"},
+				DefaultAuthor:      "dev",
+			},
+			wantErr: true,
+			errMsg:  "target_ai_percentage",
+		},
+		{
+			name: "over 100 percentage",
+			cfg: &tracker.Config{
+				TargetAIPercentage: 101,
+				TrackedExtensions:  []string{".go"},
+				DefaultAuthor:      "dev",
+			},
+			wantErr: true,
+			errMsg:  "target_ai_percentage",
+		},
+		{
+			name: "empty tracked extensions",
+			cfg: &tracker.Config{
+				TargetAIPercentage: 80,
+				TrackedExtensions:  []string{},
+				DefaultAuthor:      "dev",
+			},
+			wantErr: true,
+			errMsg:  "tracked_extensions",
+		},
+		{
+			name: "empty default author",
+			cfg: &tracker.Config{
+				TargetAIPercentage: 80,
+				TrackedExtensions:  []string{".go"},
+				DefaultAuthor:      "",
+			},
+			wantErr: true,
+			errMsg:  "default_author",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateConfig(tt.cfg)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateConfig() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr && err != nil && tt.errMsg != "" {
+				if !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("error message %q should contain %q", err.Error(), tt.errMsg)
+				}
+			}
+		})
 	}
 }
 
