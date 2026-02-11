@@ -1,6 +1,6 @@
-# AICT データフローガイド (v1.2.0)
+# AICT データフローガイド (v1.4.1)
 
-このドキュメントでは、AI Code Tracker (AICT) v1.2.0がどのようにデータを記録し、レポートを生成しているかを詳しく説明します。
+このドキュメントでは、AI Code Tracker (AICT) v1.4.1がどのようにデータを記録し、レポートを生成しているかを詳しく説明します。
 
 ## 目次
 
@@ -65,17 +65,21 @@ AICTは以下の3つの主要ステップでコードの作成者情報を追跡
 
 aict report --since 7d
     │
+    ├─> 入力バリデーション（v1.4.1）
+    │   └─> validateSinceInput(): 未知の日付形式の場合に警告
+    │
     ├─> コミット範囲を取得
     │   └─> git log --since 7d
     │
-    ├─> 各コミットのAuthorship Logを取得
-    │   └─> git notes --ref=refs/aict/authorship show <commit>
+    ├─> バッチ取得: numstat（v1.4.0: N+1問題解消）
+    │   └─> git log --numstat --format=__AICT_COMMIT__%H <range>
+    │       └─> 全コミットの追加/削除行数を1回のgit呼び出しで取得
     │
-    ├─> 各コミットのnumstatを取得
-    │   └─> git show --numstat <commit>
-    │       └─> 実際の追加/削除行数を取得
+    ├─> バッチ取得: Authorship Log（v1.4.0: N+1問題解消）
+    │   └─> git log --notes=refs/aict/authorship --format=__AICT_HASH__%H%n%N <range>
+    │       └─> 全コミットのAuthorship Logを1回のgit呼び出しで取得
     │
-    ├─> 作成者別集計
+    ├─> 作成者別集計（collectAuthorStats）
     │   ├─> Authorship Logの行範囲から作成者割合を計算
     │   ├─> numstatの追加/削除行数を作成者割合で按分
     │   ├─> AI行数カウント
@@ -115,7 +119,7 @@ handleCheckpoint()
     ├─> detectChangesFromSnapshot()
     │   └─> 前回チェックポイントとの差分を検出
     │
-    └─> .git/aict/checkpoints/{timestamp}.json に保存
+    └─> .git/aict/checkpoints/latest.json に追記（JSONL形式、v1.4.0）
 ```
 
 **データ例**:
@@ -158,29 +162,12 @@ handleCheckpoint()
     │       │   └─> getDetailedDiff() で行数・行範囲を取得
     │       └─> 削除ファイル検出
     │
-    └─> .git/aict/checkpoints/latest.json に追記（配列形式）
+    └─> .git/aict/checkpoints/latest.json に追記（JSONL形式、v1.4.0）
 ```
 
-**データ例**:
+**データ例（JSONL: 1行1チェックポイント）**:
 ```json
-{
-  "timestamp": "2025-12-13T10:15:00Z",
-  "author": "Claude Code",
-  "type": "ai",
-  "metadata": {
-    "message": "Claude Code edits"
-  },
-  "changes": {
-    "internal/api/handler.go": {
-      "added": 50,
-      "deleted": 10,
-      "lines": [[1, 50], [75, 100]]
-    }
-  },
-  "file_hashes": {
-    "internal/api/handler.go": "def456..."
-  }
-}
+{"timestamp":"2025-12-13T10:15:00Z","author":"Claude Code","type":"ai","metadata":{"message":"Claude Code edits"},"changes":{"internal/api/handler.go":{"added":50,"deleted":10,"lines":[[1,50],[75,100]]}},"snapshot":{"internal/api/handler.go":{"hash":"def456...","lines":200}}}
 ```
 
 ### 2. Authorship Log生成フェーズ
@@ -196,7 +183,7 @@ aict commit
     ↓
 handleCommit()
     ├─> LoadCheckpoints()
-    │   └─> .git/aict/checkpoints/latest.json のみを読み込み（配列形式）
+    │   └─> .git/aict/checkpoints/latest.json を読み込み（JSONL形式、旧JSON配列も自動判別）
     │
     ├─> numstatフィルタリング
     │   └─> git show --numstat --format= HEAD
@@ -267,26 +254,28 @@ handleCommit()
 
 ### 3. レポート生成フェーズ
 
-#### 3.1 Report生成（numstat按分方式）
+#### 3.1 Report生成（numstat按分方式・バッチ取得）
 
 ```
 ユーザーアクション: aict report --since 7d
     ↓
-handleRange()
-    ├─> parseTimeFilter()
-    │   └─> "7d" → 7日前の日時に変換
+handleRangeReport()
+    ├─> validateSinceInput()（v1.4.1）
+    │   └─> 未知の日付形式の場合にstderrに警告を出力
     │
-    ├─> getCommitRange()
-    │   └─> git log --since "7 days ago" --format=%H
+    ├─> convertSinceToRange()
+    │   └─> "7d" → "7 days ago" → コミット範囲に変換
     │
-    ├─> 各コミットについて
-    │   ├─> NotesManager.GetAuthorshipLog()
-    │   │   └─> git notes --ref=refs/aict/authorship show <commit>
+    ├─> collectAuthorStats()（v1.4.0: バッチ化）
+    │   ├─> GetRangeNumstat()（バッチ）
+    │   │   └─> git log --numstat --format=__AICT_COMMIT__%H <range>
+    │   │       └─> 全コミットのnumstatを1回で取得
     │   │
-    │   ├─> git show --numstat <commit>
-    │   │   └─> 実際の追加/削除行数を取得
+    │   ├─> GetAuthorshipLogsForRange()（バッチ）
+    │   │   └─> git log --notes=refs/aict/authorship --format=__AICT_HASH__%H%n%N <range>
+    │   │       └─> 全コミットのAuthorship Logを1回で取得
     │   │
-    │   └─> 作成者別集計
+    │   └─> 各コミット・各ファイルの集計
     │       ├─> Authorship Logの行範囲から作成者割合を計算
     │       ├─> numstatの追加/削除行数を割合で按分
     │       ├─> 削除のみファイルの特別処理（v1.1.9）
@@ -295,7 +284,12 @@ handleRange()
     │           ├─> コードベース貢献（追加行のみ）
     │           └─> 作業量貢献（追加+削除）
     │
-    └─> printTableReport() / printJSONReport()
+    ├─> buildReport()
+    │   └─> authorStatsResult → tracker.Report に変換
+    │
+    └─> formatRangeReport()
+        ├─> テーブル形式（デフォルト）+ 詳細メトリクス自動表示
+        └─> JSON形式（--format json）
 ```
 
 ---
@@ -383,7 +377,7 @@ type WorkVolumeMetrics struct {
 ├── aict/                           # AICT専用ディレクトリ
 │   ├── config.json                 # プロジェクト設定
 │   ├── checkpoints/
-│   │   └── latest.json             # CheckpointV2配列（セッション中のすべてのチェックポイント）
+│   │   └── latest.json             # CheckpointV2 JSONL形式（1行1チェックポイント、O(1)追記）
 │   └── hook.log                    # フック実行ログ（v1.1.6+）
 │
 ├── hooks/
@@ -463,18 +457,21 @@ By Author:
 
 ## まとめ
 
-AICT v1.2.0のデータフローは以下の特徴があります：
+AICT v1.4.1のデータフローは以下の特徴があります：
 
 ### アーキテクチャ
-1. **記録** - フック経由でCheckpointV2形式で詳細記録
+1. **記録** - フック経由でCheckpointV2形式でJSONL追記
 2. **変換** - コミット時にgit diff + チェックポイントマッピングでAuthorship Log生成
-3. **集計** - レポート生成時にnumstat按分方式で正確な統計計算
+3. **集計** - レポート生成時にバッチ取得 + numstat按分方式で正確な統計計算
 
-### 主要改善（v1.1.x → v1.2.0）
+### 主要改善（v1.1.x → v1.4.1）
 - ✅ **v1.1.7**: Gitリポジトリルートからの一貫したパス処理
 - ✅ **v1.1.8**: 未追跡ファイル（新規ファイル）の完全サポート
 - ✅ **v1.1.9**: 削除のみファイルの正確な按分
 - ✅ **v1.2.0**: 不完全な機能を削除、シンプルで安定した実装
+- ✅ **v1.3.0**: レポート出力のアイコン改善
+- ✅ **v1.4.0**: N+1問題解消（バッチnumstat/notes取得）、JSONL形式保存、メモリ効率改善、セキュリティ強化（ValidateRevisionArg）、ハンドラerror返却統一、デッドコード削除
+- ✅ **v1.4.1**: テストカバレッジ向上、`--since`入力バリデーション追加、`--format`エラーメッセージ改善
 
 ### 利点
 - ✅ **正確性**: コミットベースの完全な差分追跡（99%以上の精度）
@@ -487,9 +484,9 @@ AICT v1.2.0のデータフローは以下の特徴があります：
 ### 既知の実装制約と動作仕様
 
 #### 1. チェックポイント保存形式
-- **実装**: `.git/aict/checkpoints/latest.json` に配列形式で追記
-- **動作**: セッション中のすべてのチェックポイントを単一ファイルに記録
-- **LoadCheckpoints()**: `latest.json` のみを読み込み（複数ファイルではない）
+- **実装**: `.git/aict/checkpoints/latest.json` にJSONL形式で追記（v1.4.0）
+- **動作**: 1行1チェックポイントのO(1)追記。旧JSON配列形式からの自動マイグレーション対応
+- **LoadCheckpoints()**: `latest.json` を読み込み（JSONL/旧JSON配列を自動判別）
 
 #### 2. 差分計算の基準
 - **実装**: `git show HEAD:filepath` との比較（HEAD基準）
@@ -511,17 +508,12 @@ AICT v1.2.0のデータフローは以下の特徴があります：
 - **動作**: 行範囲情報の形式が統一されていない
 - **影響**: データ解析時に両方の形式を考慮する必要がある
 
-#### 6. 行数カウントの不一致
-- **スナップショット**: `strings.Split(content, "\n")`（TrimSpaceなし）
-- **詳細差分**: `strings.Split(strings.TrimSpace(content), "\n")`（TrimSpaceあり）
-- **影響**: 末尾改行の扱いで行数が微妙にずれる可能性
+#### 6. 行数カウント
+- **実装**: `bytes.Count(content, []byte{'\n'}) + 1`（v1.4.0: メモリ効率改善）
+- **動作**: スライス生成を回避し、バイト列で直接カウント
+- **影響**: 大きなファイルでのメモリ使用量を削減
 
-#### 7. ByFile集計の未実装
-- **実装**: `byFile`マップは作成されるが更新されない
-- **動作**: レポートのByFileセクションは常に空
-- **影響**: ファイル別の統計が表示されない
-
-#### 8. Bashコマンドによるファイル削除
+#### 7. Bashコマンドによるファイル削除
 - **実装**: `rm`コマンドはフックをバイパス
 - **動作**: ファイル削除が人間の作業として記録される場合がある
 - **影響**: AIによるファイル削除が正確に追跡されない（限定的）

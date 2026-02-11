@@ -150,6 +150,9 @@ aict sync fetch
 | `aict sync push` | Authorship Logをリモートにプッシュ |
 | `aict sync fetch` | Authorship Logをリモートから取得 |
 | `aict version` | バージョン表示 |
+| `aict debug show` | チェックポイント詳細表示 |
+| `aict debug clean` | チェックポイント削除 |
+| `aict debug clear-notes` | AICT関連Git notes削除 |
 
 ## レポートコマンドのオプション
 
@@ -175,6 +178,10 @@ aict sync fetch
 | 簡潔表記 | `<数値><単位>` 形式 | `7d` (7日), `2w` (2週間), `1m` (1ヶ月), `1y` (1年) |
 | 相対日付 | Git互換の相対日付 | `yesterday`, `7 days ago`, `2 weeks ago` |
 | 絶対日付 | ISO形式の日付 | `2025-01-15`, `2025-01-01` |
+
+**入力バリデーション（v1.4.1+）**: 認識できない形式を指定した場合、警告メッセージが表示されます。Gitに渡される値は変更されませんが、意図しない結果になる可能性を事前に通知します。
+
+**`--format` エラー**: 不正なフォーマットを指定した場合、利用可能なフォーマット一覧（`table, json`）がエラーメッセージに含まれます。
 
 ## チェックポイントのオプション
 

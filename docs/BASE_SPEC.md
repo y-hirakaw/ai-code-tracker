@@ -1,11 +1,11 @@
-# AI Code Tracker (AICT) 基本仕様書 v1.2.0
+# AI Code Tracker (AICT) 基本仕様書 v1.4.1
 
 ## 概要
 
 AI Code Tracker (AICT) は、AIによるコード生成と人間によるコード記述を追跡・管理するためのツールです。Claude Code などのAI支援ツールとGit hookを組み合わせて、誰がどのコードを書いたかを自動的に記録します。
 
-**バージョン**: v1.2.0（Production ready）
-**実装方式**: CheckpointV2ベース、git diff numstat集約方式
+**バージョン**: v1.4.1（Production ready）
+**実装方式**: CheckpointV2ベース、バッチnumstat取得 + 按分方式
 
 ## 基本フロー
 
@@ -23,23 +23,11 @@ AI Code Tracker (AICT) は、AIによるコード生成と人間によるコー�
 - 作成者: `y-hirakaw` (human)
 - 作成者タイプ: `human`
 
-**保存場所**: `.git/aict/checkpoints/latest.json`
+**保存場所**: `.git/aict/checkpoints/latest.json`（JSONL形式で追記、v1.4.0）
 
-**データ構造（CheckpointV2）**:
+**データ構造（CheckpointV2、JSONL: 1行1チェックポイント）**:
 ```json
-{
-  "timestamp": "2025-12-10T12:00:00Z",
-  "author": "y-hirakaw",
-  "author_type": "human",
-  "metadata": {
-    "message": "Before Claude Code edits"
-  },
-  "changes": {},
-  "file_hashes": {
-    "main.go": "abc123def456...",
-    "utils.go": "def456abc123..."
-  }
-}
+{"timestamp":"2025-12-10T12:00:00Z","author":"y-hirakaw","type":"human","metadata":{"message":"Before Claude Code edits"},"changes":{},"snapshot":{"main.go":{"hash":"abc123def456...","lines":50},"utils.go":{"hash":"def456abc123...","lines":30}}}
 ```
 
 ### 2. Claude Code編集: AIが実際にコードを変更
@@ -69,27 +57,11 @@ AI Code Tracker (AICT) は、AIによるコード生成と人間によるコー�
 - 作成者タイプ: `ai`
 - メタデータ: モデル名（v1.1.6で廃止、簡素化）
 
-**保存場所**: `.git/aict/checkpoints/latest.json`（追記）
+**保存場所**: `.git/aict/checkpoints/latest.json`（JSONL形式で追記）
 
-**データ構造（CheckpointV2）**:
+**データ構造（CheckpointV2、JSONL）**:
 ```json
-{
-  "timestamp": "2025-12-10T12:05:00Z",
-  "author": "Claude Code",
-  "author_type": "ai",
-  "metadata": {},
-  "changes": {
-    "main.go": {
-      "added": 10,
-      "deleted": 2,
-      "lines": [[1, 10]]
-    }
-  },
-  "file_hashes": {
-    "main.go": "xyz789abc012...",
-    "utils.go": "def456abc123..."
-  }
-}
+{"timestamp":"2025-12-10T12:05:00Z","author":"Claude Code","type":"ai","metadata":{},"changes":{"main.go":{"added":10,"deleted":2,"lines":[[1,10]]}},"snapshot":{"main.go":{"hash":"xyz789abc012...","lines":60},"utils.go":{"hash":"def456abc123...","lines":30}}}
 ```
 
 ### 4. git commit: ユーザーがコミット
@@ -112,7 +84,7 @@ git commit -m "feat: Add new feature"
 **処理内容**:
 
 #### 5.1 チェックポイント群を読み込み
-- `.git/aict/checkpoints/latest.json` から全チェックポイントを読み込む
+- `.git/aict/checkpoints/latest.json` から全チェックポイントを読み込む（JSONL/旧JSON配列を自動判別）
 
 #### 5.2 コミットのnumstatを取得（ここが重要！）
 - `git show --numstat --format= <commit-hash>` を実行
@@ -198,31 +170,21 @@ git commit -m "feat: Add new feature"
 ```go
 // handlers_commit.go
 
-// コミットのnumstatを取得
-numstatOutput, err := executor.Run("show", "--numstat", "--format=", commitHash)
+// コミットのnumstatを取得（git.ParseNumstat に統一、v1.4.0）
+numstatOutput, err := executor.Run("show", "--numstat", "--format=", "--end-of-options", commitHash)
+numstatData := git.ParseNumstat(numstatOutput)
 
 // numstatでフィルタリング（実際に変更されたファイルのみ）
-changedFiles := parseNumstatFiles(numstatOutput)
-
-// チェックポイント群をAuthorship Logに変換（numstatでフィルタリング）
-log, err := authorship.BuildAuthorshipLog(checkpoints, commitHash, changedFiles)
-```
-
-```go
-// internal/authorship/builder.go
-
-func BuildAuthorshipLog(checkpoints []*tracker.CheckpointV2, commitHash string, changedFiles map[string]bool) (*tracker.AuthorshipLog, error) {
-    // ...
-    for _, cp := range checkpoints {
-        for filepath, change := range cp.Changes {
-            // numstatフィルタリング: 実際に変更されたファイルのみ含める
-            if changedFiles != nil && !changedFiles[filepath] {
-                continue // このファイルは実際には変更されていないのでスキップ
-            }
-            // ... Authorship Logに追加
-        }
-    }
+changedFiles := make(map[string]bool)
+for filePath := range numstatData {
+    changedFiles[filePath] = true
 }
+
+// チェックポイント群からAuthorship Mapを構築
+authorMap := buildAuthorshipMap(checkpoints, changedFiles)
+
+// Authorship Logを生成（numstatでフィルタリング）
+log, err := buildAuthorshipLogFromDiff(diffMap, authorMap, commitHash, changedFiles, cfg)
 ```
 
 ## データフロー図
@@ -296,6 +258,7 @@ func BuildAuthorshipLog(checkpoints []*tracker.CheckpointV2, commitHash string, 
 | `aict debug show` | チェックポイント表示 |
 | `aict debug clean` | チェックポイント削除 |
 | `aict debug clear-notes` | Git notes削除 |
+| `aict version` | バージョン表示 |
 
 ## レポート例
 
@@ -326,14 +289,18 @@ By Author:
 ## 重要なポイント
 
 1. **CheckpointV2構造**: ファイルハッシュベースの変更検出
-2. **Gitリポジトリルート**: v1.1.7+でファイルパス一貫性確保
-3. **未追跡ファイル追跡**: v1.1.8+で新規ファイルも追跡対象
-4. **削除のみファイル**: v1.1.9+で削除行を正確に集計
-5. **numstatフィルタリング**: コミットに含まれるファイルのみを追跡（最重要！）
-6. **Authorship Log**: Git notes (`refs/aict/authorship`) として永続化
-7. **複数メトリクス**: コードベース貢献、作業量貢献、新規ファイルの3視点測定
+2. **JSONL保存**: O(1)追記でチェックポイントを保存（v1.4.0）
+3. **Gitリポジトリルート**: v1.1.7+でファイルパス一貫性確保
+4. **未追跡ファイル追跡**: v1.1.8+で新規ファイルも追跡対象
+5. **削除のみファイル**: v1.1.9+で削除行を正確に集計
+6. **numstatフィルタリング**: コミットに含まれるファイルのみを追跡（最重要！）
+7. **バッチ取得**: N+1問題を解消、2回のgit呼び出しで全データ取得（v1.4.0）
+8. **Authorship Log**: Git notes (`refs/aict/authorship`) として永続化
+9. **複数メトリクス**: コードベース貢献、作業量貢献、新規ファイルの3視点測定
+10. **入力バリデーション**: `--since`の未知形式を警告、`--format`のエラーメッセージに利用可能フォーマット表示（v1.4.1）
+11. **セキュリティ**: Git引数のオプション注入防止（ValidateRevisionArg、`--end-of-options`）（v1.4.0）
 
-## 既知の制限事項（v1.2.0）
+## 既知の制限事項
 
 ### Bashコマンドによるファイル削除
 **制限内容**: `rm` コマンドなどのBashツールで直接ファイル削除した場合、Claude Code hooksが実行されないため、削除が人間の作業として記録される可能性があります。
@@ -347,13 +314,14 @@ By Author:
 - ファイル削除自体が頻繁に発生するケースは少ない
 - 全体的な追跡精度への影響は限定的（99%以上の精度を維持）
 
-**設計判断**: v1.2.0では、コードの複雑性を避け、一般的なユースケースに焦点を当てるため、この制限を受け入れています。
-
 ## バージョン履歴
 
 - **v1.1.7**: ファイルパス一貫性修正（Gitリポジトリルートベース）
 - **v1.1.8**: 新規ファイル追跡対応（git ls-files --cached --others --exclude-standard）
 - **v1.1.9**: 削除のみファイルの正確な集計対応
 - **v1.2.0**: 安定版リリース、既知の制限事項の文書化
+- **v1.3.0**: レポート出力のアイコン改善
+- **v1.4.0**: N+1問題解消、JSONL保存、メモリ効率改善、セキュリティ強化、ハンドラerror返却統一、デッドコード削除
+- **v1.4.1**: テストカバレッジ向上、`--since`入力バリデーション、`--format`エラーメッセージ改善
 
 この仕様に基づいて、AICTはAIと人間のコード貢献を正確に追跡・管理します（99%以上の精度）。

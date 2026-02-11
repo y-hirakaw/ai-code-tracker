@@ -103,14 +103,14 @@ jobs:
   aict-report:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # 全履歴取得
 
       - name: Setup Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.23'
 
       - name: Install AICT
         run: go install github.com/y-hirakaw/ai-code-tracker/cmd/aict@latest
@@ -335,14 +335,14 @@ jobs:
   aict-report:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # 全履歴取得
 
       - name: Setup Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.23'
 
       - name: Install AICT
         run: go install github.com/y-hirakaw/ai-code-tracker/cmd/aict@latest
