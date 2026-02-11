@@ -38,3 +38,54 @@ func TestSettingsJSON(t *testing.T) {
 		t.Error("PostToolUse hook missing")
 	}
 }
+
+func TestHooksExitCleanly(t *testing.T) {
+	hooks := map[string]string{
+		"PreToolUseHook":  PreToolUseHook,
+		"PostToolUseHook": PostToolUseHook,
+		"PostCommitHook":  PostCommitHook,
+	}
+
+	for name, hook := range hooks {
+		if !strings.HasSuffix(strings.TrimSpace(hook), "exit 0") {
+			t.Errorf("%s should end with 'exit 0'", name)
+		}
+	}
+}
+
+func TestHooksContainAICTBinaryDetection(t *testing.T) {
+	hooks := map[string]string{
+		"PreToolUseHook":  PreToolUseHook,
+		"PostToolUseHook": PostToolUseHook,
+		"PostCommitHook":  PostCommitHook,
+	}
+
+	for name, hook := range hooks {
+		if !strings.Contains(hook, "command -v aict") {
+			t.Errorf("%s should contain 'command -v aict' for binary detection", name)
+		}
+		if !strings.Contains(hook, "bin/aict") {
+			t.Errorf("%s should contain 'bin/aict' fallback path", name)
+		}
+	}
+}
+
+func TestPostCommitHookUsesGitRevParse(t *testing.T) {
+	if !strings.Contains(PostCommitHook, "git rev-parse --show-toplevel") {
+		t.Error("PostCommitHook should use 'git rev-parse --show-toplevel' for repo root detection")
+	}
+}
+
+func TestHooksCheckAICTInitialized(t *testing.T) {
+	hooks := map[string]string{
+		"PreToolUseHook":  PreToolUseHook,
+		"PostToolUseHook": PostToolUseHook,
+		"PostCommitHook":  PostCommitHook,
+	}
+
+	for name, hook := range hooks {
+		if !strings.Contains(hook, ".git/aict") {
+			t.Errorf("%s should check for .git/aict directory", name)
+		}
+	}
+}

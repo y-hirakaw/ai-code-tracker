@@ -3,6 +3,7 @@ package gitnotes
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -267,5 +268,133 @@ func TestGetAuthorshipLogsForRange_GitError(t *testing.T) {
 	}
 	if len(logs) != 0 {
 		t.Errorf("expected empty map, got %d entries", len(logs))
+	}
+}
+
+func TestAddAuthorshipLog_GitError(t *testing.T) {
+	mockExec := gitexec.NewMockExecutor()
+	nm := NewNotesManagerWithExecutor(mockExec)
+
+	log := &tracker.AuthorshipLog{
+		Version: "1.0.0",
+		Commit:  "abc1234",
+	}
+
+	mockExec.RunFunc = func(args ...string) (string, error) {
+		return "", fmt.Errorf("fatal: could not add note")
+	}
+
+	err := nm.AddAuthorshipLog(log)
+	if err == nil {
+		t.Fatal("expected error from AddAuthorshipLog")
+	}
+	if !strings.Contains(err.Error(), "failed to add authorship log") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestAddAuthorshipLog_SecurityArgs(t *testing.T) {
+	// "--" がコミットハッシュの前に渡されることを確認（オプション注入防止）
+	mockExec := gitexec.NewMockExecutor()
+	nm := NewNotesManagerWithExecutor(mockExec)
+
+	log := &tracker.AuthorshipLog{
+		Version: "1.0.0",
+		Commit:  "abc1234",
+	}
+
+	mockExec.RunFunc = func(args ...string) (string, error) {
+		return "", nil
+	}
+
+	_ = nm.AddAuthorshipLog(log)
+
+	calls := mockExec.GetCalls("Run")
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 call, got %d", len(calls))
+	}
+
+	args := calls[0].Args
+	// "--" がコミットハッシュの直前にあることを確認
+	foundSeparator := false
+	for i, arg := range args {
+		if arg == "--" && i+1 < len(args) && args[i+1] == "abc1234" {
+			foundSeparator = true
+			break
+		}
+	}
+	if !foundSeparator {
+		t.Errorf("expected '--' before commit hash in args: %v", args)
+	}
+}
+
+func TestGetAuthorshipLog_GitError(t *testing.T) {
+	// "no note found" 以外のgitエラーはエラーとして返る
+	mockExec := gitexec.NewMockExecutor()
+	nm := NewNotesManagerWithExecutor(mockExec)
+
+	mockExec.RunFunc = func(args ...string) (string, error) {
+		return "", fmt.Errorf("fatal: not a git repository")
+	}
+
+	_, err := nm.GetAuthorshipLog("abc1234")
+	if err == nil {
+		t.Fatal("expected error for non-'no note found' git error")
+	}
+	if !strings.Contains(err.Error(), "failed to get authorship log") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestGetAuthorshipLog_InvalidJSON(t *testing.T) {
+	mockExec := gitexec.NewMockExecutor()
+	nm := NewNotesManagerWithExecutor(mockExec)
+
+	mockExec.RunFunc = func(args ...string) (string, error) {
+		return "{invalid json}", nil
+	}
+
+	_, err := nm.GetAuthorshipLog("abc1234")
+	if err == nil {
+		t.Fatal("expected error for invalid JSON")
+	}
+	if !strings.Contains(err.Error(), "failed to parse authorship log") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestListAuthorshipLogs_NoNotes(t *testing.T) {
+	mockExec := gitexec.NewMockExecutor()
+	nm := NewNotesManagerWithExecutor(mockExec)
+
+	mockExec.RunFunc = func(args ...string) (string, error) {
+		return "", fmt.Errorf("error: no ref found")
+	}
+
+	logs, err := nm.ListAuthorshipLogs()
+	if err != nil {
+		t.Fatalf("should not return error, got: %v", err)
+	}
+	if len(logs) != 0 {
+		t.Errorf("expected empty map, got %d entries", len(logs))
+	}
+}
+
+func TestIsNoteNotFound(t *testing.T) {
+	tests := []struct {
+		errMsg   string
+		expected bool
+	}{
+		{"error: no note found for object abc123", true},
+		{"fatal: not a git repository", false},
+		{"no note found", true},
+		{"something else entirely", false},
+	}
+
+	for _, tt := range tests {
+		result := isNoteNotFound(fmt.Errorf(tt.errMsg))
+		if result != tt.expected {
+			t.Errorf("isNoteNotFound(%q) = %v, want %v", tt.errMsg, result, tt.expected)
+		}
 	}
 }

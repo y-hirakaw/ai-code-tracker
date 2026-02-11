@@ -99,6 +99,56 @@ func TestFormatRangeReport(t *testing.T) {
 	testutil.AssertFileExists(t, tmpDir+"/.git/aict/config.json")
 }
 
+func TestExpandShorthandDate(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"7d", "7 days ago"},
+		{"1d", "1 days ago"},
+		{"2w", "2 weeks ago"},
+		{"1m", "1 months ago"},
+		{"3m", "3 months ago"},
+		{"1y", "1 years ago"},
+		{"2025-01-01", "2025-01-01"},
+		{"yesterday", "yesterday"},
+		{"d", "d"},
+		{"", ""},
+		{"abc", "abc"},
+		{"12x", "12x"},
+		{"0d", "0 days ago"},
+	}
+
+	for _, tt := range tests {
+		result := expandShorthandDate(tt.input)
+		if result != tt.expected {
+			t.Errorf("expandShorthandDate(%q) = %q, want %q", tt.input, result, tt.expected)
+		}
+	}
+}
+
+func TestIsNumeric(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected bool
+	}{
+		{"123", true},
+		{"0", true},
+		{"", false},
+		{"12a", false},
+		{"abc", false},
+		{"-1", false},
+		{"1.5", false},
+	}
+
+	for _, tt := range tests {
+		result := isNumeric(tt.input)
+		if result != tt.expected {
+			t.Errorf("isNumeric(%q) = %v, want %v", tt.input, result, tt.expected)
+		}
+	}
+}
+
 // TestAuthorCommitCountAccuracy tests that commit counts are accurate
 // when a single commit has multiple files (regression test for v1.1.3)
 func TestAuthorCommitCountAccuracy(t *testing.T) {

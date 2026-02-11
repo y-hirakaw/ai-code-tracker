@@ -157,16 +157,18 @@ Phase 4 の変更（error返却パターン・関数分割・Config読み込み�
   - `gitexec.ValidateRevisionArg()`: `-` で始まるリビジョン引数を拒否する関数を追加
 - [x] **6-2**: setup-hooks のリポジトリルート検出 (Low)
   - `git rev-parse --show-toplevel` で絶対パス化
-- [ ] **6-3**: セキュリティモジュールの統合判断 (Medium)
-  - Task 2-3 と連動して判断
+- [x] **6-3**: セキュリティモジュールの統合判断 (Medium)
+  - 判断: 再実装不要。Phase 6-1のインライン対策（ValidateRevisionArg, `--`, `--end-of-options`）で十分
+  - Phase 2-3で削除した`internal/security/`, `internal/validation/`は現在の規模では不要
 
 ## Phase 7: テスト品質向上
 
-- [ ] **7-1**: gitnotes パッケージのテスト追加 (Medium)
-  - `notes.go` 205行に対するユニットテスト作成
-- [ ] **7-2**: templates パッケージのテスト追加 (Low)
-- [ ] **7-3**: 既存テストの改善 (Low)
-  - `handlers_range_test.go` のスケルトン実装
+- [x] **7-1**: gitnotes パッケージのテスト追加 (Medium)
+  - `notes_test.go` に7テスト追加（GitError, SecurityArgs, InvalidJSON, NoNotes, isNoteNotFound等）
+- [x] **7-2**: templates パッケージのテスト追加 (Low)
+  - `hooks_test.go` に4テスト追加（ExitCleanly, BinaryDetection, GitRevParse, AICTInitialized）
+- [x] **7-3**: 既存テストの改善 (Low)
+  - `handlers_range_test.go` に2テスト追加（ExpandShorthandDate 13ケース, IsNumeric 7ケース, AuthorCommitCountAccuracy）
 
 ## Phase 8: その他
 
