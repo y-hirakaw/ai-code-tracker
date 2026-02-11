@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/y-hirakaw/ai-code-tracker/internal/authorship"
 	"github.com/y-hirakaw/ai-code-tracker/internal/testutil"
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
@@ -220,6 +221,111 @@ func TestBuildAuthorshipMap_EmptyCheckpoints(t *testing.T) {
 	if len(result) != 0 {
 		t.Errorf("expected empty map for nil checkpoints, got %d entries", len(result))
 	}
+}
+
+func TestBuildAuthorshipLogFromDiff(t *testing.T) {
+	cfg := &tracker.Config{
+		TrackedExtensions: []string{".go", ".py"},
+		ExcludePatterns:   []string{"*_test.go"},
+		DefaultAuthor:     "default-dev",
+	}
+
+	t.Run("checkpoint match", func(t *testing.T) {
+		diffMap := map[string]tracker.Change{
+			"main.go": {Added: 10, Deleted: 2, Lines: [][]int{{1, 10}}},
+		}
+		authorMap := map[string]*tracker.CheckpointV2{
+			"main.go": {
+				Author:   "claude",
+				Type:     tracker.AuthorTypeAI,
+				Metadata: map[string]string{"model": "opus"},
+			},
+		}
+		changedFiles := map[string]bool{"main.go": true}
+
+		log, err := buildAuthorshipLogFromDiff(diffMap, authorMap, "abc123", changedFiles, cfg)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if log.Version != authorship.AuthorshipLogVersion {
+			t.Errorf("Version = %q, want %q", log.Version, authorship.AuthorshipLogVersion)
+		}
+		if log.Commit != "abc123" {
+			t.Errorf("Commit = %q, want %q", log.Commit, "abc123")
+		}
+		fi, exists := log.Files["main.go"]
+		if !exists {
+			t.Fatal("main.go should be in Files")
+		}
+		if fi.Authors[0].Name != "claude" {
+			t.Errorf("Author = %q, want %q", fi.Authors[0].Name, "claude")
+		}
+		if fi.Authors[0].Type != tracker.AuthorTypeAI {
+			t.Errorf("Type = %q, want %q", fi.Authors[0].Type, tracker.AuthorTypeAI)
+		}
+	})
+
+	t.Run("default author fallback", func(t *testing.T) {
+		diffMap := map[string]tracker.Change{
+			"utils.go": {Added: 5, Lines: [][]int{{1, 5}}},
+		}
+		authorMap := map[string]*tracker.CheckpointV2{}
+		changedFiles := map[string]bool{"utils.go": true}
+
+		log, err := buildAuthorshipLogFromDiff(diffMap, authorMap, "def456", changedFiles, cfg)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		fi := log.Files["utils.go"]
+		if fi.Authors[0].Name != "default-dev" {
+			t.Errorf("Author = %q, want %q (default author)", fi.Authors[0].Name, "default-dev")
+		}
+		if fi.Authors[0].Type != tracker.AuthorTypeHuman {
+			t.Errorf("Type = %q, want %q", fi.Authors[0].Type, tracker.AuthorTypeHuman)
+		}
+	})
+
+	t.Run("excluded file filtered", func(t *testing.T) {
+		diffMap := map[string]tracker.Change{
+			"main_test.go": {Added: 20, Lines: [][]int{{1, 20}}},
+		}
+		authorMap := map[string]*tracker.CheckpointV2{}
+		changedFiles := map[string]bool{"main_test.go": true}
+
+		log, err := buildAuthorshipLogFromDiff(diffMap, authorMap, "ghi789", changedFiles, cfg)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(log.Files) != 0 {
+			t.Errorf("Files count = %d, want 0 (test file should be excluded)", len(log.Files))
+		}
+	})
+
+	t.Run("untracked extension filtered", func(t *testing.T) {
+		diffMap := map[string]tracker.Change{
+			"README.md": {Added: 10, Lines: [][]int{{1, 10}}},
+		}
+		authorMap := map[string]*tracker.CheckpointV2{}
+		changedFiles := map[string]bool{"README.md": true}
+
+		log, err := buildAuthorshipLogFromDiff(diffMap, authorMap, "jkl012", changedFiles, cfg)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(log.Files) != 0 {
+			t.Errorf("Files count = %d, want 0 (.md not tracked)", len(log.Files))
+		}
+	})
+
+	t.Run("empty diff", func(t *testing.T) {
+		log, err := buildAuthorshipLogFromDiff(map[string]tracker.Change{}, map[string]*tracker.CheckpointV2{}, "xyz", map[string]bool{}, cfg)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(log.Files) != 0 {
+			t.Errorf("Files count = %d, want 0", len(log.Files))
+		}
+	})
 }
 
 func TestBuildAuthorshipMap_FiltersByChangedFiles(t *testing.T) {

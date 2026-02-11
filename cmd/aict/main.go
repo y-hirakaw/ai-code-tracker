@@ -7,7 +7,7 @@ import (
 	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
 )
 
-const version = "1.4.0"
+const version = "1.4.1"
 
 // exitFunc is used to mock os.Exit in tests
 var exitFunc = os.Exit

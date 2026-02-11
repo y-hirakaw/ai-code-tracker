@@ -60,6 +60,9 @@ func handleRangeReport() error {
 
 	// --since を --range に変換
 	if opts.Since != "" {
+		if warning := validateSinceInput(opts.Since); warning != "" {
+			fmt.Fprintf(os.Stderr, "Warning: %s\n", warning)
+		}
 		convertedRange, err := convertSinceToRange(opts.Since)
 		if err != nil {
 			return err
@@ -310,6 +313,35 @@ func expandShorthandDate(since string) string {
 	}
 }
 
+// validateSinceInput validates the --since input and returns a warning message if the format is unrecognized.
+// Returns empty string if the input is a known format.
+func validateSinceInput(since string) string {
+	// shorthand形式 (7d, 2w, 1m, 1y)
+	if len(since) >= 2 {
+		lastChar := since[len(since)-1]
+		numPart := since[:len(since)-1]
+		if isNumeric(numPart) && (lastChar == 'd' || lastChar == 'w' || lastChar == 'm' || lastChar == 'y') {
+			return ""
+		}
+	}
+
+	// 既知のgit日付形式
+	knownPatterns := []string{"yesterday", "today", "days ago", "weeks ago", "months ago", "years ago"}
+	lowerSince := strings.ToLower(since)
+	for _, pattern := range knownPatterns {
+		if strings.Contains(lowerSince, pattern) {
+			return ""
+		}
+	}
+
+	// 日付形式 (YYYY-MM-DD)
+	if len(since) == 10 && since[4] == '-' && since[7] == '-' {
+		return ""
+	}
+
+	return fmt.Sprintf("unrecognized date format %q; expected formats: 7d, 2w, 1m, 1y, YYYY-MM-DD, 'yesterday', '7 days ago'", since)
+}
+
 // isNumeric checks if a string contains only digits
 func isNumeric(s string) bool {
 	if len(s) == 0 {
@@ -380,7 +412,7 @@ func formatRangeReport(report *tracker.Report, format string, metrics *tracker.D
 		}
 
 	default:
-		return fmt.Errorf("unknown format: %s", format)
+		return fmt.Errorf("unknown format: %s (available: table, json)", format)
 	}
 	return nil
 }

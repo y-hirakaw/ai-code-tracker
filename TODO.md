@@ -184,21 +184,22 @@ Phase 4 の変更（error返却パターン・関数分割・Config読み込み�
 
 ### テストカバレッジ向上
 
-- [ ] **T-1**: `cmd/aict/` パッケージのテストカバレッジ向上 (High)
-  - 現在13.2%。`internal/` パッケージ（60-80%）に比べて著しく低い
-  - 特に `handleCommit`, `handleRangeReport`, `buildAuthorshipLogFromDiff` の統合テストが不足
-  - `gitexec.MockExecutor` を活用した統合テスト追加が効果的
+- [x] **T-1**: `cmd/aict/` パッケージのテストカバレッジ向上 (High)
+  - `buildReport`: 3テスト（AI/人間混在、since表示、単一作成者）
+  - `buildAuthorshipLogFromDiff`: 5テスト（チェックポイント一致、デフォルト作成者、除外ファイル、未追跡拡張子、空diff）
+  - `formatRangeReport`: 3テスト（JSON/table/不正フォーマット）
 
-- [ ] **T-2**: `handlers_checkpoint.go` の純粋関数テスト追加 (Medium)
-  - `captureSnapshot`, `detectChangesFromSnapshot` 等のテストが未実装
-  - スナップショット比較ロジックのエッジケースカバレッジ不足
+- [x] **T-2**: `handlers_checkpoint.go` の純粋関数テスト追加 (Medium)
+  - `getFileList`: 3テスト（空マップ、単一ファイル、複数ファイル）
+  - `detectChangesFromSnapshot`: 混合変更エッジケース追加（新規+変更+削除+未変更の複合テスト）
 
 ### 入力バリデーション
 
-- [ ] **V-1**: `--since` フラグの入力バリデーション (Low)
-  - 現状: `--since invalid` が exit 0 で「No commits found」を返す
-  - gitが不正な日付を暗黙的に処理するため、ユーザーに分かりにくい
-  - `expandShorthandDate` で未知の形式を検出し警告を出すのが望ましい
+- [x] **V-1**: `--since` フラグの入力バリデーション (Low)
+  - `validateSinceInput()` 関数追加: 既知の日付形式かチェックし、未知の場合に警告を出力
+  - 対応形式: 7d/2w/1m/1y、YYYY-MM-DD、yesterday/today、N days ago 等
+  - テスト: 18ケース（正常形式13、異常形式5）
 
-- [ ] **V-2**: `--format` フラグの不正値エラー改善 (Low)
-  - 現状: `--format xml` で不明なフォーマットメッセージが出るが、利用可能な値のリストが示されない
+- [x] **V-2**: `--format` フラグの不正値エラー改善 (Low)
+  - エラーメッセージに `(available: table, json)` を追加
+  - テスト: 利用可能フォーマット一覧が含まれることを検証

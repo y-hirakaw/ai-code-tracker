@@ -261,6 +261,104 @@ func c() {}
 	}
 }
 
+func TestGetFileList(t *testing.T) {
+	tests := []struct {
+		name    string
+		changes map[string]tracker.Change
+		want    int
+	}{
+		{
+			name:    "empty map",
+			changes: map[string]tracker.Change{},
+			want:    0,
+		},
+		{
+			name: "single file",
+			changes: map[string]tracker.Change{
+				"main.go": {Added: 10},
+			},
+			want: 1,
+		},
+		{
+			name: "multiple files",
+			changes: map[string]tracker.Change{
+				"main.go":  {Added: 10},
+				"utils.go": {Added: 5, Deleted: 2},
+				"api.go":   {Deleted: 3},
+			},
+			want: 3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getFileList(tt.changes)
+			if len(result) != tt.want {
+				t.Errorf("getFileList() returned %d files, want %d", len(result), tt.want)
+			}
+			// 全てのキーが結果に含まれることを確認
+			resultMap := make(map[string]bool)
+			for _, f := range result {
+				resultMap[f] = true
+			}
+			for key := range tt.changes {
+				if !resultMap[key] {
+					t.Errorf("getFileList() missing file: %s", key)
+				}
+			}
+		})
+	}
+}
+
+func TestDetectChangesFromSnapshot_MixedChanges(t *testing.T) {
+	lastCheckpoint := &tracker.CheckpointV2{
+		Snapshot: map[string]tracker.FileSnapshot{
+			"unchanged.go":  {Hash: "aaa", Lines: 10},
+			"modified.go":   {Hash: "bbb", Lines: 20},
+			"deleted.go":    {Hash: "ccc", Lines: 15},
+		},
+	}
+	currentSnapshot := map[string]tracker.FileSnapshot{
+		"unchanged.go":  {Hash: "aaa", Lines: 10}, // no change
+		"modified.go":   {Hash: "ddd", Lines: 25}, // modified (hash changed)
+		"new.go":        {Hash: "eee", Lines: 8},  // new file
+	}
+
+	changes, err := detectChangesFromSnapshot(lastCheckpoint, currentSnapshot)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// unchanged.go should not be in changes
+	if _, exists := changes["unchanged.go"]; exists {
+		t.Error("unchanged.go should NOT be in changes")
+	}
+
+	// modified.go should be in changes
+	if _, exists := changes["modified.go"]; !exists {
+		t.Error("modified.go should be in changes")
+	}
+
+	// deleted.go should be in changes
+	if ch, exists := changes["deleted.go"]; !exists {
+		t.Error("deleted.go should be in changes")
+	} else if ch.Deleted != 15 {
+		t.Errorf("deleted.go Deleted = %d, want 15", ch.Deleted)
+	}
+
+	// new.go should be in changes
+	if ch, exists := changes["new.go"]; !exists {
+		t.Error("new.go should be in changes")
+	} else if ch.Added != 8 {
+		t.Errorf("new.go Added = %d, want 8", ch.Added)
+	}
+
+	// Total: 3 changes (modified, deleted, new)
+	if len(changes) != 3 {
+		t.Errorf("total changes = %d, want 3", len(changes))
+	}
+}
+
 func TestDetectChangesFromSnapshot(t *testing.T) {
 	tests := []struct {
 		name            string
