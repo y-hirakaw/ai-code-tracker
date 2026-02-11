@@ -313,3 +313,109 @@ Phase 4 の変更（error返却パターン・関数分割・Config読み込み�
   - モジュール名 `github.com/y-hirakaw/ai-code-tracker` はGitHub remote URLと一致
   - ローカルディレクトリ名 `y-hirakawa` は単なるローカル名で問題なし
   - 対応不要
+
+---
+
+## 次期改善ロードマップ（v1.5.0〜）
+
+4つの専門ペルソナ（アーキテクト・QA・DX・DevOps）による並行分析で策定。
+推奨実装順に記載。各フェーズは独立して着手可能。
+
+### Phase A: CI/CD基盤整備
+
+- [ ] **A-1**: Makefile 導入 (Medium)
+  - `make build`, `make test`, `make test-unit`, `make test-integration`, `make coverage`, `make clean`
+  - `go build -o bin/aict ./cmd/aict` の長いコマンドを統一
+  - テストスクリプト実行前の自動ビルド組み込み
+  - カバレッジHTML生成（`go tool cover -html`）
+
+- [ ] **A-2**: GitHub Actions CI パイプライン導入 (High)
+  - `.github/workflows/ci.yml` 新規作成
+  - push/PR時に `go test ./...` + `test_functional.sh` + `test_since_option.sh` 自動実行
+  - カバレッジレポート生成（codecov連携）
+  - Go 1.21 + ubuntu-latest 環境
+
+- [ ] **A-3**: 統合テストのCI対応 (Low)
+  - `test_functional.sh`, `test_since_option.sh` に `CI=true` 時のカラー無効化
+  - テスト失敗時のデバッグ情報詳細出力
+
+### Phase B: DX改善（開発者体験）
+
+- [ ] **B-1**: `aict status` コマンド追加 (High)
+  - AICT初期化状態、hooks設定状態、未処理チェックポイント数、最終追跡コミットを表示
+  - エラー状態時に修正コマンドを案内（例: `✗ Hooks not configured → Run 'aict setup-hooks'`）
+  - `git status` ライクなUXで「動いているか」を即座に確認可能に
+
+- [ ] **B-2**: エラーメッセージに解決策を追加 (High)
+  - 全エラーメッセージに `Try:` または `Hint:` で具体的なコマンド例を追記
+  - 例: `Error: either --range or --since is required\nTry: aict report --since 7d`
+  - エラーメッセージの言語を英語に統一（`handlers_debug.go` の日本語を修正）
+
+- [ ] **B-3**: `aict init --with-hooks` オプション追加 (Medium)
+  - `init` + `setup-hooks` を1コマンドで実行
+  - 成功メッセージに「次にやること」を明記
+  - 新規ユーザーのセットアップ手順を2ステップ→1ステップに短縮
+
+- [ ] **B-4**: レポート出力の可読性向上 (Medium)
+  - セクション間に空行を追加し、視覚的な区切りを強化
+  - `--format summary` オプション追加（1行サマリー: `AI: 62.9% (612/973 lines, 8 commits)`）
+  - CI/CDスクリプトで使いやすい簡易出力
+
+### Phase C: リリース自動化
+
+- [ ] **C-1**: バージョン番号の ldflags 自動注入 (Medium)
+  - `cmd/aict/main.go` の `const version` を `var version = "dev"` に変更
+  - ビルド時に `-ldflags "-X main.version=$(git describe --tags)"` で自動設定
+  - Gitタグを唯一のバージョン情報源（Single Source of Truth）に
+  - 9ファイルの手動バージョン更新が不要に
+
+- [ ] **C-2**: GoReleaser 導入 (High)
+  - `.goreleaser.yml` 新規作成
+  - Linux/macOS/Windows × amd64/arm64 の6プラットフォーム自動ビルド
+  - GitHubリリースページに自動CHANGELOG生成 + チェックサム
+
+- [ ] **C-3**: GitHub Actions リリースワークフロー (Medium)
+  - `.github/workflows/release.yml` 新規作成
+  - `git tag v1.x.x && git push origin v1.x.x` だけでリリース完了
+  - 手動リリース工数を8ステップ→1ステップに削減
+
+### Phase D: アーキテクチャ改善
+
+- [ ] **D-1**: internal層の DI パターン統一 (High)
+  - `internal/tracker/analyzer.go` の `gitexec.NewExecutor()` 直接呼び出しをDI化
+  - `internal/gitnotes/notes.go` の同様の箇所を修正
+  - `NewAnalyzerWithExecutor`, `NewNotesManagerWithExecutor` パターンを標準化
+  - `cmd/aict/` の Phase 10-3 DIパターンと一貫性を確保
+
+- [ ] **D-2**: CLI層とビジネスロジック層の分離 (High)
+  - `internal/report/` パッケージを新規作成
+  - `handlers_range.go` の `collectAuthorStats`, `buildReport`, `formatRangeReport` を移動
+  - `cmd/aict/handlers_range.go` は引数パース→`report.Generate()`→結果出力のみに縮小
+  - テストを純粋関数テストに変換（Gitリポジトリ初期化不要に）
+
+- [ ] **D-3**: 設定(Config)読み込みの完全統一 (Low)
+  - `loadStorageAndConfig()` を全ハンドラに適用（現在 checkpoint/commit のみ）
+  - `collectAuthorStats` に `cfg` パラメータを追加し内部での再読み込みを除去
+
+### Phase E: テスト品質向上
+
+- [ ] **E-1**: cmd/aict エラーハンドリングパステスト追加 (High)
+  - モックExecutorを活用したエラー注入テスト
+  - `handleCheckpoint`: git rev-parse失敗、ストレージ読み込み失敗
+  - `handleCommit`: Authorship Log生成失敗、Git notes保存失敗
+  - `handleRangeReport`: コミット範囲取得失敗、numstat解析失敗
+  - 目標: cmd/aictカバレッジ 69.2% → 85%+
+
+- [ ] **E-2**: test_functional.sh の検証精度向上 (Medium)
+  - 数値検証ヘルパー `assert_number_equals` を追加
+  - 各シナリオでTotal Lines、AI%、Human%の期待値を検証
+  - `--format json` 出力の `jq` によるJSON構造検証
+
+- [ ] **E-3**: internal/storage 境界値テスト強化 (Medium)
+  - 部分的に破損したJSONL（中間行のみ破損）の処理確認
+  - 大量チェックポイント（10,000件）の読み込みパフォーマンステスト
+  - `validateConfig` の境界値（0%, 100%, 負の値）テスト追加
+
+- [ ] **E-4**: analyzer.go 按分計算のプロパティベーステスト (Low)
+  - `testing/quick` によるファジングテスト（ランダム入力1000回）
+  - 不変条件: 全作成者の按分合計 ≤ total、負の値なし、ゼロ除算なし
