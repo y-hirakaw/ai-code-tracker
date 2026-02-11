@@ -141,7 +141,7 @@ Phase 4 の変更（error返却パターン・関数分割・Config読み込み�
 
 - [ ] **6-1**: Git引数のオプション注入防止 (Medium)
   - `--` (end of options marker) を追加
-- [ ] **6-2**: setup-hooks のリポジトリルート検出 (Low)
+- [x] **6-2**: setup-hooks のリポジトリルート検出 (Low)
   - `git rev-parse --show-toplevel` で絶対パス化
 - [ ] **6-3**: セキュリティモジュールの統合判断 (Medium)
   - Task 2-3 と連動して判断

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
 	"github.com/y-hirakaw/ai-code-tracker/internal/templates"
 )
 
@@ -14,24 +15,36 @@ import (
 func handleSetupHooksV2() error {
 	fmt.Println("Setting up AI Code Tracker hooks (SPEC.md)...")
 
+	// Gitリポジトリのルートディレクトリを取得
+	executor := gitexec.NewExecutor()
+	repoRoot, err := executor.Run("rev-parse", "--show-toplevel")
+	if err != nil {
+		return fmt.Errorf("failed to get repository root (are you in a git repo?): %w", err)
+	}
+
+	// .git ディレクトリの絶対パスを決定
+	// 注: 将来的には git rev-parse --git-dir を使うのがより堅牢だが、
+	// 現状の構成では .git がルート直下にあると仮定
+	gitDir := filepath.Join(repoRoot, ".git")
+
 	// .git/aict/hooks/ ディレクトリを作成
-	hooksDir := ".git/aict/hooks"
-	if err := os.MkdirAll(hooksDir, 0755); err != nil {
+	aictHooksDir := filepath.Join(gitDir, "aict", "hooks")
+	if err := os.MkdirAll(aictHooksDir, 0755); err != nil {
 		return fmt.Errorf("creating hooks directory: %w", err)
 	}
 
 	// Claude Code hooksを作成
-	if err := createClaudeHooks(hooksDir); err != nil {
+	if err := createClaudeHooks(aictHooksDir); err != nil {
 		return fmt.Errorf("creating Claude Code hooks: %w", err)
 	}
 
 	// Git post-commit hookを作成
-	if err := setupPostCommitHook(hooksDir); err != nil {
+	if err := setupPostCommitHook(repoRoot); err != nil {
 		return fmt.Errorf("setting up post-commit hook: %w", err)
 	}
 
 	// .claude/settings.json を更新
-	if err := setupClaudeSettings(); err != nil {
+	if err := setupClaudeSettings(repoRoot); err != nil {
 		return fmt.Errorf("setting up Claude Code settings: %w", err)
 	}
 
@@ -39,9 +52,9 @@ func handleSetupHooksV2() error {
 	fmt.Println("✓ Hook setup complete!")
 	fmt.Println()
 	fmt.Println("Hooks created:")
-	fmt.Println("  - .git/aict/hooks/pre-tool-use.sh  (records human checkpoint)")
-	fmt.Println("  - .git/aict/hooks/post-tool-use.sh (records AI checkpoint)")
-	fmt.Println("  - .git/hooks/post-commit           (generates Authorship Log)")
+	fmt.Printf("  - %s/pre-tool-use.sh  (records human checkpoint)\n", aictHooksDir)
+	fmt.Printf("  - %s/post-tool-use.sh (records AI checkpoint)\n", aictHooksDir)
+	fmt.Printf("  - %s/hooks/post-commit           (generates Authorship Log)\n", gitDir)
 	fmt.Println()
 	fmt.Println("Claude Code will now automatically track AI vs Human contributions.")
 	return nil
@@ -64,9 +77,9 @@ func createClaudeHooks(hooksDir string) error {
 	return nil
 }
 
-func setupPostCommitHook(hooksDir string) error {
+func setupPostCommitHook(repoRoot string) error {
 	// post-commit hookを.git/hooks/にコピー
-	gitHooksDir := ".git/hooks"
+	gitHooksDir := filepath.Join(repoRoot, ".git", "hooks")
 	gitHookPath := filepath.Join(gitHooksDir, "post-commit")
 
 	// .git/hooks/ディレクトリがなければ作成
@@ -100,8 +113,8 @@ func setupPostCommitHook(hooksDir string) error {
 	return nil
 }
 
-func setupClaudeSettings() error {
-	settingsDir := ".claude"
+func setupClaudeSettings(repoRoot string) error {
+	settingsDir := filepath.Join(repoRoot, ".claude")
 	if err := os.MkdirAll(settingsDir, 0755); err != nil {
 		return fmt.Errorf("failed to create .claude directory: %w", err)
 	}
