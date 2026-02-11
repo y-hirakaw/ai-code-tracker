@@ -323,21 +323,20 @@ Phase 4 の変更（error返却パターン・関数分割・Config読み込み�
 
 ### Phase A: CI/CD基盤整備
 
-- [ ] **A-1**: Makefile 導入 (Medium)
+- [x] **A-1**: Makefile 導入 (Medium)
   - `make build`, `make test`, `make test-unit`, `make test-integration`, `make coverage`, `make clean`
   - `go build -o bin/aict ./cmd/aict` の長いコマンドを統一
   - テストスクリプト実行前の自動ビルド組み込み
   - カバレッジHTML生成（`go tool cover -html`）
 
-- [ ] **A-2**: GitHub Actions CI パイプライン導入 (High)
+- [x] **A-2**: GitHub Actions CI パイプライン導入 (High)
   - `.github/workflows/ci.yml` 新規作成
   - push/PR時に `go test ./...` + `test_functional.sh` + `test_since_option.sh` 自動実行
   - カバレッジレポート生成（codecov連携）
   - Go 1.21 + ubuntu-latest 環境
 
-- [ ] **A-3**: 統合テストのCI対応 (Low)
-  - `test_functional.sh`, `test_since_option.sh` に `CI=true` 時のカラー無効化
-  - テスト失敗時のデバッグ情報詳細出力
+- [x] **A-3**: 統合テストのCI対応 (Low)
+  - `test_functional.sh`, `test_since_option.sh` に `CI=true` / `NO_COLOR` 時のカラー無効化
 
 ### Phase B: DX改善（開発者体験）
 

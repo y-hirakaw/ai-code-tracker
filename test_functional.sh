@@ -11,10 +11,18 @@
 
 set -e
 
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
+# CI環境ではカラー出力を無効化
+if [ "${CI:-}" = "true" ] || [ "${NO_COLOR:-}" != "" ]; then
+    GREEN=''
+    RED=''
+    YELLOW=''
+    NC=''
+else
+    GREEN='\033[0;32m'
+    RED='\033[0;31m'
+    YELLOW='\033[1;33m'
+    NC='\033[0m'
+fi
 
 PASSED=0
 FAILED=0
