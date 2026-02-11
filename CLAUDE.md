@@ -9,7 +9,7 @@ README.mdだけは英語で記載すること
 
 AI Code Tracker (AICT) is a Go-based tool designed to track the proportion of AI-generated versus human-written code in a repository. The project integrates with Claude Code hooks and Git post-commit hooks to automatically monitor code generation metrics.
 
-**Current Version**: v1.0.6 (Production ready)
+**Current Version**: v1.4.0
 
 **Key Features**:
 - Git notes-based authorship tracking (`refs/aict/authorship`)
@@ -154,7 +154,7 @@ go test ./...
 ```bash
 # Build and test basic functionality
 go build -o bin/aict ./cmd/aict
-./bin/aict version                    # v1.0.3
+./bin/aict version                    # v1.4.0
 ./bin/aict report --since 7d          # Show last 7 days
 ./bin/aict report --since 2w          # Show last 2 weeks
 ./bin/aict report --range HEAD~5..HEAD  # Show last 5 commits
@@ -296,6 +296,35 @@ go install github.com/y-hirakaw/ai-code-tracker/cmd/aict@v[バージョン]
 - 新機能追加の場合はマイナーバージョンを上げる
 - バグ修正の場合はパッチバージョンを上げる
 - Go Module Proxy のキャッシュ更新には時間がかかる場合がある
+
+## テスト開発ガイドライン
+
+### テストパターン
+
+- **純粋関数**: テーブル駆動テスト（`t.Run` + サブテスト）を使用。Git環境不要
+- **Git操作を伴う関数**: `testutil.TempGitRepo(t)` でテンポラリGitリポジトリを作成
+- **Git notesを伴う関数**: `gitexec.NewMockExecutor()` でモック化してテスト
+- **統合テスト**: `testutil.InitAICT(t, tmpDir)` でAICT設定込みの環境を構築
+
+### テスト時の注意点
+
+- **偽テストを書かない**: テスト名と実際に検証する内容を一致させること。環境セットアップだけのテストは `_EnvironmentSetup` サフィックスを付ける
+- **cmd/aict/ のカバレッジ**: 現在13.2%と低い。純粋関数（`isTrackedFile`, `matchesPattern`, `buildAuthorshipMap` 等）はモック不要でテスト可能
+- **os.Chdir パターン**: テスト内で `os.Chdir` する場合は必ず `defer os.Chdir(originalDir)` でリストアする
+- **`--since` 入力バリデーション**: `expandShorthandDate` は未知の形式をそのままgitに渡す。gitは不正日付を「コミットなし」として扱うため、エラーにならない
+
+### テスト実行
+
+```bash
+# ユニットテスト
+go test ./...
+
+# 特定パッケージ
+go test ./cmd/aict/ -v
+
+# 統合テスト
+./test_since_option.sh
+```
 
 ## リファクタリング進捗状況
 

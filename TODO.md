@@ -175,3 +175,30 @@ Phase 4 の変更（error返却パターン・関数分割・Config読み込み�
 - [x] **8-1**: コメント言語の統一 (Low)
 - [x] **8-2**: AuthorMappings の初期化 (Low)
 - [x] **8-3**: 変数名 filepath のシャドウイング解消 (Low)
+
+---
+
+## 今後の改善候補
+
+テストレビュー・実動作テスト（v1.4.0）で特定された改善候補。優先度順。
+
+### テストカバレッジ向上
+
+- [ ] **T-1**: `cmd/aict/` パッケージのテストカバレッジ向上 (High)
+  - 現在13.2%。`internal/` パッケージ（60-80%）に比べて著しく低い
+  - 特に `handleCommit`, `handleRangeReport`, `buildAuthorshipLogFromDiff` の統合テストが不足
+  - `gitexec.MockExecutor` を活用した統合テスト追加が効果的
+
+- [ ] **T-2**: `handlers_checkpoint.go` の純粋関数テスト追加 (Medium)
+  - `captureSnapshot`, `detectChangesFromSnapshot` 等のテストが未実装
+  - スナップショット比較ロジックのエッジケースカバレッジ不足
+
+### 入力バリデーション
+
+- [ ] **V-1**: `--since` フラグの入力バリデーション (Low)
+  - 現状: `--since invalid` が exit 0 で「No commits found」を返す
+  - gitが不正な日付を暗黙的に処理するため、ユーザーに分かりにくい
+  - `expandShorthandDate` で未知の形式を検出し警告を出すのが望ましい
+
+- [ ] **V-2**: `--format` フラグの不正値エラー改善 (Low)
+  - 現状: `--format xml` で不明なフォーマットメッセージが出るが、利用可能な値のリストが示されない

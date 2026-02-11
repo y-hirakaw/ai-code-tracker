@@ -52,27 +52,18 @@ func TestGetCommitsInRange(t *testing.T) {
 	}
 }
 
-func TestHandleRangeReport(t *testing.T) {
-	// Setup test environment
+func TestHandleRangeReport_EnvironmentSetup(t *testing.T) {
+	// handleRangeReport()の統合テスト前提条件（環境セットアップ）を検証する
 	tmpDir := testutil.TempGitRepo(t)
 	testutil.InitAICT(t, tmpDir)
 
-	// Change to temp directory
 	originalDir, _ := os.Getwd()
 	defer os.Chdir(originalDir)
 	os.Chdir(tmpDir)
 
-	// Create test commits
 	testutil.CreateTestFile(t, tmpDir, "test.go", "package main\n")
 	testutil.GitCommit(t, tmpDir, "Test commit")
 
-	// Note: handleRangeReport() is a complex integration that requires:
-	// - Git notes with authorship logs
-	// - Proper AICT configuration
-	// This basic test just verifies the environment is set up
-	// Full integration testing should be done separately
-
-	// Verify git repository has commits
 	commits, err := getCommitsInRange("HEAD")
 	if err != nil {
 		t.Fatalf("Failed to get commits: %v", err)
@@ -83,19 +74,11 @@ func TestHandleRangeReport(t *testing.T) {
 	}
 }
 
-func TestFormatRangeReport(t *testing.T) {
-	// Test formatRangeReport with mock data
-	// This doesn't require actual git repository
-
-	// Note: This would require access to formatRangeReport function
-	// and sample AuthorshipLog data structures.
-	// For now, we'll just verify the function exists by testing
-	// that the environment can be set up for it
-
+func TestFormatRangeReport_EnvironmentSetup(t *testing.T) {
+	// AICT設定ファイルが正しく生成されることを検証する
 	tmpDir := testutil.TempGitRepo(t)
 	testutil.InitAICT(t, tmpDir)
 
-	// Verify AICT config was created
 	testutil.AssertFileExists(t, tmpDir+"/.git/aict/config.json")
 }
 

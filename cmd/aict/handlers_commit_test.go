@@ -3,8 +3,10 @@ package main
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/y-hirakaw/ai-code-tracker/internal/testutil"
+	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
 
 func TestGetLatestCommitHash(t *testing.T) {
@@ -44,28 +46,18 @@ func TestGetLatestCommitHash(t *testing.T) {
 	}
 }
 
-func TestHandleCommit(t *testing.T) {
-	// Setup test environment
+func TestHandleCommit_EnvironmentSetup(t *testing.T) {
+	// このテストはhandleCommit()の統合テストの前提条件（環境セットアップ）を検証する
 	tmpDir := testutil.TempGitRepo(t)
 	testutil.InitAICT(t, tmpDir)
 
-	// Change to temp directory
 	originalDir, _ := os.Getwd()
 	defer os.Chdir(originalDir)
 	os.Chdir(tmpDir)
 
-	// Create a test file and commit
 	testutil.CreateTestFile(t, tmpDir, "test.go", "package main\n\nfunc main() {}\n")
 	testutil.GitCommit(t, tmpDir, "Initial commit")
 
-	// Note: handleCommit() is a complex integration that requires:
-	// - AICT storage
-	// - Git notes
-	// - Checkpoints
-	// This basic test just verifies it doesn't panic with proper setup
-	// Full integration testing should be done separately
-
-	// For now, we'll just verify the git repository is set up correctly
 	hash, err := getLatestCommitHash()
 	if err != nil {
 		t.Fatalf("Failed to get commit hash: %v", err)
@@ -73,5 +65,181 @@ func TestHandleCommit(t *testing.T) {
 
 	if hash == "" {
 		t.Error("Expected commit hash after git commit")
+	}
+}
+
+func TestMatchesPattern(t *testing.T) {
+	tests := []struct {
+		name     string
+		fpath    string
+		pattern  string
+		expected bool
+	}{
+		// サフィックスワイルドカード（*で始まるパターン）
+		{"suffix match _test.go", "handlers_commit_test.go", "*_test.go", true},
+		{"suffix match nested", "internal/foo/bar_test.go", "*_test.go", true},
+		{"suffix no match", "handlers_commit.go", "*_test.go", false},
+
+		// プレフィックスワイルドカード（*で終わるパターン）
+		{"prefix match vendor", "vendor/lib/foo.go", "vendor/*", true},
+		{"prefix match node_modules", "node_modules/pkg/index.js", "node_modules/*", true},
+		{"prefix no match", "src/main.go", "vendor/*", false},
+
+		// 完全一致
+		{"exact match", "Makefile", "Makefile", true},
+		{"exact no match", "makefile", "Makefile", false},
+
+		// 空文字列
+		{"empty pattern", "foo.go", "", false},
+		{"empty fpath", "", "*_test.go", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := matchesPattern(tt.fpath, tt.pattern)
+			if result != tt.expected {
+				t.Errorf("matchesPattern(%q, %q) = %v, want %v", tt.fpath, tt.pattern, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsTrackedFile(t *testing.T) {
+	cfg := &tracker.Config{
+		TrackedExtensions: []string{".go", ".py", ".js"},
+		ExcludePatterns:   []string{"*_test.go", "vendor/*"},
+	}
+
+	tests := []struct {
+		name     string
+		fpath    string
+		expected bool
+	}{
+		// 追跡対象
+		{"go file tracked", "main.go", true},
+		{"py file tracked", "script.py", true},
+		{"js file tracked", "app.js", true},
+		{"nested go file", "internal/pkg/handler.go", true},
+
+		// 除外パターンに該当
+		{"test file excluded", "main_test.go", false},
+		{"nested test excluded", "pkg/handler_test.go", false},
+		{"vendor excluded", "vendor/lib/foo.go", false},
+
+		// 追跡対象外の拡張子
+		{"md not tracked", "README.md", false},
+		{"txt not tracked", "notes.txt", false},
+		{"yaml not tracked", "config.yaml", false},
+		{"no extension", "Makefile", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isTrackedFile(tt.fpath, cfg)
+			if result != tt.expected {
+				t.Errorf("isTrackedFile(%q) = %v, want %v", tt.fpath, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsTrackedFile_EmptyConfig(t *testing.T) {
+	cfg := &tracker.Config{
+		TrackedExtensions: []string{},
+		ExcludePatterns:   []string{},
+	}
+
+	if isTrackedFile("main.go", cfg) {
+		t.Error("isTrackedFile should return false when no extensions are configured")
+	}
+}
+
+func TestBuildAuthorshipMap(t *testing.T) {
+	now := time.Now()
+
+	cpHuman := &tracker.CheckpointV2{
+		Timestamp: now.Add(-2 * time.Minute),
+		Author:    "human",
+		Type:      tracker.AuthorTypeHuman,
+		Changes: map[string]tracker.Change{
+			"main.go":  {Added: 10, Deleted: 0},
+			"utils.go": {Added: 5, Deleted: 2},
+		},
+	}
+
+	cpAI := &tracker.CheckpointV2{
+		Timestamp: now.Add(-1 * time.Minute),
+		Author:    "claude",
+		Type:      tracker.AuthorTypeAI,
+		Changes: map[string]tracker.Change{
+			"main.go":    {Added: 20, Deleted: 5},
+			"handler.go": {Added: 30, Deleted: 0},
+		},
+	}
+
+	changedFiles := map[string]bool{
+		"main.go":    true,
+		"utils.go":   true,
+		"handler.go": true,
+		"other.go":   true, // チェックポイントに存在しないファイル
+	}
+
+	result := buildAuthorshipMap([]*tracker.CheckpointV2{cpHuman, cpAI}, changedFiles)
+
+	// main.go は最後のチェックポイント（cpAI）が優先される
+	if cp, exists := result["main.go"]; !exists {
+		t.Error("main.go should be in authorship map")
+	} else if cp.Author != "claude" {
+		t.Errorf("main.go author = %q, want %q (last checkpoint wins)", cp.Author, "claude")
+	}
+
+	// utils.go は cpHuman のみ
+	if cp, exists := result["utils.go"]; !exists {
+		t.Error("utils.go should be in authorship map")
+	} else if cp.Author != "human" {
+		t.Errorf("utils.go author = %q, want %q", cp.Author, "human")
+	}
+
+	// handler.go は cpAI のみ
+	if cp, exists := result["handler.go"]; !exists {
+		t.Error("handler.go should be in authorship map")
+	} else if cp.Author != "claude" {
+		t.Errorf("handler.go author = %q, want %q", cp.Author, "claude")
+	}
+
+	// other.go はどのチェックポイントにも存在しない
+	if _, exists := result["other.go"]; exists {
+		t.Error("other.go should NOT be in authorship map (no checkpoint)")
+	}
+}
+
+func TestBuildAuthorshipMap_EmptyCheckpoints(t *testing.T) {
+	changedFiles := map[string]bool{"main.go": true}
+	result := buildAuthorshipMap(nil, changedFiles)
+
+	if len(result) != 0 {
+		t.Errorf("expected empty map for nil checkpoints, got %d entries", len(result))
+	}
+}
+
+func TestBuildAuthorshipMap_FiltersByChangedFiles(t *testing.T) {
+	cp := &tracker.CheckpointV2{
+		Author: "human",
+		Type:   tracker.AuthorTypeHuman,
+		Changes: map[string]tracker.Change{
+			"tracked.go":   {Added: 10},
+			"untracked.go": {Added: 5},
+		},
+	}
+
+	// changedFilesに含まれないファイルは除外される
+	changedFiles := map[string]bool{"tracked.go": true}
+	result := buildAuthorshipMap([]*tracker.CheckpointV2{cp}, changedFiles)
+
+	if _, exists := result["tracked.go"]; !exists {
+		t.Error("tracked.go should be in result")
+	}
+	if _, exists := result["untracked.go"]; exists {
+		t.Error("untracked.go should NOT be in result (not in changedFiles)")
 	}
 }
