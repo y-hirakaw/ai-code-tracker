@@ -1,4 +1,4 @@
-# AI Code Tracker (AICT) v1.4.1
+# AI Code Tracker (AICT) v1.4.2
 
 A Git-integrated tool to measure the proportion of AI-generated vs human-written code in your repository.
 
