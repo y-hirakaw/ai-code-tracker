@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"flag"
@@ -183,8 +184,8 @@ func captureSnapshot(trackedExtensions []string) (map[string]tracker.FileSnapsho
 		hash := sha256.Sum256(content)
 		hashStr := hex.EncodeToString(hash[:])
 
-		// 行数カウント
-		lines := len(strings.Split(string(content), "\n"))
+		// 行数カウント（メモリ効率: strings.Split でスライス生成せず bytes.Count で数える）
+		lines := bytes.Count(content, []byte{'\n'}) + 1
 
 		snapshot[filepath] = tracker.FileSnapshot{
 			Hash:  hashStr,
@@ -272,8 +273,7 @@ func getDetailedDiff(filepath string) (added, deleted int, lineRanges [][]int, e
 	headContentStr, err := executor.Run("show", fmt.Sprintf("HEAD:%s", filepath))
 	if err != nil {
 		// HEADに存在しない（新規ファイル）の場合
-		currentLines := strings.Split(strings.TrimSpace(string(currentContent)), "\n")
-		lineCount := len(currentLines)
+		lineCount := bytes.Count(bytes.TrimSpace(currentContent), []byte{'\n'}) + 1
 		return lineCount, 0, [][]int{{1, lineCount}}, nil
 	}
 

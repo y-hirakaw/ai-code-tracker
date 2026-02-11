@@ -80,12 +80,12 @@ type authorStatsResult struct {
 
 // handleRangeReportWithOptions handles report for commit range (SPEC.md準拠)
 func handleRangeReportWithOptions(opts *ReportOptions) error {
-	commits, err := getCommitsInRange(opts.Range)
+	result, commitCount, err := collectAuthorStats(opts.Range)
 	if err != nil {
 		return fmt.Errorf("getting commits: %w", err)
 	}
 
-	if len(commits) == 0 {
+	if commitCount == 0 {
 		rangeDisplay := opts.Range
 		if opts.Since != "" {
 			rangeDisplay = "since " + opts.Since
@@ -94,16 +94,30 @@ func handleRangeReportWithOptions(opts *ReportOptions) error {
 		return nil
 	}
 
-	result := collectAuthorStats(commits)
-	report := buildReport(opts, len(commits), result)
+	report := buildReport(opts, commitCount, result)
 
 	return formatRangeReport(report, opts.Format, &result.detailedMetrics)
 }
 
-// collectAuthorStats aggregates author statistics from commits' Authorship Logs
-func collectAuthorStats(commits []string) *authorStatsResult {
-	nm := gitnotes.NewNotesManager()
+// collectAuthorStats はコミット範囲内の作成者統計をバッチ取得で集計します。
+// 従来の2N回のgitプロセス起動（N×GetAuthorshipLog + N×git show --numstat）を
+// 2回のバッチ呼び出し（GetRangeNumstat + GetAuthorshipLogsForRange）に削減します。
+func collectAuthorStats(rangeSpec string) (*authorStatsResult, int, error) {
 	executor := gitexec.NewExecutor()
+	nm := gitnotes.NewNotesManager()
+
+	// バッチ取得: 全コミットのnumstatを1回のgit呼び出しで取得
+	allNumstats, commits, err := git.GetRangeNumstat(executor, rangeSpec)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if len(commits) == 0 {
+		return &authorStatsResult{byAuthor: make(map[string]*tracker.AuthorStats)}, 0, nil
+	}
+
+	// バッチ取得: 全コミットのAuthorship Logを1回のgit呼び出しで取得
+	allLogs, _ := nm.GetAuthorshipLogsForRange(rangeSpec)
 
 	result := &authorStatsResult{
 		byAuthor: make(map[string]*tracker.AuthorStats),
@@ -113,21 +127,20 @@ func collectAuthorStats(commits []string) *authorStatsResult {
 	authorCommits := make(map[string]map[string]bool)
 
 	for _, commitHash := range commits {
-		log, err := nm.GetAuthorshipLog(commitHash)
-		if err != nil || log == nil {
+		log := allLogs[commitHash]
+		if log == nil {
 			continue
 		}
 
-		numstatOutput, err := executor.Run("show", "--numstat", "--format=", commitHash)
-		if err != nil {
+		numstatMap := allNumstats[commitHash]
+		if numstatMap == nil {
 			continue
 		}
 
-		numstatMap, _ := git.ParseNumstat(numstatOutput)
 		authorsInCommit := make(map[string]bool)
 
-		for filepath, fileInfo := range log.Files {
-			numstat, found := numstatMap[filepath]
+		for filePath, fileInfo := range log.Files {
+			numstat, found := numstatMap[filePath]
 			if !found {
 				continue
 			}
@@ -195,13 +208,13 @@ func collectAuthorStats(commits []string) *authorStatsResult {
 	}
 
 	// コミット数を集計（重複なし）
-	for authorName, commits := range authorCommits {
+	for authorName, commitSet := range authorCommits {
 		if stats, exists := result.byAuthor[authorName]; exists {
-			stats.Commits = len(commits)
+			stats.Commits = len(commitSet)
 		}
 	}
 
-	return result
+	return result, len(commits), nil
 }
 
 // buildReport constructs a Report from aggregated author statistics
@@ -313,7 +326,7 @@ func isNumeric(s string) bool {
 // getCommitsInRange retrieves commit hashes in the given range
 func getCommitsInRange(rangeSpec string) ([]string, error) {
 	executor := gitexec.NewExecutor()
-	output, err := executor.Run("log", "--format=%H", rangeSpec)
+	output, err := executor.Run("log", "--format=%H", "--end-of-options", rangeSpec)
 	if err != nil {
 		return nil, err
 	}

@@ -237,10 +237,9 @@ func TestAnalyzeCheckpoints(t *testing.T) {
 		t.Fatalf("Failed to analyze checkpoints: %v", err)
 	}
 
-	// With numstat data: 5 total AI lines from main.go + 2 AI lines from helper.go = 7 AI lines
-	// Note: The analyzer counts the total added lines from numstat, not the difference
-	if result.AILines != 7 {
-		t.Errorf("Expected 7 AI lines, got %d", result.AILines)
+	// With numstat data: main.go diff = 5-2 = 3 AI lines, helper.go (new) = 2 AI lines → 5 total
+	if result.AILines != 5 {
+		t.Errorf("Expected 5 AI lines, got %d", result.AILines)
 	}
 
 	if result.HumanLines != 0 {
@@ -251,6 +250,78 @@ func TestAnalyzeCheckpoints(t *testing.T) {
 	expectedTotal := 5 + 2 // main.go + helper.go
 	if result.TotalLines != expectedTotal {
 		t.Errorf("Expected %d total lines, got %d", expectedTotal, result.TotalLines)
+	}
+}
+
+func TestAnalyzeFromNumstat_DetailedMetrics(t *testing.T) {
+	config := &Config{
+		TrackedExtensions: []string{".go"},
+		ExcludePatterns:   []string{},
+		AuthorMappings:    make(map[string]string),
+	}
+	analyzer := NewAnalyzer(config)
+
+	before := &Checkpoint{
+		ID:        "before",
+		Timestamp: time.Now().Add(-1 * time.Hour),
+		Author:    "human",
+		NumstatData: map[string][2]int{
+			"existing.go": {10, 0},
+		},
+		Files: map[string]FileContent{},
+	}
+
+	after := &Checkpoint{
+		ID:        "after",
+		Timestamp: time.Now(),
+		Author:    "claude",
+		NumstatData: map[string][2]int{
+			"existing.go": {15, 3}, // 5 lines added diff, 15 added total, 3 deleted
+			"newfile.go":  {8, 0},  // new file, 8 lines added
+		},
+		Files: map[string]FileContent{
+			"existing.go": {Path: "existing.go", Lines: []string{"a", "b", "c"}},
+			"newfile.go":  {Path: "newfile.go", Lines: []string{"x", "y"}},
+		},
+	}
+
+	result, err := analyzer.AnalyzeCheckpoints(before, after)
+	if err != nil {
+		t.Fatalf("AnalyzeCheckpoints failed: %v", err)
+	}
+
+	// AILines = diff of added: (15-10) + 8 = 13
+	if result.AILines != 13 {
+		t.Errorf("AILines: got %d, want 13", result.AILines)
+	}
+
+	// WorkVolume: AI added = 15 + 8 = 23, AI deleted = 3 + 0 = 3
+	if result.Metrics.WorkVolume.AIAdded != 23 {
+		t.Errorf("WorkVolume.AIAdded: got %d, want 23", result.Metrics.WorkVolume.AIAdded)
+	}
+	if result.Metrics.WorkVolume.AIDeleted != 3 {
+		t.Errorf("WorkVolume.AIDeleted: got %d, want 3", result.Metrics.WorkVolume.AIDeleted)
+	}
+	if result.Metrics.WorkVolume.AIChanges != 26 {
+		t.Errorf("WorkVolume.AIChanges: got %d, want 26", result.Metrics.WorkVolume.AIChanges)
+	}
+
+	// Contributions: AI additions = 5 + 8 = 13
+	if result.Metrics.Contributions.AIAdditions != 13 {
+		t.Errorf("Contributions.AIAdditions: got %d, want 13", result.Metrics.Contributions.AIAdditions)
+	}
+
+	// NewFiles: only newfile.go is new (8 lines)
+	if result.Metrics.NewFiles.AINewLines != 8 {
+		t.Errorf("NewFiles.AINewLines: got %d, want 8", result.Metrics.NewFiles.AINewLines)
+	}
+
+	// Human metrics should all be zero
+	if result.Metrics.WorkVolume.HumanAdded != 0 {
+		t.Errorf("WorkVolume.HumanAdded: got %d, want 0", result.Metrics.WorkVolume.HumanAdded)
+	}
+	if result.Metrics.NewFiles.HumanNewLines != 0 {
+		t.Errorf("NewFiles.HumanNewLines: got %d, want 0", result.Metrics.NewFiles.HumanNewLines)
 	}
 }
 

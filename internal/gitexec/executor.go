@@ -59,6 +59,15 @@ func (e *RealExecutor) RunInDir(dir string, args ...string) (string, error) {
 	return strings.TrimSpace(stdout.String()), nil
 }
 
+// ValidateRevisionArg validates that a revision argument (commit hash, range spec)
+// does not start with "-" to prevent option injection attacks.
+func ValidateRevisionArg(arg string) error {
+	if strings.HasPrefix(arg, "-") {
+		return fmt.Errorf("invalid revision argument: %q (must not start with '-')", arg)
+	}
+	return nil
+}
+
 // MockExecutor implements Executor for testing
 type MockExecutor struct {
 	// RunFunc is called when Run is invoked

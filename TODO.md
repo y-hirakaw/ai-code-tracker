@@ -129,18 +129,28 @@ Phase 4 の変更（error返却パターン・関数分割・Config読み込み�
 
 ## Phase 5: パフォーマンス改善
 
-- [ ] **5-1**: レポート生成の N+1 問題解消 (High)
-  - コミットN件に対する2N回のgitプロセス起動を削減
+- [x] **5-1**: レポート生成の N+1 問題解消 (High)
+  - `git log --numstat --format=__AICT_COMMIT__%H` でバッチnumstat取得（`GetRangeNumstat`）
+  - `git log --notes=refs/aict/authorship --format=__AICT_HASH__%H%n%N` でバッチnotes取得（`GetAuthorshipLogsForRange`）
+  - `collectAuthorStats` をバッチ化、gitプロセス起動を2N+1回→2回に削減
 - [ ] **5-2**: チェックポイント保存の JSONL 化 (Medium)
   - 後方互換性を維持しつつ追記型に移行
-- [ ] **5-3**: captureSnapshot のメモリ効率改善 (Medium)
-  - `strings.Split` → `bytes.Count` に変更
-- [ ] **5-4**: analyzeFromNumstat の二重ループ修正 (High)
+- [x] **5-3**: captureSnapshot のメモリ効率改善 (Medium)
+  - `captureSnapshot` の行数カウント: `len(strings.Split(string(content), "\n"))` → `bytes.Count(content, []byte{'\n'}) + 1`
+  - `getDetailedDiff` の新規ファイル行数カウント: 同様に `bytes.Count` + `bytes.TrimSpace` に変更
+  - 大きなファイルで不要なスライス生成を回避し、メモリ使用量を削減
+- [x] **5-4**: analyzeFromNumstat の二重ループ修正 (High)
+  - 2つの `for filepath, afterStats := range after.NumstatData` ループを1つに統合
+  - 新規ファイルの行数が二重カウントされていたバグを修正
+  - NewFilesメトリクスを統合ループ内で処理
 
 ## Phase 6: セキュリティ強化
 
-- [ ] **6-1**: Git引数のオプション注入防止 (Medium)
-  - `--` (end of options marker) を追加
+- [x] **6-1**: Git引数のオプション注入防止 (Medium)
+  - `git notes add/show`: commit引数の前に `--` を追加
+  - `git log`: `--end-of-options` を追加（`notes.go`, `numstat.go`, `handlers_range.go`）
+  - `git diff --numstat`: `ValidateRevisionArg` バリデーション追加
+  - `gitexec.ValidateRevisionArg()`: `-` で始まるリビジョン引数を拒否する関数を追加
 - [x] **6-2**: setup-hooks のリポジトリルート検出 (Low)
   - `git rev-parse --show-toplevel` で絶対パス化
 - [ ] **6-3**: セキュリティモジュールの統合判断 (Medium)

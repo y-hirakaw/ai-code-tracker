@@ -180,13 +180,12 @@ func (a *Analyzer) analyzeFromNumstat(before, after *Checkpoint, isAI bool) (*An
 		LastUpdated: after.Timestamp,
 	}
 
-	// Process modified files
-	for filepath, afterStats := range after.NumstatData {
-		if !a.shouldTrackFile(filepath) {
+	for filePath, afterStats := range after.NumstatData {
+		if !a.shouldTrackFile(filePath) {
 			continue
 		}
 
-		beforeStats, existed := before.NumstatData[filepath]
+		beforeStats, existed := before.NumstatData[filePath]
 		if !existed {
 			beforeStats = [2]int{0, 0}
 		}
@@ -217,19 +216,9 @@ func (a *Analyzer) analyzeFromNumstat(before, after *Checkpoint, isAI bool) (*An
 				result.Metrics.Contributions.HumanAdditions += addedLinesDiff
 			}
 		}
-	}
 
-	// Process new files
-	for filepath, afterStats := range after.NumstatData {
-		if !a.shouldTrackFile(filepath) {
-			continue
-		}
-
-		if _, existed := before.NumstatData[filepath]; !existed {
-			// 新規ファイル
-			a.aggregateLinesByAuthor(afterStats[0], isAI, &result.AILines, &result.HumanLines)
-
-			// 詳細メトリクス: 新規ファイル
+		// 詳細メトリクス: 新規ファイル
+		if !existed {
 			if isAI {
 				result.Metrics.NewFiles.AINewLines += afterStats[0]
 			} else {

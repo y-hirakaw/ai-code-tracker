@@ -58,8 +58,8 @@ func (nm *NotesManager) AddAuthorshipLog(log *tracker.AuthorshipLog) error {
 		return fmt.Errorf("failed to marshal authorship log: %w", err)
 	}
 
-	// refs/aict/authorship/ に保存
-	_, err = nm.executor.Run("notes", "--ref="+AuthorshipNotesRef, "add", "-f", "-m", string(data), log.Commit)
+	// refs/aict/authorship/ に保存（"--" でオプション終端を明示し、コミットハッシュのオプション注入を防止）
+	_, err = nm.executor.Run("notes", "--ref="+AuthorshipNotesRef, "add", "-f", "-m", string(data), "--", log.Commit)
 	if err != nil {
 		return fmt.Errorf("failed to add authorship log: %w", err)
 	}
@@ -69,7 +69,7 @@ func (nm *NotesManager) AddAuthorshipLog(log *tracker.AuthorshipLog) error {
 
 // GetAuthorshipLog retrieves an AuthorshipLog from Git notes
 func (nm *NotesManager) GetAuthorshipLog(commitHash string) (*tracker.AuthorshipLog, error) {
-	output, err := nm.executor.Run("notes", "--ref="+AuthorshipNotesRef, "show", commitHash)
+	output, err := nm.executor.Run("notes", "--ref="+AuthorshipNotesRef, "show", "--", commitHash)
 	if err != nil {
 		if isNoteNotFound(err) {
 			return nil, nil
@@ -83,6 +83,62 @@ func (nm *NotesManager) GetAuthorshipLog(commitHash string) (*tracker.Authorship
 	}
 
 	return &log, nil
+}
+
+// authorshipLogMarker はgit logの出力でコミットを区切るマーカー
+const authorshipLogMarker = "__AICT_HASH__"
+
+// GetAuthorshipLogsForRange はコミット範囲内の全Authorship Logを1回のgit呼び出しで取得します。
+// git log --notes を使用し、個別に git notes show を呼ぶN+1問題を解消します。
+func (nm *NotesManager) GetAuthorshipLogsForRange(rangeSpec string) (map[string]*tracker.AuthorshipLog, error) {
+	output, err := nm.executor.Run(
+		"log",
+		"--no-standard-notes",
+		"--notes="+AuthorshipNotesRef,
+		"--format="+authorshipLogMarker+"%H%n%N",
+		"--end-of-options",
+		rangeSpec,
+	)
+	if err != nil {
+		return make(map[string]*tracker.AuthorshipLog), nil
+	}
+
+	return parseAuthorshipLogsOutput(output), nil
+}
+
+// parseAuthorshipLogsOutput は git log --notes --format の出力をパースします。
+func parseAuthorshipLogsOutput(output string) map[string]*tracker.AuthorshipLog {
+	logs := make(map[string]*tracker.AuthorshipLog)
+
+	sections := strings.Split(output, authorshipLogMarker)
+	for _, section := range sections {
+		section = strings.TrimSpace(section)
+		if section == "" {
+			continue
+		}
+
+		// 最初の行がコミットハッシュ、残りがノート内容（JSON）
+		newlineIdx := strings.Index(section, "\n")
+		if newlineIdx == -1 {
+			continue // ノートなし
+		}
+
+		commitHash := strings.TrimSpace(section[:newlineIdx])
+		noteContent := strings.TrimSpace(section[newlineIdx+1:])
+
+		if noteContent == "" {
+			continue
+		}
+
+		var log tracker.AuthorshipLog
+		if err := json.Unmarshal([]byte(noteContent), &log); err != nil {
+			continue
+		}
+
+		logs[commitHash] = &log
+	}
+
+	return logs
 }
 
 // ListAuthorshipLogs lists all commits that have Authorship Logs
