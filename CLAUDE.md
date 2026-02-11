@@ -45,7 +45,8 @@ ai-code-tracker/
 │   └── checkpoints/       # Checkpoint snapshots
 ├── .claude/
 │   └── settings.json      # Claude Code hooks configuration
-└── test_since_option.sh   # Integration test suite
+├── test_since_option.sh   # --since option integration tests
+└── test_functional.sh     # Full functional test (multi-commit workflow)
 ```
 
 ## Development Commands
@@ -58,7 +59,8 @@ go build -o bin/aict ./cmd/aict
 go test ./...
 
 # Run integration tests
-./test_since_option.sh
+./test_since_option.sh     # --since option tests (16 tests)
+./test_functional.sh       # Full workflow test (25 tests)
 
 # Format code
 go fmt ./...
@@ -131,12 +133,18 @@ go mod tidy
 ## Testing
 
 ### Integration Tests
-Run comprehensive test suite:
+
 ```bash
+# --since オプションのテスト (16 tests)
 ./test_since_option.sh
+
+# 全コマンド動作確認 (25 tests) - 仮リポジトリで複数コミットのワークフローをE2Eテスト
+# init → checkpoint → commit → report → debug の全フローを検証
+# リファクタリングやコマンド変更後に実行推奨
+./test_functional.sh
 ```
 
-**Test Coverage** (16 tests, 100% pass rate):
+**test_since_option.sh** (16 tests):
 - Shorthand notation (7d, 2w, 1m, 1y)
 - Relative dates (yesterday, N days ago)
 - Absolute dates (2025-01-01)
@@ -144,6 +152,12 @@ Run comprehensive test suite:
 - Output formats (table, JSON)
 - Edge cases (initial commits, very old dates)
 - Real-world scenarios (sprint review, daily standup, monthly release)
+
+**test_functional.sh** (25 tests):
+- 仮Gitリポジトリで5コミット（human 3回 + AI 2回）のワークフローを再現
+- checkpoint のベースライン→変更検出、commit のAuthorship Log生成
+- report の table/json/range 出力、AI/human 分類の正確性
+- debug show/clean、help、エラーケース（引数不足、排他チェック）
 
 ### Unit Tests
 ```bash
