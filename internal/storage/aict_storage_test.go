@@ -506,3 +506,49 @@ func TestAIctStorageConfig(t *testing.T) {
 		t.Errorf("Expected 2 AI agents, got %d", len(loadedCfg.AIAgents))
 	}
 }
+
+
+func TestGetAictDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	gitDir := filepath.Join(tmpDir, ".git")
+	if err := os.MkdirAll(gitDir, 0755); err != nil {
+		t.Fatalf("Failed to create .git directory: %v", err)
+	}
+
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current directory: %v", err)
+	}
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("Failed to change directory: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	store, err := NewAIctStorage()
+	if err != nil {
+		t.Fatalf("NewAIctStorage failed: %v", err)
+	}
+
+	dir := store.GetAictDir()
+	if dir == "" {
+		t.Error("GetAictDir() returned empty string")
+	}
+
+	// Should end with /aict or \aict (path separator dependent)
+	if !strings.HasSuffix(dir, "aict") {
+		t.Errorf("GetAictDir() = %q, should end with 'aict'", dir)
+	}
+
+	// Should contain .git/aict path components
+	if !strings.Contains(dir, filepath.Join(".git", "aict")) {
+		t.Errorf("GetAictDir() = %q, should contain '.git/aict'", dir)
+	}
+
+	// Directory should actually exist on disk
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Errorf("GetAictDir() directory does not exist: %v", err)
+	} else if !info.IsDir() {
+		t.Errorf("GetAictDir() path is not a directory")
+	}
+}

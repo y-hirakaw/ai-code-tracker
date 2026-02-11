@@ -1,9 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"os"
+	"strings"
 	"testing"
 
+	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
 	"github.com/y-hirakaw/ai-code-tracker/internal/testutil"
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
@@ -153,3 +156,188 @@ func TestIsTrackedFile_EmptyConfig(t *testing.T) {
 	}
 }
 
+
+
+func TestGetCommitDiff(t *testing.T) {
+	tests := []struct {
+		name           string
+		mockRunFunc    func(args ...string) (string, error)
+		expectedFiles  map[string]tracker.Change
+		expectError    bool
+	}{
+		{
+			name: "normal commit with numstat output",
+			mockRunFunc: func(args ...string) (string, error) {
+				if len(args) >= 2 && args[0] == "rev-parse" && args[1] == "HEAD~1" {
+					// HEAD~1 exists (normal commit)
+					return "abc123", nil
+				}
+				if len(args) >= 4 && args[0] == "diff" && args[1] == "--numstat" {
+					return "10\t2\tmain.go\n5\t0\thelper.go", nil
+				}
+				return "", nil
+			},
+			expectedFiles: map[string]tracker.Change{
+				"main.go": {
+					Added:   10,
+					Deleted: 2,
+					Lines:   [][]int{{1, 10}},
+				},
+				"helper.go": {
+					Added:   5,
+					Deleted: 0,
+					Lines:   [][]int{{1, 5}},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "initial commit fallback to show",
+			mockRunFunc: func(args ...string) (string, error) {
+				if len(args) >= 2 && args[0] == "rev-parse" && args[1] == "HEAD~1" {
+					// HEAD~1 does not exist (initial commit)
+					return "", fmt.Errorf("fatal: bad revision 'HEAD~1'")
+				}
+				if len(args) >= 1 && args[0] == "show" {
+					return "3\t0\tnew_file.go", nil
+				}
+				return "", nil
+			},
+			expectedFiles: map[string]tracker.Change{
+				"new_file.go": {
+					Added:   3,
+					Deleted: 0,
+					Lines:   [][]int{{1, 3}},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "empty numstat output",
+			mockRunFunc: func(args ...string) (string, error) {
+				if len(args) >= 2 && args[0] == "rev-parse" && args[1] == "HEAD~1" {
+					return "abc123", nil
+				}
+				if len(args) >= 4 && args[0] == "diff" && args[1] == "--numstat" {
+					return "", nil
+				}
+				return "", nil
+			},
+			expectedFiles: map[string]tracker.Change{},
+			expectError:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// DI: mock executor
+			origExecutor := newExecutor
+			defer func() { newExecutor = origExecutor }()
+
+			mock := gitexec.NewMockExecutor()
+			mock.RunFunc = tt.mockRunFunc
+			newExecutor = func() gitexec.Executor { return mock }
+
+			result, err := getCommitDiff("abc123def456")
+
+			if tt.expectError && err == nil {
+				t.Fatal("expected error but got nil")
+			}
+			if !tt.expectError && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if len(result) != len(tt.expectedFiles) {
+				t.Errorf("got %d files, want %d", len(result), len(tt.expectedFiles))
+			}
+
+			for fpath, expected := range tt.expectedFiles {
+				got, ok := result[fpath]
+				if !ok {
+					t.Errorf("missing file %q in result", fpath)
+					continue
+				}
+				if got.Added != expected.Added {
+					t.Errorf("file %q: Added = %d, want %d", fpath, got.Added, expected.Added)
+				}
+				if got.Deleted != expected.Deleted {
+					t.Errorf("file %q: Deleted = %d, want %d", fpath, got.Deleted, expected.Deleted)
+				}
+				if len(got.Lines) != len(expected.Lines) {
+					t.Errorf("file %q: Lines count = %d, want %d", fpath, len(got.Lines), len(expected.Lines))
+				}
+			}
+		})
+	}
+}
+
+func TestGetCommitDiff_VerifiesCommandArgs(t *testing.T) {
+	// Verify that initial commit uses "show" and normal commit uses "diff"
+	t.Run("normal commit uses diff command", func(t *testing.T) {
+		origExecutor := newExecutor
+		defer func() { newExecutor = origExecutor }()
+
+		mock := gitexec.NewMockExecutor()
+		mock.RunFunc = func(args ...string) (string, error) {
+			if args[0] == "rev-parse" {
+				return "parent_hash", nil
+			}
+			return "1\t0\tfile.go", nil
+		}
+		newExecutor = func() gitexec.Executor { return mock }
+
+		_, _ = getCommitDiff("abc123")
+
+		// Check that "diff" was called (not "show")
+		calls := mock.GetCalls("Run")
+		foundDiff := false
+		for _, call := range calls {
+			if len(call.Args) > 0 && call.Args[0] == "diff" {
+				foundDiff = true
+				// Verify args contain --numstat HEAD~1 HEAD
+				argsStr := strings.Join(call.Args, " ")
+				if !strings.Contains(argsStr, "--numstat") {
+					t.Error("diff command missing --numstat flag")
+				}
+			}
+		}
+		if !foundDiff {
+			t.Error("expected 'diff' command for normal commit, but it was not called")
+		}
+	})
+
+	t.Run("initial commit uses show command", func(t *testing.T) {
+		origExecutor := newExecutor
+		defer func() { newExecutor = origExecutor }()
+
+		mock := gitexec.NewMockExecutor()
+		mock.RunFunc = func(args ...string) (string, error) {
+			if args[0] == "rev-parse" {
+				return "", fmt.Errorf("HEAD~1 not found")
+			}
+			return "2\t0\tinit.go", nil
+		}
+		newExecutor = func() gitexec.Executor { return mock }
+
+		_, _ = getCommitDiff("first_commit")
+
+		// Check that "show" was called (not "diff")
+		calls := mock.GetCalls("Run")
+		foundShow := false
+		for _, call := range calls {
+			if len(call.Args) > 0 && call.Args[0] == "show" {
+				foundShow = true
+				argsStr := strings.Join(call.Args, " ")
+				if !strings.Contains(argsStr, "--numstat") {
+					t.Error("show command missing --numstat flag")
+				}
+				if !strings.Contains(argsStr, "first_commit") {
+					t.Error("show command missing commit hash")
+				}
+			}
+		}
+		if !foundShow {
+			t.Error("expected 'show' command for initial commit, but it was not called")
+		}
+	})
+}

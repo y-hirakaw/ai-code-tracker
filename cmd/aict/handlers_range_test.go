@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"testing"
 
+	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
 	"github.com/y-hirakaw/ai-code-tracker/internal/testutil"
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
@@ -349,4 +351,607 @@ func TestAuthorCommitCountAccuracy(t *testing.T) {
 	if len(commits) > 0 && !strings.HasPrefix(commits[0], commitHash[:7]) {
 		t.Errorf("getCommitsInRange() returned unexpected commit: got %s, want %s", commits[0][:7], commitHash[:7])
 	}
+}
+
+
+// TestCalculateAuthorContribution は按分計算ロジックをテーブル駆動で検証する
+func TestCalculateAuthorContribution(t *testing.T) {
+	tests := []struct {
+		name             string
+		authorLines      int
+		totalAuthorLines int
+		totalAdded       int
+		totalDeleted     int
+		authorCount      int
+		wantAdded        int
+		wantDeleted      int
+	}{
+		{
+			name:             "正常系: 30/100の按分でtotalAdded=50",
+			authorLines:      30,
+			totalAuthorLines: 100,
+			totalAdded:       50,
+			totalDeleted:     10,
+			authorCount:      2,
+			wantAdded:        15, // int(50 * 30/100) = 15
+			wantDeleted:      3,  // int(10 * 30/100) = 3
+		},
+		{
+			name:             "正常系: 100%の按分（単独作成者）",
+			authorLines:      100,
+			totalAuthorLines: 100,
+			totalAdded:       50,
+			totalDeleted:     20,
+			authorCount:      1,
+			wantAdded:        50,
+			wantDeleted:      20,
+		},
+		{
+			name:             "正常系: 50/50の按分",
+			authorLines:      50,
+			totalAuthorLines: 100,
+			totalAdded:       80,
+			totalDeleted:     40,
+			authorCount:      2,
+			wantAdded:        40, // int(80 * 0.5) = 40
+			wantDeleted:      20, // int(40 * 0.5) = 20
+		},
+		{
+			name:             "エッジケース: totalAuthorLines=0, authorCount=1（削除のみ返す）",
+			authorLines:      0,
+			totalAuthorLines: 0,
+			totalAdded:       0,
+			totalDeleted:     15,
+			authorCount:      1,
+			wantAdded:        0,
+			wantDeleted:      15,
+		},
+		{
+			name:             "エッジケース: totalAuthorLines=0, authorCount>1（ゼロ返却）",
+			authorLines:      0,
+			totalAuthorLines: 0,
+			totalAdded:       10,
+			totalDeleted:     5,
+			authorCount:      3,
+			wantAdded:        0,
+			wantDeleted:      0,
+		},
+		{
+			name:             "ゼロ値テスト: すべて0",
+			authorLines:      0,
+			totalAuthorLines: 0,
+			totalAdded:       0,
+			totalDeleted:     0,
+			authorCount:      1,
+			wantAdded:        0,
+			wantDeleted:      0,
+		},
+		{
+			name:             "按分の端数切り捨て",
+			authorLines:      1,
+			totalAuthorLines: 3,
+			totalAdded:       10,
+			totalDeleted:     7,
+			authorCount:      3,
+			wantAdded:        3, // int(10 * 1/3) = int(3.33) = 3
+			wantDeleted:      2, // int(7 * 1/3) = int(2.33) = 2
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			added, deleted := calculateAuthorContribution(
+				tt.authorLines, tt.totalAuthorLines,
+				tt.totalAdded, tt.totalDeleted, tt.authorCount,
+			)
+			if added != tt.wantAdded {
+				t.Errorf("added = %d, want %d", added, tt.wantAdded)
+			}
+			if deleted != tt.wantDeleted {
+				t.Errorf("deleted = %d, want %d", deleted, tt.wantDeleted)
+			}
+		})
+	}
+}
+
+// TestAccumulateMetrics はAI/Humanの作成者タイプに基づくメトリクス累積を検証する
+func TestAccumulateMetrics(t *testing.T) {
+	tests := []struct {
+		name       string
+		authorType tracker.AuthorType
+		added      int
+		deleted    int
+		// 期待値: WorkVolume と Contributions
+		wantAIWorkChanges    int
+		wantAIWorkAdded      int
+		wantAIWorkDeleted    int
+		wantHumanWorkChanges int
+		wantHumanWorkAdded   int
+		wantHumanWorkDeleted int
+		wantAIContrib        int
+		wantHumanContrib     int
+		wantTotalAI          int
+		wantTotalHuman       int
+	}{
+		{
+			name:                 "AI作成者のメトリクス累積",
+			authorType:           tracker.AuthorTypeAI,
+			added:                30,
+			deleted:              10,
+			wantAIWorkChanges:    40,
+			wantAIWorkAdded:      30,
+			wantAIWorkDeleted:    10,
+			wantHumanWorkChanges: 0,
+			wantHumanWorkAdded:   0,
+			wantHumanWorkDeleted: 0,
+			wantAIContrib:        30,
+			wantHumanContrib:     0,
+			wantTotalAI:          30,
+			wantTotalHuman:       0,
+		},
+		{
+			name:                 "Human作成者のメトリクス累積",
+			authorType:           tracker.AuthorTypeHuman,
+			added:                20,
+			deleted:              5,
+			wantAIWorkChanges:    0,
+			wantAIWorkAdded:      0,
+			wantAIWorkDeleted:    0,
+			wantHumanWorkChanges: 25,
+			wantHumanWorkAdded:   20,
+			wantHumanWorkDeleted: 5,
+			wantAIContrib:        0,
+			wantHumanContrib:     20,
+			wantTotalAI:          0,
+			wantTotalHuman:       20,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// 各テストケースで新しいresultを初期化
+			result := &authorStatsResult{
+				byAuthor: make(map[string]*tracker.AuthorStats),
+			}
+
+			accumulateMetrics(result, tt.authorType, tt.added, tt.deleted)
+
+			// WorkVolume検証
+			wv := result.detailedMetrics.WorkVolume
+			if wv.AIChanges != tt.wantAIWorkChanges {
+				t.Errorf("WorkVolume.AIChanges = %d, want %d", wv.AIChanges, tt.wantAIWorkChanges)
+			}
+			if wv.AIAdded != tt.wantAIWorkAdded {
+				t.Errorf("WorkVolume.AIAdded = %d, want %d", wv.AIAdded, tt.wantAIWorkAdded)
+			}
+			if wv.AIDeleted != tt.wantAIWorkDeleted {
+				t.Errorf("WorkVolume.AIDeleted = %d, want %d", wv.AIDeleted, tt.wantAIWorkDeleted)
+			}
+			if wv.HumanChanges != tt.wantHumanWorkChanges {
+				t.Errorf("WorkVolume.HumanChanges = %d, want %d", wv.HumanChanges, tt.wantHumanWorkChanges)
+			}
+			if wv.HumanAdded != tt.wantHumanWorkAdded {
+				t.Errorf("WorkVolume.HumanAdded = %d, want %d", wv.HumanAdded, tt.wantHumanWorkAdded)
+			}
+			if wv.HumanDeleted != tt.wantHumanWorkDeleted {
+				t.Errorf("WorkVolume.HumanDeleted = %d, want %d", wv.HumanDeleted, tt.wantHumanWorkDeleted)
+			}
+
+			// Contributions検証
+			c := result.detailedMetrics.Contributions
+			if c.AIAdditions != tt.wantAIContrib {
+				t.Errorf("Contributions.AIAdditions = %d, want %d", c.AIAdditions, tt.wantAIContrib)
+			}
+			if c.HumanAdditions != tt.wantHumanContrib {
+				t.Errorf("Contributions.HumanAdditions = %d, want %d", c.HumanAdditions, tt.wantHumanContrib)
+			}
+
+			// totalAI/totalHuman検証
+			if result.totalAI != tt.wantTotalAI {
+				t.Errorf("totalAI = %d, want %d", result.totalAI, tt.wantTotalAI)
+			}
+			if result.totalHuman != tt.wantTotalHuman {
+				t.Errorf("totalHuman = %d, want %d", result.totalHuman, tt.wantTotalHuman)
+			}
+		})
+	}
+}
+
+// TestAccumulateMetrics_Cumulative は複数回の累積呼び出しが正しく加算されることを検証する
+func TestAccumulateMetrics_Cumulative(t *testing.T) {
+	result := &authorStatsResult{
+		byAuthor: make(map[string]*tracker.AuthorStats),
+	}
+
+	// AI 30+10, Human 20+5 を順次累積
+	accumulateMetrics(result, tracker.AuthorTypeAI, 30, 10)
+	accumulateMetrics(result, tracker.AuthorTypeHuman, 20, 5)
+	accumulateMetrics(result, tracker.AuthorTypeAI, 15, 3)
+
+	// AI: added=30+15=45, deleted=10+3=13, changes=40+18=58
+	if result.detailedMetrics.WorkVolume.AIChanges != 58 {
+		t.Errorf("cumulative AIChanges = %d, want 58", result.detailedMetrics.WorkVolume.AIChanges)
+	}
+	if result.detailedMetrics.WorkVolume.AIAdded != 45 {
+		t.Errorf("cumulative AIAdded = %d, want 45", result.detailedMetrics.WorkVolume.AIAdded)
+	}
+	if result.detailedMetrics.Contributions.AIAdditions != 45 {
+		t.Errorf("cumulative AIAdditions = %d, want 45", result.detailedMetrics.Contributions.AIAdditions)
+	}
+	if result.totalAI != 45 {
+		t.Errorf("cumulative totalAI = %d, want 45", result.totalAI)
+	}
+
+	// Human: added=20, deleted=5, changes=25
+	if result.detailedMetrics.WorkVolume.HumanChanges != 25 {
+		t.Errorf("cumulative HumanChanges = %d, want 25", result.detailedMetrics.WorkVolume.HumanChanges)
+	}
+	if result.totalHuman != 20 {
+		t.Errorf("cumulative totalHuman = %d, want 20", result.totalHuman)
+	}
+}
+
+// TestProcessFileAuthors は1ファイル内の作成者ごとの行数按分を検証する
+func TestProcessFileAuthors(t *testing.T) {
+	t.Run("単独AI作成者_numstat_10_2", func(t *testing.T) {
+		result := &authorStatsResult{
+			byAuthor: make(map[string]*tracker.AuthorStats),
+		}
+		authorsInCommit := make(map[string]bool)
+
+		fileInfo := tracker.FileInfo{
+			Authors: []tracker.AuthorInfo{
+				{
+					Name:  "claude",
+					Type:  tracker.AuthorTypeAI,
+					Lines: [][]int{{1, 10}}, // CountLines = 10
+				},
+			},
+		}
+		numstat := [2]int{10, 2} // added=10, deleted=2
+
+		processFileAuthors(result, fileInfo, numstat, authorsInCommit)
+
+		// 単独作成者なので100%按分: added=10, deleted=2
+		stats := result.byAuthor["claude"]
+		if stats == nil {
+			t.Fatal("claude のAuthorStatsが作成されていない")
+		}
+		if stats.Lines != 10 {
+			t.Errorf("claude.Lines = %d, want 10", stats.Lines)
+		}
+		if stats.Type != tracker.AuthorTypeAI {
+			t.Errorf("claude.Type = %q, want %q", stats.Type, tracker.AuthorTypeAI)
+		}
+
+		// authorsInCommitに登録されている
+		if !authorsInCommit["claude"] {
+			t.Error("claude がauthorsInCommitに登録されていない")
+		}
+
+		// メトリクス検証
+		if result.totalAI != 10 {
+			t.Errorf("totalAI = %d, want 10", result.totalAI)
+		}
+		if result.detailedMetrics.WorkVolume.AIAdded != 10 {
+			t.Errorf("WorkVolume.AIAdded = %d, want 10", result.detailedMetrics.WorkVolume.AIAdded)
+		}
+		if result.detailedMetrics.WorkVolume.AIDeleted != 2 {
+			t.Errorf("WorkVolume.AIDeleted = %d, want 2", result.detailedMetrics.WorkVolume.AIDeleted)
+		}
+	})
+
+	t.Run("複数作成者_AI_Human_按分", func(t *testing.T) {
+		result := &authorStatsResult{
+			byAuthor: make(map[string]*tracker.AuthorStats),
+		}
+		authorsInCommit := make(map[string]bool)
+
+		fileInfo := tracker.FileInfo{
+			Authors: []tracker.AuthorInfo{
+				{
+					Name:  "claude",
+					Type:  tracker.AuthorTypeAI,
+					Lines: [][]int{{1, 30}}, // CountLines = 30
+				},
+				{
+					Name:  "developer",
+					Type:  tracker.AuthorTypeHuman,
+					Lines: [][]int{{31, 40}, {45}}, // CountLines = 10 + 1 = 11
+				},
+			},
+		}
+		// totalAuthorLines = 30 + 11 = 41
+		numstat := [2]int{41, 10} // added=41, deleted=10
+
+		processFileAuthors(result, fileInfo, numstat, authorsInCommit)
+
+		// claude: ratio = 30/41
+		// added = int(41 * 30/41) = int(30.0) = 30
+		// deleted = int(10 * 30/41) = int(7.31) = 7
+		claudeStats := result.byAuthor["claude"]
+		if claudeStats == nil {
+			t.Fatal("claude のAuthorStatsが作成されていない")
+		}
+		if claudeStats.Lines != 30 {
+			t.Errorf("claude.Lines = %d, want 30", claudeStats.Lines)
+		}
+
+		// developer: ratio = 11/41
+		// added = int(41 * 11/41) = int(11.0) = 11
+		devStats := result.byAuthor["developer"]
+		if devStats == nil {
+			t.Fatal("developer のAuthorStatsが作成されていない")
+		}
+		if devStats.Lines != 11 {
+			t.Errorf("developer.Lines = %d, want 11", devStats.Lines)
+		}
+
+		// 両方がauthorsInCommitに登録
+		if !authorsInCommit["claude"] {
+			t.Error("claude がauthorsInCommitに登録されていない")
+		}
+		if !authorsInCommit["developer"] {
+			t.Error("developer がauthorsInCommitに登録されていない")
+		}
+
+		// メトリクス: AI=30 added, Human=11 added
+		if result.totalAI != 30 {
+			t.Errorf("totalAI = %d, want 30", result.totalAI)
+		}
+		if result.totalHuman != 11 {
+			t.Errorf("totalHuman = %d, want 11", result.totalHuman)
+		}
+	})
+}
+
+// TestProcessCommitFiles はAuthorshipLogとnumstatMapから正しく集計されることを検証する
+func TestProcessCommitFiles(t *testing.T) {
+	t.Run("正常系: 2ファイルの集計", func(t *testing.T) {
+		result := &authorStatsResult{
+			byAuthor: make(map[string]*tracker.AuthorStats),
+		}
+
+		alog := &tracker.AuthorshipLog{
+			Version: "1",
+			Commit:  "abc123",
+			Files: map[string]tracker.FileInfo{
+				"main.go": {
+					Authors: []tracker.AuthorInfo{
+						{Name: "claude", Type: tracker.AuthorTypeAI, Lines: [][]int{{1, 20}}},
+					},
+				},
+				"utils.go": {
+					Authors: []tracker.AuthorInfo{
+						{Name: "developer", Type: tracker.AuthorTypeHuman, Lines: [][]int{{1, 10}}},
+					},
+				},
+			},
+		}
+
+		numstatMap := map[string][2]int{
+			"main.go":  {20, 5},
+			"utils.go": {10, 3},
+		}
+
+		authorsInCommit := processCommitFiles(result, alog, numstatMap)
+
+		// claude: main.go から added=20
+		if result.byAuthor["claude"] == nil {
+			t.Fatal("claude のAuthorStatsが作成されていない")
+		}
+		if result.byAuthor["claude"].Lines != 20 {
+			t.Errorf("claude.Lines = %d, want 20", result.byAuthor["claude"].Lines)
+		}
+
+		// developer: utils.go から added=10
+		if result.byAuthor["developer"] == nil {
+			t.Fatal("developer のAuthorStatsが作成されていない")
+		}
+		if result.byAuthor["developer"].Lines != 10 {
+			t.Errorf("developer.Lines = %d, want 10", result.byAuthor["developer"].Lines)
+		}
+
+		// authorsInCommitに両方登録
+		if !authorsInCommit["claude"] {
+			t.Error("claude がauthorsInCommitに登録されていない")
+		}
+		if !authorsInCommit["developer"] {
+			t.Error("developer がauthorsInCommitに登録されていない")
+		}
+	})
+
+	t.Run("ファイルがnumstatにない場合スキップ", func(t *testing.T) {
+		result := &authorStatsResult{
+			byAuthor: make(map[string]*tracker.AuthorStats),
+		}
+
+		alog := &tracker.AuthorshipLog{
+			Version: "1",
+			Commit:  "abc123",
+			Files: map[string]tracker.FileInfo{
+				"main.go": {
+					Authors: []tracker.AuthorInfo{
+						{Name: "claude", Type: tracker.AuthorTypeAI, Lines: [][]int{{1, 20}}},
+					},
+				},
+				"missing.go": {
+					Authors: []tracker.AuthorInfo{
+						{Name: "developer", Type: tracker.AuthorTypeHuman, Lines: [][]int{{1, 10}}},
+					},
+				},
+			},
+		}
+
+		// missing.go はnumstatMapにない
+		numstatMap := map[string][2]int{
+			"main.go": {20, 5},
+		}
+
+		authorsInCommit := processCommitFiles(result, alog, numstatMap)
+
+		// claude は存在する（main.goがnumstatにある）
+		if result.byAuthor["claude"] == nil {
+			t.Fatal("claude のAuthorStatsが作成されていない")
+		}
+		if result.byAuthor["claude"].Lines != 20 {
+			t.Errorf("claude.Lines = %d, want 20", result.byAuthor["claude"].Lines)
+		}
+
+		// developer は存在しない（missing.goがnumstatにない）
+		if result.byAuthor["developer"] != nil {
+			t.Errorf("developer は作成されるべきではないが、Lines=%d で存在する", result.byAuthor["developer"].Lines)
+		}
+
+		// authorsInCommitにはclaudeのみ
+		if !authorsInCommit["claude"] {
+			t.Error("claude がauthorsInCommitに登録されていない")
+		}
+		if authorsInCommit["developer"] {
+			t.Error("developer がauthorsInCommitに登録されるべきではない")
+		}
+	})
+}
+
+// TestConvertSinceToRange はモックExecutorを使ってconvertSinceToRangeの変換ロジックを検証する
+func TestConvertSinceToRange(t *testing.T) {
+	t.Run("正常系: 親コミットが存在する場合", func(t *testing.T) {
+		// DI差し替え
+		origExecutor := newExecutor
+		defer func() { newExecutor = origExecutor }()
+
+		mock := gitexec.NewMockExecutor()
+		mock.RunFunc = func(args ...string) (string, error) {
+			// 1回目: git log --since=... --format=%H --reverse
+			if len(args) >= 3 && args[0] == "log" {
+				return "aaa111\nbbb222\nccc333", nil
+			}
+			// 2回目: git rev-parse aaa111^（親の存在確認）
+			if len(args) >= 1 && args[0] == "rev-parse" {
+				return "parent-hash", nil
+			}
+			return "", fmt.Errorf("unexpected call: %v", args)
+		}
+		newExecutor = func() gitexec.Executor { return mock }
+
+		result, err := convertSinceToRange("7d")
+		if err != nil {
+			t.Fatalf("convertSinceToRange(\"7d\") error = %v", err)
+		}
+
+		// 親が存在するので firstCommit^..HEAD
+		expected := "aaa111^..HEAD"
+		if result != expected {
+			t.Errorf("convertSinceToRange(\"7d\") = %q, want %q", result, expected)
+		}
+	})
+
+	t.Run("初回コミット: 親がない場合", func(t *testing.T) {
+		origExecutor := newExecutor
+		defer func() { newExecutor = origExecutor }()
+
+		mock := gitexec.NewMockExecutor()
+		mock.RunFunc = func(args ...string) (string, error) {
+			if len(args) >= 3 && args[0] == "log" {
+				return "initial-commit-hash", nil
+			}
+			if len(args) >= 1 && args[0] == "rev-parse" {
+				// 親がない場合はエラーを返す
+				return "", fmt.Errorf("rev-parse failed: no parent")
+			}
+			return "", fmt.Errorf("unexpected call: %v", args)
+		}
+		newExecutor = func() gitexec.Executor { return mock }
+
+		result, err := convertSinceToRange("1y")
+		if err != nil {
+			t.Fatalf("convertSinceToRange(\"1y\") error = %v", err)
+		}
+
+		// 親がないので firstCommit..HEAD
+		expected := "initial-commit-hash..HEAD"
+		if result != expected {
+			t.Errorf("convertSinceToRange(\"1y\") = %q, want %q", result, expected)
+		}
+	})
+
+	t.Run("コミットなしの場合のエラー", func(t *testing.T) {
+		origExecutor := newExecutor
+		defer func() { newExecutor = origExecutor }()
+
+		mock := gitexec.NewMockExecutor()
+		mock.RunFunc = func(args ...string) (string, error) {
+			if len(args) >= 3 && args[0] == "log" {
+				// 空の出力 = コミットなし
+				return "", nil
+			}
+			return "", fmt.Errorf("unexpected call: %v", args)
+		}
+		newExecutor = func() gitexec.Executor { return mock }
+
+		_, err := convertSinceToRange("7d")
+		if err == nil {
+			t.Fatal("convertSinceToRange should return error when no commits found")
+		}
+		if !strings.Contains(err.Error(), "no commits found") {
+			t.Errorf("error message should contain 'no commits found', got: %v", err)
+		}
+	})
+
+	t.Run("git logコマンドのエラー", func(t *testing.T) {
+		origExecutor := newExecutor
+		defer func() { newExecutor = origExecutor }()
+
+		mock := gitexec.NewMockExecutor()
+		mock.RunFunc = func(args ...string) (string, error) {
+			if len(args) >= 3 && args[0] == "log" {
+				return "", fmt.Errorf("git log failed: not a git repository")
+			}
+			return "", fmt.Errorf("unexpected call: %v", args)
+		}
+		newExecutor = func() gitexec.Executor { return mock }
+
+		_, err := convertSinceToRange("7d")
+		if err == nil {
+			t.Fatal("convertSinceToRange should return error when git log fails")
+		}
+		if !strings.Contains(err.Error(), "failed to get commits") {
+			t.Errorf("error message should contain 'failed to get commits', got: %v", err)
+		}
+	})
+
+	t.Run("shorthand展開の確認: 2wが正しくgit logに渡される", func(t *testing.T) {
+		origExecutor := newExecutor
+		defer func() { newExecutor = origExecutor }()
+
+		mock := gitexec.NewMockExecutor()
+		var capturedSinceArg string
+		mock.RunFunc = func(args ...string) (string, error) {
+			if len(args) >= 3 && args[0] == "log" {
+				// --since=引数をキャプチャ
+				for _, arg := range args {
+					if strings.HasPrefix(arg, "--since=") {
+						capturedSinceArg = arg
+					}
+				}
+				return "commit-abc", nil
+			}
+			if args[0] == "rev-parse" {
+				return "parent-hash", nil
+			}
+			return "", fmt.Errorf("unexpected call: %v", args)
+		}
+		newExecutor = func() gitexec.Executor { return mock }
+
+		_, err := convertSinceToRange("2w")
+		if err != nil {
+			t.Fatalf("convertSinceToRange(\"2w\") error = %v", err)
+		}
+
+		// 2w は "2 weeks ago" に展開されるはず
+		expectedArg := "--since=2 weeks ago"
+		if capturedSinceArg != expectedArg {
+			t.Errorf("git log received %q, want %q", capturedSinceArg, expectedArg)
+		}
+	})
 }

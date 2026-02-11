@@ -288,3 +288,30 @@ func TestMockExecutor_Reset(t *testing.T) {
 		t.Errorf("Expected 0 calls after reset, got %d", len(mock.CallLog))
 	}
 }
+
+
+func TestValidateRevisionArg(t *testing.T) {
+	tests := []struct {
+		name    string
+		arg     string
+		wantErr bool
+	}{
+		{"valid hash", "abc123", false},
+		{"valid range", "abc..def", false},
+		{"valid HEAD", "HEAD", false},
+		{"valid HEAD~3", "HEAD~3", false},
+		{"valid branch name", "origin/main..HEAD", false},
+		{"dash prefix rejected", "-evil", true},
+		{"double dash rejected", "--exec=cmd", true},
+		{"option injection rejected", "--upload-pack=malicious", true},
+		{"empty string valid", "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateRevisionArg(tt.arg)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateRevisionArg(%q) error = %v, wantErr %v", tt.arg, err, tt.wantErr)
+			}
+		})
+	}
+}

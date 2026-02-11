@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
 )
 
 func TestNewAnalyzer(t *testing.T) {
@@ -472,4 +474,252 @@ func TestGetFileStats(t *testing.T) {
 	if file1Stats.HumanLines != 0 {
 		t.Errorf("Expected 0 human lines for file1.go (AI author), got %d", file1Stats.HumanLines)
 	}
+}
+
+
+func TestNewAnalyzerWithExecutor(t *testing.T) {
+	config := &Config{TargetAIPercentage: 80}
+	mock := &gitexec.MockExecutor{}
+	analyzer := NewAnalyzerWithExecutor(config, mock)
+	if analyzer.config != config {
+		t.Error("config mismatch: analyzer.config does not match provided config")
+	}
+	if analyzer.executor != mock {
+		t.Error("executor mismatch: analyzer.executor does not match provided mock")
+	}
+}
+
+func TestAnalyzeFromCommits(t *testing.T) {
+	config := &Config{
+		TrackedExtensions: []string{".go"},
+		ExcludePatterns:   []string{},
+		AuthorMappings:    make(map[string]string),
+	}
+	mock := gitexec.NewMockExecutor()
+	mock.RunFunc = func(args ...string) (string, error) {
+		// Expected call: "diff", "--numstat", "abc123", "def456"
+		if len(args) >= 1 && args[0] == "diff" {
+			return "10\t2\tmain.go\n5\t1\thelper.go", nil
+		}
+		return "", nil
+	}
+	analyzer := NewAnalyzerWithExecutor(config, mock)
+
+	before := &Checkpoint{
+		CommitHash: "abc123",
+		Timestamp:  time.Now().Add(-1 * time.Hour),
+		Author:     "human",
+		Files:      map[string]FileContent{},
+		// NumstatData is nil -> triggers analyzeFromCommits
+	}
+	after := &Checkpoint{
+		CommitHash: "def456",
+		Timestamp:  time.Now(),
+		Author:     "claude",
+		Files: map[string]FileContent{
+			"main.go":   {Path: "main.go", Lines: []string{"a", "b", "c", "d", "e"}},
+			"helper.go": {Path: "helper.go", Lines: []string{"x", "y", "z"}},
+		},
+		// NumstatData is nil -> triggers analyzeFromCommits
+	}
+
+	result, err := analyzer.AnalyzeCheckpoints(before, after)
+	if err != nil {
+		t.Fatalf("AnalyzeCheckpoints failed: %v", err)
+	}
+
+	// AI lines = added lines from numstat: 10 (main.go) + 5 (helper.go) = 15
+	if result.AILines != 15 {
+		t.Errorf("AILines: got %d, want 15", result.AILines)
+	}
+
+	if result.HumanLines != 0 {
+		t.Errorf("HumanLines: got %d, want 0", result.HumanLines)
+	}
+
+	// TotalLines = sum of lines in after.Files: 5 (main.go) + 3 (helper.go) = 8
+	if result.TotalLines != 8 {
+		t.Errorf("TotalLines: got %d, want 8", result.TotalLines)
+	}
+
+	// Verify percentage: 15/(15+0) * 100 = 100.0
+	if result.Percentage != 100.0 {
+		t.Errorf("Percentage: got %.1f, want 100.0", result.Percentage)
+	}
+
+	// Verify detailed metrics: WorkVolume
+	if result.Metrics.WorkVolume.AIAdded != 15 {
+		t.Errorf("WorkVolume.AIAdded: got %d, want 15", result.Metrics.WorkVolume.AIAdded)
+	}
+	if result.Metrics.WorkVolume.AIDeleted != 3 {
+		t.Errorf("WorkVolume.AIDeleted: got %d, want 3 (2+1)", result.Metrics.WorkVolume.AIDeleted)
+	}
+	if result.Metrics.Contributions.AIAdditions != 15 {
+		t.Errorf("Contributions.AIAdditions: got %d, want 15", result.Metrics.Contributions.AIAdditions)
+	}
+
+	// Verify mock was called with correct args
+	calls := mock.GetCalls("Run")
+	if len(calls) == 0 {
+		t.Fatal("Expected at least one Run call to mock executor")
+	}
+	diffCall := calls[0]
+	if len(diffCall.Args) < 4 || diffCall.Args[0] != "diff" || diffCall.Args[1] != "--numstat" ||
+		diffCall.Args[2] != "abc123" || diffCall.Args[3] != "def456" {
+		t.Errorf("Expected diff --numstat abc123 def456, got %v", diffCall.Args)
+	}
+}
+
+func TestAnalyzeFromFiles(t *testing.T) {
+	config := &Config{
+		TrackedExtensions: []string{".go"},
+		ExcludePatterns:   []string{},
+		AuthorMappings:    make(map[string]string),
+	}
+	analyzer := NewAnalyzer(config)
+
+	t.Run("new file counted as AI lines", func(t *testing.T) {
+		before := &Checkpoint{
+			Timestamp: time.Now().Add(-1 * time.Hour),
+			Author:    "human",
+			Files:     map[string]FileContent{},
+		}
+		after := &Checkpoint{
+			Timestamp: time.Now(),
+			Author:    "claude",
+			Files: map[string]FileContent{
+				"newfile.go": {Path: "newfile.go", Lines: []string{"package main", "func hello() {}", "// comment"}},
+			},
+		}
+
+		result, err := analyzer.AnalyzeCheckpoints(before, after)
+		if err != nil {
+			t.Fatalf("AnalyzeCheckpoints failed: %v", err)
+		}
+
+		if result.AILines != 3 {
+			t.Errorf("AILines: got %d, want 3", result.AILines)
+		}
+		if result.HumanLines != 0 {
+			t.Errorf("HumanLines: got %d, want 0", result.HumanLines)
+		}
+		if result.TotalLines != 3 {
+			t.Errorf("TotalLines: got %d, want 3", result.TotalLines)
+		}
+	})
+
+	t.Run("modified file counts added lines", func(t *testing.T) {
+		before := &Checkpoint{
+			Timestamp: time.Now().Add(-1 * time.Hour),
+			Author:    "human",
+			Files: map[string]FileContent{
+				"main.go": {Path: "main.go", Lines: []string{"line1", "line2"}},
+			},
+		}
+		after := &Checkpoint{
+			Timestamp: time.Now(),
+			Author:    "claude",
+			Files: map[string]FileContent{
+				"main.go": {Path: "main.go", Lines: []string{"line1", "line2", "line3", "line4", "line5"}},
+			},
+		}
+
+		result, err := analyzer.AnalyzeCheckpoints(before, after)
+		if err != nil {
+			t.Fatalf("AnalyzeCheckpoints failed: %v", err)
+		}
+
+		if result.AILines != 3 {
+			t.Errorf("AILines: got %d, want 3", result.AILines)
+		}
+		if result.HumanLines != 0 {
+			t.Errorf("HumanLines: got %d, want 0", result.HumanLines)
+		}
+	})
+
+	t.Run("deleted file reduces TotalLines", func(t *testing.T) {
+		before := &Checkpoint{
+			Timestamp: time.Now().Add(-1 * time.Hour),
+			Author:    "human",
+			Files: map[string]FileContent{
+				"old.go": {Path: "old.go", Lines: []string{"line1", "line2", "line3", "line4"}},
+			},
+		}
+		after := &Checkpoint{
+			Timestamp: time.Now(),
+			Author:    "claude",
+			Files:     map[string]FileContent{},
+		}
+
+		result, err := analyzer.AnalyzeCheckpoints(before, after)
+		if err != nil {
+			t.Fatalf("AnalyzeCheckpoints failed: %v", err)
+		}
+
+		if result.TotalLines != -4 {
+			t.Errorf("TotalLines: got %d, want -4", result.TotalLines)
+		}
+		if result.AILines != 0 {
+			t.Errorf("AILines: got %d, want 0", result.AILines)
+		}
+	})
+
+	t.Run("human author new file", func(t *testing.T) {
+		before := &Checkpoint{
+			Timestamp: time.Now().Add(-1 * time.Hour),
+			Author:    "someone",
+			Files:     map[string]FileContent{},
+		}
+		after := &Checkpoint{
+			Timestamp: time.Now(),
+			Author:    "John Doe",
+			Files: map[string]FileContent{
+				"util.go": {Path: "util.go", Lines: []string{"package util", "func Add(a, b int) int { return a + b }"}},
+			},
+		}
+
+		result, err := analyzer.AnalyzeCheckpoints(before, after)
+		if err != nil {
+			t.Fatalf("AnalyzeCheckpoints failed: %v", err)
+		}
+
+		if result.AILines != 0 {
+			t.Errorf("AILines: got %d, want 0", result.AILines)
+		}
+		if result.HumanLines != 2 {
+			t.Errorf("HumanLines: got %d, want 2", result.HumanLines)
+		}
+	})
+
+	t.Run("mixed new and modified files", func(t *testing.T) {
+		before := &Checkpoint{
+			Timestamp: time.Now().Add(-1 * time.Hour),
+			Author:    "human",
+			Files: map[string]FileContent{
+				"existing.go": {Path: "existing.go", Lines: []string{"line1", "line2"}},
+			},
+		}
+		after := &Checkpoint{
+			Timestamp: time.Now(),
+			Author:    "claude",
+			Files: map[string]FileContent{
+				"existing.go":  {Path: "existing.go", Lines: []string{"line1", "line2", "line3"}},
+				"brand_new.go": {Path: "brand_new.go", Lines: []string{"a", "b"}},
+			},
+		}
+
+		result, err := analyzer.AnalyzeCheckpoints(before, after)
+		if err != nil {
+			t.Fatalf("AnalyzeCheckpoints failed: %v", err)
+		}
+
+		// existing.go: 1 line added, brand_new.go: 2 lines (new file) = 3 AI lines total
+		if result.AILines != 3 {
+			t.Errorf("AILines: got %d, want 3", result.AILines)
+		}
+		// TotalLines: 2 (new file lines) + 0 (modified diff doesn't add to total in this path)
+		if result.TotalLines != 2 {
+			t.Errorf("TotalLines: got %d, want 2", result.TotalLines)
+		}
+	})
 }
