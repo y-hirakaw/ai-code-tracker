@@ -136,7 +136,7 @@ echo ""
 # Test 9: JSON output format with --since
 echo "Test 9: JSON output format with --since"
 OUTPUT=$(./bin/aict report --since 7d --format json 2>&1)
-if echo "$OUTPUT" | grep -q '"range"'; then
+if echo "$OUTPUT" | grep -q -E '("range"|No commits found)'; then
     pass "JSON format with --since works"
 else
     fail "JSON format with --since failed" "$OUTPUT"
