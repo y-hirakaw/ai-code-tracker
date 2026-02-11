@@ -1,10 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
@@ -23,14 +21,12 @@ func handleDebug() error {
 		return fmt.Errorf("debug subcommand required")
 	}
 
-	aictDir := filepath.Join(".git", storage.AictDirName)
-
 	subcommand := os.Args[2]
 	switch subcommand {
 	case "show":
-		return handleDebugShow(aictDir)
+		return handleDebugShow()
 	case "clean":
-		return handleDebugClean(aictDir)
+		return handleDebugClean()
 	case "clear-notes":
 		return handleDebugClearNotes()
 	default:
@@ -41,25 +37,15 @@ func handleDebug() error {
 }
 
 // handleDebugShow displays detailed checkpoint information for debugging
-func handleDebugShow(aictDir string) error {
-	checkpointsFile := filepath.Join(aictDir, storage.CheckpointsDirName, storage.LatestFileName)
-
-	// Check if checkpoints file exists
-	if _, err := os.Stat(checkpointsFile); os.IsNotExist(err) {
-		fmt.Println("チェックポイントファイルが存在しません")
-		return nil
-	}
-
-	// Read checkpoint file
-	data, err := os.ReadFile(checkpointsFile)
+func handleDebugShow() error {
+	store, err := storage.NewAIctStorage()
 	if err != nil {
-		return fmt.Errorf("チェックポイントファイルの読み込みに失敗しました: %w", err)
+		return fmt.Errorf("initializing storage: %w", err)
 	}
 
-	// Parse checkpoint array
-	var checkpoints []*tracker.CheckpointV2
-	if err := json.Unmarshal(data, &checkpoints); err != nil {
-		return fmt.Errorf("チェックポイントのパースに失敗しました: %w", err)
+	checkpoints, err := store.LoadCheckpoints()
+	if err != nil {
+		return fmt.Errorf("チェックポイントの読み込みに失敗しました: %w", err)
 	}
 
 	if len(checkpoints) == 0 {
@@ -68,7 +54,6 @@ func handleDebugShow(aictDir string) error {
 	}
 
 	fmt.Printf("=== チェックポイント情報 (%d件) ===\n\n", len(checkpoints))
-	fmt.Printf("ファイル: %s\n\n", checkpointsFile)
 
 	// Display each checkpoint
 	for i, cp := range checkpoints {
@@ -111,38 +96,27 @@ func displayCheckpoint(index int, cp *tracker.CheckpointV2) {
 }
 
 // handleDebugClean removes all checkpoint data
-func handleDebugClean(aictDir string) error {
-	checkpointsFile := filepath.Join(aictDir, storage.CheckpointsDirName, storage.LatestFileName)
-
-	// Check if checkpoints file exists
-	if _, err := os.Stat(checkpointsFile); os.IsNotExist(err) {
-		fmt.Println("チェックポイントファイルが存在しません")
-		return nil
-	}
-
-	// Count checkpoints
-	data, err := os.ReadFile(checkpointsFile)
+func handleDebugClean() error {
+	store, err := storage.NewAIctStorage()
 	if err != nil {
-		return fmt.Errorf("チェックポイントファイルの読み込みに失敗しました: %w", err)
+		return fmt.Errorf("initializing storage: %w", err)
 	}
 
-	var checkpoints []*tracker.CheckpointV2
-	if err := json.Unmarshal(data, &checkpoints); err != nil {
-		return fmt.Errorf("チェックポイントのパースに失敗しました: %w", err)
+	checkpoints, err := store.LoadCheckpoints()
+	if err != nil {
+		return fmt.Errorf("チェックポイントの読み込みに失敗しました: %w", err)
 	}
 
-	checkpointCount := len(checkpoints)
-	if checkpointCount == 0 {
+	if len(checkpoints) == 0 {
 		fmt.Println("削除するチェックポイントはありません")
 		return nil
 	}
 
-	// Remove checkpoint file
-	if err := os.Remove(checkpointsFile); err != nil {
+	if err := store.ClearCheckpoints(); err != nil {
 		return fmt.Errorf("チェックポイントファイルの削除に失敗しました: %w", err)
 	}
 
-	fmt.Printf("✅ %d件のチェックポイントを削除しました\n", checkpointCount)
+	fmt.Printf("✅ %d件のチェックポイントを削除しました\n", len(checkpoints))
 	return nil
 }
 

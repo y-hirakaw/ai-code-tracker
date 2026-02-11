@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -38,9 +39,9 @@ func NewAIctStorage() (*AIctStorage, error) {
 	return &AIctStorage{gitDir: aictDir}, nil
 }
 
-// SaveCheckpoint appends a checkpoint to latest.json
+// SaveCheckpoint appends a checkpoint as a JSONL line to latest.json.
+// 旧JSON配列形式のファイルが存在する場合、自動的にJSONL形式にマイグレーションします。
 func (s *AIctStorage) SaveCheckpoint(cp *tracker.CheckpointV2) error {
-	// .git/aict/checkpoints/latest.json に追記（配列形式）
 	checkpointsDir := filepath.Join(s.gitDir, CheckpointsDirName)
 	if err := os.MkdirAll(checkpointsDir, 0755); err != nil {
 		return err
@@ -48,51 +49,39 @@ func (s *AIctStorage) SaveCheckpoint(cp *tracker.CheckpointV2) error {
 
 	checkpointsFile := filepath.Join(checkpointsDir, LatestFileName)
 
-	// 既存のチェックポイントを読み込み（エラーを適切に処理）
-	checkpoints, err := s.LoadCheckpoints()
-	if err != nil {
-		return fmt.Errorf("failed to load existing checkpoints: %w", err)
+	// 旧JSON配列形式の場合、JSONL形式にマイグレーション
+	if err := migrateToJSONLIfNeeded(checkpointsFile); err != nil {
+		return fmt.Errorf("failed to migrate checkpoint format: %w", err)
 	}
 
-	// 新しいチェックポイントを追加
-	checkpoints = append(checkpoints, cp)
-
-	// JSON配列としてシリアライズ
-	data, err := json.MarshalIndent(checkpoints, "", "  ")
+	// 単一チェックポイントをコンパクトJSONにシリアライズ
+	data, err := json.Marshal(cp)
 	if err != nil {
 		return err
 	}
+	data = append(data, '\n')
 
-	// 一時ファイルに書き込み後、アトミックにリネーム
-	tmpFile, err := os.CreateTemp(checkpointsDir, "latest-*.tmp")
+	// ファイルに追記（O_APPENDは小さな書き込みに対してアトミック）
+	f, err := os.OpenFile(checkpointsFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		return fmt.Errorf("failed to create temp file: %w", err)
+		return err
 	}
-	tmpPath := tmpFile.Name()
+	defer f.Close()
 
-	if _, err := tmpFile.Write(data); err != nil {
-		tmpFile.Close()
-		os.Remove(tmpPath)
-		return fmt.Errorf("failed to write temp file: %w", err)
-	}
-	if err := tmpFile.Close(); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("failed to close temp file: %w", err)
-	}
-
-	if err := os.Rename(tmpPath, checkpointsFile); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("failed to rename temp file: %w", err)
-	}
-
-	return nil
+	_, err = f.Write(data)
+	return err
 }
 
-// LoadCheckpoints loads all checkpoints from latest.json
+// LoadCheckpoints loads all checkpoints from latest.json.
+// JSON配列（旧形式）とJSONL（新形式）の両方を自動判別して読み込みます。
 func (s *AIctStorage) LoadCheckpoints() ([]*tracker.CheckpointV2, error) {
 	checkpointsFile := filepath.Join(s.gitDir, CheckpointsDirName, LatestFileName)
+	return loadCheckpointsFromFile(checkpointsFile)
+}
 
-	data, err := os.ReadFile(checkpointsFile)
+// loadCheckpointsFromFile reads checkpoints from a file, auto-detecting format.
+func loadCheckpointsFromFile(path string) ([]*tracker.CheckpointV2, error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return []*tracker.CheckpointV2{}, nil
@@ -100,12 +89,69 @@ func (s *AIctStorage) LoadCheckpoints() ([]*tracker.CheckpointV2, error) {
 		return nil, err
 	}
 
-	var checkpoints []*tracker.CheckpointV2
-	if err := json.Unmarshal(data, &checkpoints); err != nil {
-		return nil, err
+	data = bytes.TrimSpace(data)
+	if len(data) == 0 {
+		return []*tracker.CheckpointV2{}, nil
 	}
 
+	// 旧形式判定: '[' で始まる場合はJSON配列
+	if data[0] == '[' {
+		var checkpoints []*tracker.CheckpointV2
+		if err := json.Unmarshal(data, &checkpoints); err != nil {
+			return nil, err
+		}
+		return checkpoints, nil
+	}
+
+	// JSONL形式: 1行1JSONオブジェクト（不正な行はスキップ）
+	var checkpoints []*tracker.CheckpointV2
+	for _, line := range bytes.Split(data, []byte{'\n'}) {
+		line = bytes.TrimSpace(line)
+		if len(line) == 0 {
+			continue
+		}
+		var cp tracker.CheckpointV2
+		if err := json.Unmarshal(line, &cp); err != nil {
+			continue
+		}
+		checkpoints = append(checkpoints, &cp)
+	}
 	return checkpoints, nil
+}
+
+// migrateToJSONLIfNeeded converts a legacy JSON array file to JSONL format.
+func migrateToJSONLIfNeeded(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	data = bytes.TrimSpace(data)
+	if len(data) == 0 || data[0] != '[' {
+		return nil // 既にJSONLまたは空ファイル
+	}
+
+	// 旧JSON配列をパース
+	var checkpoints []*tracker.CheckpointV2
+	if err := json.Unmarshal(data, &checkpoints); err != nil {
+		return err
+	}
+
+	// JSONL形式で書き直し
+	var buf bytes.Buffer
+	for _, cp := range checkpoints {
+		line, err := json.Marshal(cp)
+		if err != nil {
+			return err
+		}
+		buf.Write(line)
+		buf.WriteByte('\n')
+	}
+
+	return os.WriteFile(path, buf.Bytes(), 0644)
 }
 
 // ClearCheckpoints removes all checkpoints

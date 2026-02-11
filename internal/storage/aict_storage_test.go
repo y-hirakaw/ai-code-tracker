@@ -96,8 +96,8 @@ func TestAIctStorage(t *testing.T) {
 	}
 }
 
-func TestSaveCheckpointCorruptedFile(t *testing.T) {
-	// 破損したJSONファイルがある場合、SaveCheckpointがエラーを返すことを確認
+func TestSaveCheckpointCorruptedJSONL(t *testing.T) {
+	// JSONL形式: 破損行があってもSaveCheckpointは追記でき、LoadCheckpointsは破損行をスキップする
 	tmpDir := t.TempDir()
 	gitDir := filepath.Join(tmpDir, ".git")
 	if err := os.MkdirAll(gitDir, 0755); err != nil {
@@ -118,17 +118,73 @@ func TestSaveCheckpointCorruptedFile(t *testing.T) {
 		t.Fatalf("NewAIctStorage failed: %v", err)
 	}
 
-	// 破損したJSONファイルを作成
+	// 破損行を含むJSONLファイルを作成
 	checkpointsDir := filepath.Join(gitDir, "aict", "checkpoints")
 	if err := os.MkdirAll(checkpointsDir, 0755); err != nil {
 		t.Fatalf("Failed to create checkpoints dir: %v", err)
 	}
-	corruptedData := []byte("{invalid json content")
+	corruptedData := []byte("{invalid json content\n")
 	if err := os.WriteFile(filepath.Join(checkpointsDir, "latest.json"), corruptedData, 0644); err != nil {
 		t.Fatalf("Failed to write corrupted file: %v", err)
 	}
 
-	// SaveCheckpointがエラーを返すことを確認（旧実装ではエラーが無視されていた）
+	// JSONL方式: 破損行があっても追記は成功する
+	checkpoint := &tracker.CheckpointV2{
+		Timestamp: time.Now(),
+		Author:    "Test",
+		Type:      tracker.AuthorTypeHuman,
+	}
+
+	err = store.SaveCheckpoint(checkpoint)
+	if err != nil {
+		t.Fatalf("SaveCheckpoint should succeed even with corrupted lines: %v", err)
+	}
+
+	// LoadCheckpointsは破損行をスキップし、有効なチェックポイントのみ返す
+	checkpoints, err := store.LoadCheckpoints()
+	if err != nil {
+		t.Fatalf("LoadCheckpoints failed: %v", err)
+	}
+	if len(checkpoints) != 1 {
+		t.Errorf("Expected 1 valid checkpoint (corrupted line skipped), got %d", len(checkpoints))
+	}
+	if len(checkpoints) > 0 && checkpoints[0].Author != "Test" {
+		t.Errorf("Expected author Test, got %s", checkpoints[0].Author)
+	}
+}
+
+func TestSaveCheckpointCorruptedJSONArray(t *testing.T) {
+	// 旧JSON配列形式が破損している場合、マイグレーションでエラーを返す
+	tmpDir := t.TempDir()
+	gitDir := filepath.Join(tmpDir, ".git")
+	if err := os.MkdirAll(gitDir, 0755); err != nil {
+		t.Fatalf("Failed to create .git directory: %v", err)
+	}
+
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current directory: %v", err)
+	}
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("Failed to change directory: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	store, err := NewAIctStorage()
+	if err != nil {
+		t.Fatalf("NewAIctStorage failed: %v", err)
+	}
+
+	// 破損したJSON配列ファイルを作成（'['で始まるが不正なJSON）
+	checkpointsDir := filepath.Join(gitDir, "aict", "checkpoints")
+	if err := os.MkdirAll(checkpointsDir, 0755); err != nil {
+		t.Fatalf("Failed to create checkpoints dir: %v", err)
+	}
+	corruptedData := []byte("[invalid json array")
+	if err := os.WriteFile(filepath.Join(checkpointsDir, "latest.json"), corruptedData, 0644); err != nil {
+		t.Fatalf("Failed to write corrupted file: %v", err)
+	}
+
 	checkpoint := &tracker.CheckpointV2{
 		Timestamp: time.Now(),
 		Author:    "Test",
@@ -137,12 +193,12 @@ func TestSaveCheckpointCorruptedFile(t *testing.T) {
 
 	err = store.SaveCheckpoint(checkpoint)
 	if err == nil {
-		t.Error("SaveCheckpoint should return error for corrupted file")
+		t.Error("SaveCheckpoint should return error for corrupted JSON array")
 	}
 }
 
-func TestSaveCheckpointAtomicWrite(t *testing.T) {
-	// アトミック書き込みで一時ファイルが残らないことを確認
+func TestLoadCheckpointsJSONArrayBackwardCompat(t *testing.T) {
+	// 旧JSON配列形式のファイルが正しく読み込めることを確認
 	tmpDir := t.TempDir()
 	gitDir := filepath.Join(tmpDir, ".git")
 	if err := os.MkdirAll(gitDir, 0755); err != nil {
@@ -163,27 +219,147 @@ func TestSaveCheckpointAtomicWrite(t *testing.T) {
 		t.Fatalf("NewAIctStorage failed: %v", err)
 	}
 
+	// 旧JSON配列形式のファイルを直接作成
+	checkpointsDir := filepath.Join(gitDir, "aict", "checkpoints")
+	if err := os.MkdirAll(checkpointsDir, 0755); err != nil {
+		t.Fatalf("Failed to create checkpoints dir: %v", err)
+	}
+
+	jsonArray := `[
+  {"timestamp":"2025-01-01T00:00:00Z","author":"human","type":"human","changes":{"a.go":{"added":5,"deleted":0}}},
+  {"timestamp":"2025-01-01T01:00:00Z","author":"claude","type":"ai","changes":{"b.go":{"added":10,"deleted":2}}}
+]`
+	if err := os.WriteFile(filepath.Join(checkpointsDir, "latest.json"), []byte(jsonArray), 0644); err != nil {
+		t.Fatalf("Failed to write JSON array file: %v", err)
+	}
+
+	checkpoints, err := store.LoadCheckpoints()
+	if err != nil {
+		t.Fatalf("LoadCheckpoints failed for JSON array: %v", err)
+	}
+
+	if len(checkpoints) != 2 {
+		t.Errorf("Expected 2 checkpoints from JSON array, got %d", len(checkpoints))
+	}
+	if len(checkpoints) > 0 && checkpoints[0].Author != "human" {
+		t.Errorf("Expected first author human, got %s", checkpoints[0].Author)
+	}
+}
+
+func TestSaveCheckpointMigratesJSONArray(t *testing.T) {
+	// 旧JSON配列ファイルにSaveCheckpointするとJSONL形式にマイグレーションされる
+	tmpDir := t.TempDir()
+	gitDir := filepath.Join(tmpDir, ".git")
+	if err := os.MkdirAll(gitDir, 0755); err != nil {
+		t.Fatalf("Failed to create .git directory: %v", err)
+	}
+
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current directory: %v", err)
+	}
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("Failed to change directory: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	store, err := NewAIctStorage()
+	if err != nil {
+		t.Fatalf("NewAIctStorage failed: %v", err)
+	}
+
+	// 旧JSON配列形式のファイルを作成
+	checkpointsDir := filepath.Join(gitDir, "aict", "checkpoints")
+	if err := os.MkdirAll(checkpointsDir, 0755); err != nil {
+		t.Fatalf("Failed to create checkpoints dir: %v", err)
+	}
+
+	jsonArray := `[{"timestamp":"2025-01-01T00:00:00Z","author":"existing","type":"human","changes":{}}]`
+	checkpointsFile := filepath.Join(checkpointsDir, "latest.json")
+	if err := os.WriteFile(checkpointsFile, []byte(jsonArray), 0644); err != nil {
+		t.Fatalf("Failed to write JSON array file: %v", err)
+	}
+
+	// 新しいチェックポイントを追記
 	checkpoint := &tracker.CheckpointV2{
 		Timestamp: time.Now(),
-		Author:    "Test",
-		Type:      tracker.AuthorTypeHuman,
+		Author:    "new",
+		Type:      tracker.AuthorTypeAI,
 	}
 
 	if err := store.SaveCheckpoint(checkpoint); err != nil {
 		t.Fatalf("SaveCheckpoint failed: %v", err)
 	}
 
-	// 一時ファイルが残っていないことを確認
-	checkpointsDir := filepath.Join(gitDir, "aict", "checkpoints")
-	entries, err := os.ReadDir(checkpointsDir)
+	// 全チェックポイントが読み込めることを確認（旧1件 + 新1件）
+	checkpoints, err := store.LoadCheckpoints()
 	if err != nil {
-		t.Fatalf("Failed to read checkpoints dir: %v", err)
+		t.Fatalf("LoadCheckpoints failed: %v", err)
 	}
 
-	for _, entry := range entries {
-		if filepath.Ext(entry.Name()) == ".tmp" {
-			t.Errorf("Temporary file should not remain: %s", entry.Name())
+	if len(checkpoints) != 2 {
+		t.Errorf("Expected 2 checkpoints (1 migrated + 1 new), got %d", len(checkpoints))
+	}
+
+	// ファイルがJSONL形式になっていることを確認（'['で始まらない）
+	data, err := os.ReadFile(checkpointsFile)
+	if err != nil {
+		t.Fatalf("Failed to read file: %v", err)
+	}
+	if len(data) > 0 && data[0] == '[' {
+		t.Error("File should be in JSONL format after migration, but starts with '['")
+	}
+}
+
+func TestSaveCheckpointJSONLFormat(t *testing.T) {
+	// JSONL形式で保存されることを確認
+	tmpDir := t.TempDir()
+	gitDir := filepath.Join(tmpDir, ".git")
+	if err := os.MkdirAll(gitDir, 0755); err != nil {
+		t.Fatalf("Failed to create .git directory: %v", err)
+	}
+
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current directory: %v", err)
+	}
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("Failed to change directory: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	store, err := NewAIctStorage()
+	if err != nil {
+		t.Fatalf("NewAIctStorage failed: %v", err)
+	}
+
+	// 2件のチェックポイントを保存
+	for _, author := range []string{"human", "ai"} {
+		cp := &tracker.CheckpointV2{
+			Timestamp: time.Now(),
+			Author:    author,
+			Type:      tracker.AuthorTypeHuman,
 		}
+		if err := store.SaveCheckpoint(cp); err != nil {
+			t.Fatalf("SaveCheckpoint failed for %s: %v", author, err)
+		}
+	}
+
+	// ファイル内容がJSONL形式であることを確認
+	checkpointsFile := filepath.Join(gitDir, "aict", "checkpoints", "latest.json")
+	data, err := os.ReadFile(checkpointsFile)
+	if err != nil {
+		t.Fatalf("Failed to read file: %v", err)
+	}
+
+	lines := 0
+	for _, b := range data {
+		if b == '\n' {
+			lines++
+		}
+	}
+	if lines != 2 {
+		t.Errorf("Expected 2 JSONL lines, got %d", lines)
 	}
 }
 

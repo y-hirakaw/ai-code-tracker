@@ -133,8 +133,12 @@ Phase 4 の変更（error返却パターン・関数分割・Config読み込み�
   - `git log --numstat --format=__AICT_COMMIT__%H` でバッチnumstat取得（`GetRangeNumstat`）
   - `git log --notes=refs/aict/authorship --format=__AICT_HASH__%H%n%N` でバッチnotes取得（`GetAuthorshipLogsForRange`）
   - `collectAuthorStats` をバッチ化、gitプロセス起動を2N+1回→2回に削減
-- [ ] **5-2**: チェックポイント保存の JSONL 化 (Medium)
-  - 後方互換性を維持しつつ追記型に移行
+- [x] **5-2**: チェックポイント保存の JSONL 化 (Medium)
+  - `SaveCheckpoint`: JSON配列の全読み→追加→全書き（O(n)）→ JSONL追記（O(1)）に変更
+  - `LoadCheckpoints`: JSON配列（旧形式）とJSONL（新形式）の自動判別
+  - `migrateToJSONLIfNeeded`: 旧JSON配列ファイルの自動マイグレーション
+  - `handlers_debug.go`: 直接ファイル操作をstorage APIに統一
+  - テスト追加: 後方互換性、マイグレーション、破損ファイル、JSONL形式確認
 - [x] **5-3**: captureSnapshot のメモリ効率改善 (Medium)
   - `captureSnapshot` の行数カウント: `len(strings.Split(string(content), "\n"))` → `bytes.Count(content, []byte{'\n'}) + 1`
   - `getDetailedDiff` の新規ファイル行数カウント: 同様に `bytes.Count` + `bytes.TrimSpace` に変更
