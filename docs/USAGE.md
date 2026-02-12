@@ -24,22 +24,16 @@ aict init
 
 `.git/aict/` ディレクトリが作成され、設定ファイル `config.json` が生成されます。
 
-### 2. フックのセットアップ（推奨）
+`aict init` 実行時に「Set up hooks for automatic tracking? (Y/n)」と聞かれるので、Enterまたは`y`を入力するとフックも自動セットアップされます。
 
-Claude Codeとの統合による自動トラッキングを有効にします:
-
-```bash
-aict setup-hooks
-```
-
-これにより以下がセットアップされます:
+セットアップされるフック:
 - **Pre-tool-use hook**: Claude Code編集前に人間のチェックポイントを自動記録
 - **Post-tool-use hook**: Claude Code編集後にAIチェックポイントを自動記録
 - **Post-commit hook**: コミット時に自動的にAuthorship Logを生成
 
 **フックセットアップ後は、手動でチェックポイント記録する必要はありません！**
 
-### 2-a. 手動でチェックポイントを記録する場合
+### 2. 手動でチェックポイントを記録する場合
 
 フックを使わない場合、または手動で記録したい場合:
 
@@ -142,8 +136,7 @@ aict sync fetch
 
 | コマンド | 説明 |
 |---------|------|
-| `aict init` | プロジェクトの初期化（`.git/aict/` ディレクトリ作成） |
-| `aict setup-hooks` | Claude Code & Git hooks のセットアップ（推奨） |
+| `aict init` | プロジェクトの初期化（hooks設定の確認付き） |
 | `aict checkpoint [options]` | チェックポイントの記録（手動の場合） |
 | `aict commit` | Authorship Logの生成（自動 or 手動） |
 | `aict report [options]` | コード生成統計レポート表示 |
@@ -292,7 +285,7 @@ By Author:
    ```bash
    cd your-project
    aict init
-   aict setup-hooks
+   # → hooks設定の確認が表示されるのでEnterで自動セットアップ
    ```
 
 2. **開発サイクル**（フック有効時）
@@ -454,7 +447,7 @@ aict debug clear-notes    # Git notesも削除
 - フックファイルが実行可能か確認: `ls -la .git/hooks/post-commit`
 - `.claude/settings.json` が正しく設定されているか確認
 - `aict` コマンドがPATHに含まれているか確認
-- フックの再セットアップ: `aict setup-hooks`
+- フックの再セットアップ: `aict init` を再実行
 
 ## 既知の制限事項
 

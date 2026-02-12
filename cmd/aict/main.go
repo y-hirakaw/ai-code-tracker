@@ -31,7 +31,8 @@ func main() {
 	var err error
 	switch command {
 	case "init":
-		err = handleInitV2()
+		withHooks := len(os.Args) > 2 && os.Args[2] == "--with-hooks"
+		err = handleInitV2WithOptions(withHooks)
 	case "checkpoint":
 		err = handleCheckpoint()
 	case "commit":
@@ -68,7 +69,7 @@ func printUsage() {
 	fmt.Printf("AI Code Tracker (aict) v%s - Track AI vs Human code contributions\n", version)
 	fmt.Println()
 	fmt.Println("Usage:")
-	fmt.Println("  aict init                    Initialize tracking (.git/aict/ directory)")
+	fmt.Println("  aict init [--with-hooks]      Initialize tracking (.git/aict/ directory)")
 	fmt.Println("  aict checkpoint [options]    Record development checkpoint")
 	fmt.Println("    --author <name>            Author name (required)")
 	fmt.Println("    --model <model>            AI model name (for AI agents)")

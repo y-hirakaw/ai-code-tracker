@@ -91,7 +91,7 @@ echo ""
 
 # --- Test 1: init ---
 echo "--- init ---"
-OUTPUT=$($AICT init 2>&1)
+OUTPUT=$(echo "n" | $AICT init 2>&1)
 assert_contains "$OUTPUT" "initialized successfully" "init: 正常初期化"
 assert_contains "$OUTPUT" "TestUser" "init: デフォルト作成者"
 

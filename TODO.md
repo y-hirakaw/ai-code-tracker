@@ -350,9 +350,9 @@ Phase 4 の変更（error返却パターン・関数分割・Config読み込み�
   - 例: `Error: either --range or --since is required\nTry: aict report --since 7d`
   - エラーメッセージの言語を英語に統一（`handlers_debug.go` の日本語を修正）
 
-- [ ] **B-3**: `aict init --with-hooks` オプション追加 (Medium)
-  - `init` + `setup-hooks` を1コマンドで実行
-  - 成功メッセージに「次にやること」を明記
+- [x] **B-3**: `aict init` にhooksセットアップ統合 (Medium)
+  - `aict init` 実行後にインタラクティブに「Set up hooks? (Y/n)」と確認（デフォルトYes）
+  - `aict init --with-hooks` でプロンプトなしにhooksも設定（スクリプト・CI向け）
   - 新規ユーザーのセットアップ手順を2ステップ→1ステップに短縮
 
 - [ ] **B-4**: レポート出力の可読性向上 (Medium)

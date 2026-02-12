@@ -56,6 +56,8 @@ func handleSetupHooksV2() error {
 	fmt.Printf("  - %s/hooks/post-commit           (generates Authorship Log)\n", gitDir)
 	fmt.Println()
 	fmt.Println("Claude Code will now automatically track AI vs Human contributions.")
+	fmt.Println()
+	fmt.Println("Tip: You can also run 'aict init' to set up everything at once.")
 	return nil
 }
 
