@@ -112,6 +112,7 @@ fi
 exit 0`
 
 // ClaudeSettingsJSON template for Claude Code hook configuration
+// hookスクリプトが存在しない場合でもエラーにならないよう test -x でガード (#5)
 const ClaudeSettingsJSON = `{
   "hooks": {
     "PreToolUse": [
@@ -120,7 +121,7 @@ const ClaudeSettingsJSON = `{
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.git/aict/hooks/pre-tool-use.sh"
+            "command": "test -x \"$CLAUDE_PROJECT_DIR/.git/aict/hooks/pre-tool-use.sh\" && \"$CLAUDE_PROJECT_DIR/.git/aict/hooks/pre-tool-use.sh\" || true"
           }
         ]
       }
@@ -131,7 +132,7 @@ const ClaudeSettingsJSON = `{
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.git/aict/hooks/post-tool-use.sh"
+            "command": "test -x \"$CLAUDE_PROJECT_DIR/.git/aict/hooks/post-tool-use.sh\" && \"$CLAUDE_PROJECT_DIR/.git/aict/hooks/post-tool-use.sh\" || true"
           }
         ]
       }

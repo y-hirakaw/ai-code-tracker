@@ -98,7 +98,7 @@ assert_contains "$OUTPUT" "TestUser" "init: デフォルト作成者"
 # --- Test 2: version ---
 echo "--- version ---"
 OUTPUT=$($AICT version 2>&1)
-assert_contains "$OUTPUT" "1.4.3" "version: バージョン表示"
+assert_contains "$OUTPUT" "1.4.4" "version: バージョン表示"
 
 # --- Test 3: コミット1 (human) ---
 echo "--- commit 1: human initial ---"

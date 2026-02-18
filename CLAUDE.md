@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 AI Code Tracker (AICT) is a Go-based tool designed to track the proportion of AI-generated versus human-written code in a repository. The project integrates with Claude Code hooks and Git post-commit hooks to automatically monitor code generation metrics.
 
-**Current Version**: v1.4.3
+**Current Version**: v1.4.4
 
 **Key Features**:
 - Git notes-based authorship tracking (`refs/aict/authorship`)
@@ -166,7 +166,7 @@ go test ./...
 ```bash
 # Build and test basic functionality
 go build -o bin/aict ./cmd/aict
-./bin/aict version                    # v1.4.3
+./bin/aict version                    # v1.4.4
 ./bin/aict report --since 7d          # Show last 7 days
 ./bin/aict report --since 2w          # Show last 2 weeks
 ./bin/aict report --range HEAD~5..HEAD  # Show last 5 commits

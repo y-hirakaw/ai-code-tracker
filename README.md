@@ -1,4 +1,4 @@
-# AI Code Tracker (AICT) v1.4.3
+# AI Code Tracker (AICT) v1.4.4
 
 [![CI](https://github.com/y-hirakaw/ai-code-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/y-hirakaw/ai-code-tracker/actions/workflows/ci.yml)
 

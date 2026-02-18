@@ -76,6 +76,37 @@ func TestPostCommitHookUsesGitRevParse(t *testing.T) {
 	}
 }
 
+func TestClaudeSettingsHasTestGuard(t *testing.T) {
+	// Verify each hook command has test -x guard (#5)
+	var settings struct {
+		Hooks map[string][]struct {
+			Hooks []struct {
+				Command string `json:"command"`
+			} `json:"hooks"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal([]byte(ClaudeSettingsJSON), &settings); err != nil {
+		t.Fatalf("Failed to parse ClaudeSettingsJSON: %v", err)
+	}
+
+	for _, hookName := range []string{"PreToolUse", "PostToolUse"} {
+		entries, ok := settings.Hooks[hookName]
+		if !ok || len(entries) == 0 || len(entries[0].Hooks) == 0 {
+			t.Fatalf("%s hook entry not found", hookName)
+		}
+		cmd := entries[0].Hooks[0].Command
+		if !strings.HasPrefix(cmd, "test -x") {
+			t.Errorf("%s: command should start with 'test -x', got: %s", hookName, cmd)
+		}
+		if !strings.HasSuffix(cmd, "|| true") {
+			t.Errorf("%s: command should end with '|| true', got: %s", hookName, cmd)
+		}
+		if !strings.Contains(cmd, "&&") {
+			t.Errorf("%s: command should contain '&&' to chain execution, got: %s", hookName, cmd)
+		}
+	}
+}
+
 func TestHooksCheckAICTInitialized(t *testing.T) {
 	hooks := map[string]string{
 		"PreToolUseHook":  PreToolUseHook,
