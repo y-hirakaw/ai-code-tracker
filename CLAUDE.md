@@ -7,16 +7,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 AI Code Tracker (AICT) is a Go-based tool designed to track the proportion of AI-generated versus human-written code in a repository. The project integrates with Claude Code hooks and Git post-commit hooks to automatically monitor code generation metrics.
 
-**Current Version**: v1.5.0-beta.1
+**Current Version**: v1.5.1-beta.1
 
 **Key Features**:
 - Git notes-based authorship tracking (`refs/aict/authorship`)
 - Snapshot-based checkpoint system for human/AI code tracking
 - Baseline preservation to exclude existing code from tracking
+- Stash/restore時のAI帰属情報保全
 - Date-based report filtering with `--since` option
 - Automatic Claude Code hooks integration
 - Table and JSON output formats
 - Debug commands for development and testing
+- チェックポイントファイルのアドバイザリロック（TOCTOU防止）
 
 ## Architecture
 
@@ -130,51 +132,13 @@ go mod tidy
 
 ## Testing
 
-### Integration Tests
-
 ```bash
-# --since オプションのテスト (16 tests)
-./test_since_option.sh
-
-# 全コマンド動作確認 (25 tests) - 仮リポジトリで複数コミットのワークフローをE2Eテスト
-# init → checkpoint → commit → report → debug の全フローを検証
-# リファクタリングやコマンド変更後に実行推奨
-./test_functional.sh
-```
-
-**test_since_option.sh** (16 tests):
-- Shorthand notation (7d, 2w, 1m, 1y)
-- Relative dates (yesterday, N days ago)
-- Absolute dates (2025-01-01)
-- Error handling (mutual exclusivity, invalid input)
-- Output formats (table, JSON)
-- Edge cases (initial commits, very old dates)
-- Real-world scenarios (sprint review, daily standup, monthly release)
-
-**test_functional.sh** (25 tests):
-- 仮Gitリポジトリで5コミット（human 3回 + AI 2回）のワークフローを再現
-- checkpoint のベースライン→変更検出、commit のAuthorship Log生成
-- report の table/json/range 出力、AI/human 分類の正確性
-- debug show/clean、help、エラーケース（引数不足、排他チェック）
-
-### Unit Tests
-```bash
+# ユニットテスト
 go test ./...
-```
 
-### Quick Functional Test
-```bash
-# Build and test basic functionality
-go build -o bin/aict ./cmd/aict
-./bin/aict version                    # v1.5.0-beta.1
-./bin/aict report --since 7d          # Show last 7 days
-./bin/aict report --since 2w          # Show last 2 weeks
-./bin/aict report --range HEAD~5..HEAD  # Show last 5 commits
-
-# Debug commands
-./bin/aict debug show                 # Show checkpoint details
-./bin/aict debug clean                # Clean checkpoints
-./bin/aict debug clear-notes          # Clear Git notes
+# 統合テスト
+./test_since_option.sh     # --since option tests (16 tests)
+./test_functional.sh       # Full workflow test (25 tests) ※リファクタ後に実行推奨
 ```
 
 ## Common Use Cases
@@ -242,101 +206,44 @@ aict debug clear-notes  # すべてのaict関連notesを削除
 
 ## バージョン更新手順
 
-新しいバージョンをリリースする際は以下の手順に従ってください：
+### 更新対象ファイル
+以下の全ファイルでバージョン番号を更新（`replace_all`推奨）:
+- `cmd/aict/main.go` (version定数)
+- `README.md`, `CLAUDE.md`, `SPEC.md`, `IMPLEMENTATION_STATUS.md`
+- `test_functional.sh`
+- `docs/USAGE.md`, `docs/BASE_SPEC.md`, `docs/DATA_FLOW.md`
 
-### 1. バージョン番号の更新
+### リリース手順
 ```bash
-# cmd/aict/main.go の version 定数を更新
-# 例: version = "0.3.4" → version = "0.3.5"
-```
+# 1. 全ファイルのバージョン更新後
+go build -o bin/aict ./cmd/aict && ./bin/aict version
 
-### 2. README.mdのバージョン更新
-```bash
-# README.md の先頭タイトルを更新
-# 例: # AI Code Tracker (AICT) v0.3.4 → # AI Code Tracker (AICT) v0.3.5
-```
+# 2. テスト
+go test ./... && ./test_functional.sh
 
-### 3. ビルドとテスト
-```bash
-# プロジェクトをビルド
-go build -o bin/aict ./cmd/aict
-
-# バージョン確認
-./bin/aict version
-```
-
-### 4. 変更のコミットとプッシュ
-```bash
-# 変更をステージング
-git add .
-
-# 詳細なコミットメッセージでコミット
-git commit -m "feat: [機能概要] and bump to v[バージョン]
-
-- [変更内容1]
-- [変更内容2]
-- Bumped version to [バージョン]"
-
-# リモートにプッシュ
-git push origin main
-```
-
-### 5. タグの作成とプッシュ
-```bash
-# アノテーション付きタグを作成
-git tag -a v[バージョン] -m "Release v[バージョン] - [リリース概要]
-
-- [主要な変更点1]
-- [主要な変更点2]"
-
-# タグをリモートにプッシュ
-git push origin v[バージョン]
-```
-
-### 6. リリース後の確認
-```bash
-# タグが正しく作成されたことを確認
-git tag -l
-
-# go install でインストールできることを確認（新しいターミナルで）
-go install github.com/y-hirakaw/ai-code-tracker/cmd/aict@v[バージョン]
+# 3. コミット・タグ・プッシュ
+git add <files> && git commit -m "chore: bump version to v[VERSION]"
+git tag -a v[VERSION] -m "Release v[VERSION] - [概要]"
+git push origin main && git push origin v[VERSION]
 ```
 
 ### 注意事項
-- バージョン番号はセマンティックバージョニング（major.minor.patch）に従う
-- 破壊的変更がある場合はメジャーバージョンを上げる
-- 新機能追加の場合はマイナーバージョンを上げる
-- バグ修正の場合はパッチバージョンを上げる
+- セマンティックバージョニング（major.minor.patch）に従う
+- プレリリース版（例: `v1.5.1-beta.1`）は `@latest` に含まれない
 - Go Module Proxy のキャッシュ更新には時間がかかる場合がある
 
 ## テスト開発ガイドライン
 
 ### テストパターン
+- **純粋関数**: テーブル駆動テスト（`t.Run` + サブテスト）
+- **Git操作**: `testutil.TempGitRepo(t)` でテンポラリリポジトリ作成
+- **Git notes**: `gitexec.NewMockExecutor()` でモック化
+- **統合テスト**: `testutil.InitAICT(t, tmpDir)` でAICT環境構築
+- **cmd/aict/**: `newExecutor` のDIパターンでモック注入可能（カバレッジ56.7%）
 
-- **純粋関数**: テーブル駆動テスト（`t.Run` + サブテスト）を使用。Git環境不要
-- **Git操作を伴う関数**: `testutil.TempGitRepo(t)` でテンポラリGitリポジトリを作成
-- **Git notesを伴う関数**: `gitexec.NewMockExecutor()` でモック化してテスト
-- **統合テスト**: `testutil.InitAICT(t, tmpDir)` でAICT設定込みの環境を構築
-
-### テスト時の注意点
-
-- **偽テストを書かない**: テスト名と実際に検証する内容を一致させること。環境セットアップだけのテストは `_EnvironmentSetup` サフィックスを付ける
-- **cmd/aict/ のカバレッジ**: 現在56.7%。`newExecutor` のDIパターンによりモック注入でテスト可能
-- **os.Chdir パターン**: テスト内で `os.Chdir` する場合は必ず `defer os.Chdir(originalDir)` でリストアする
-- **`--since` 入力バリデーション**: `expandShorthandDate` は未知の形式をそのままgitに渡す。gitは不正日付を「コミットなし」として扱うため、エラーにならない
-
-### テスト実行
-
-```bash
-# ユニットテスト
-go test ./...
-
-# 特定パッケージ
-go test ./cmd/aict/ -v
-
-# 統合テスト
-./test_since_option.sh
-```
+### 注意点
+- テスト内で `os.Chdir` する場合は必ず `defer os.Chdir(originalDir)` でリストア
+- `expandShorthandDate` は未知の形式をそのままgitに渡す（エラーにならない）
 
 ## リファクタリング進捗状況
 
@@ -359,3 +266,5 @@ go test ./cmd/aict/ -v
 | 9 | データ整合性・バグリスク | ファイルフィルタ統一、ゼロ除算ガード |
 | 10 | コード品質・アーキテクチャ | collectAuthorStats分割、DIパターン化 |
 | 11 | テスト品質向上 | cmd/aictカバレッジ27.3%→56.7% |
+| 12 | Stash/Restore対応 | AI帰属保全、チェックポイント再生成 |
+| 13 | TOCTOU修正・API改善 | ロック保護、PurgeExpiredCheckpoints API簡素化、テスト+502行 |

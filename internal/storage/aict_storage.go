@@ -189,18 +189,13 @@ func migrateToJSONLIfNeeded(path string) error {
 	}
 
 	// JSONL形式でtmp+renameパターンで安全に書き直し
-	var buf bytes.Buffer
-	for _, cp := range checkpoints {
-		line, err := json.Marshal(cp)
-		if err != nil {
-			return err
-		}
-		buf.Write(line)
-		buf.WriteByte('\n')
+	data, err = marshalCheckpointsJSONL(checkpoints)
+	if err != nil {
+		return err
 	}
 
 	tmpFile := path + ".migrate.tmp"
-	if err := os.WriteFile(tmpFile, buf.Bytes(), 0644); err != nil {
+	if err := os.WriteFile(tmpFile, data, 0644); err != nil {
 		return err
 	}
 	if err := os.Rename(tmpFile, path); err != nil {
@@ -210,14 +205,23 @@ func migrateToJSONLIfNeeded(path string) error {
 	return nil
 }
 
+// marshalCheckpointsJSONL はチェックポイントリストをJSONL（1行1JSON）形式にシリアライズします。
+func marshalCheckpointsJSONL(checkpoints []*tracker.CheckpointV2) ([]byte, error) {
+	var buf bytes.Buffer
+	for _, cp := range checkpoints {
+		line, err := json.Marshal(cp)
+		if err != nil {
+			return nil, fmt.Errorf("marshal checkpoint: %w", err)
+		}
+		buf.Write(line)
+		buf.WriteByte('\n')
+	}
+	return buf.Bytes(), nil
+}
+
 // ClearCheckpoints removes all checkpoints
 func (s *AIctStorage) ClearCheckpoints() error {
-	checkpointsFile := filepath.Join(s.gitDir, CheckpointsDirName, LatestFileName)
-	err := os.Remove(checkpointsFile)
-	if os.IsNotExist(err) {
-		return nil // Already cleared
-	}
-	return err
+	return s.clearCheckpointsLocked()
 }
 
 // RemoveConsumedCheckpoints は照合で使用されたチェックポイントのみを削除し、
@@ -331,7 +335,6 @@ func (s *AIctStorage) PurgeExpiredCheckpoints(ttl time.Duration) error {
 	if ttl <= 0 {
 		ttl = CheckpointTTL
 	}
-	effectiveTTL := ttl
 
 	// ロック取得（Load→Rewrite全体を保護）
 	lockFile, err := s.lockCheckpointsFile()
@@ -351,7 +354,7 @@ func (s *AIctStorage) PurgeExpiredCheckpoints(ttl time.Duration) error {
 	now := time.Now()
 	var valid []*tracker.CheckpointV2
 	for _, cp := range checkpoints {
-		if now.Sub(cp.Timestamp) < effectiveTTL {
+		if now.Sub(cp.Timestamp) < ttl {
 			valid = append(valid, cp)
 		}
 	}
@@ -390,17 +393,12 @@ func (s *AIctStorage) rewriteCheckpointsLocked(checkpoints []*tracker.Checkpoint
 	checkpointsFile := filepath.Join(checkpointsDir, LatestFileName)
 	tmpFile := checkpointsFile + ".tmp"
 
-	var buf bytes.Buffer
-	for _, cp := range checkpoints {
-		line, err := json.Marshal(cp)
-		if err != nil {
-			return fmt.Errorf("marshal checkpoint: %w", err)
-		}
-		buf.Write(line)
-		buf.WriteByte('\n')
+	data, err := marshalCheckpointsJSONL(checkpoints)
+	if err != nil {
+		return err
 	}
 
-	if err := os.WriteFile(tmpFile, buf.Bytes(), 0644); err != nil {
+	if err := os.WriteFile(tmpFile, data, 0644); err != nil {
 		return fmt.Errorf("write temp file: %w", err)
 	}
 

@@ -1,10 +1,10 @@
-# AI Code Tracker (AICT) 基本仕様書 v1.5.0-beta.1
+# AI Code Tracker (AICT) 基本仕様書 v1.5.1-beta.1
 
 ## 概要
 
 AI Code Tracker (AICT) は、AIによるコード生成と人間によるコード記述を追跡・管理するためのツールです。Claude Code などのAI支援ツールとGit hookを組み合わせて、誰がどのコードを書いたかを自動的に記録します。
 
-**バージョン**: v1.5.0-beta.1（Production ready）
+**バージョン**: v1.5.1-beta.1（Pre-release）
 **実装方式**: CheckpointV2ベース、バッチnumstat取得 + 按分方式
 
 ## 基本フロー
@@ -297,8 +297,10 @@ By Author:
 7. **バッチ取得**: N+1問題を解消、2回のgit呼び出しで全データ取得（v1.4.0）
 8. **Authorship Log**: Git notes (`refs/aict/authorship`) として永続化
 9. **複数メトリクス**: コードベース貢献、作業量貢献、新規ファイルの3視点測定
-10. **入力バリデーション**: `--since`の未知形式を警告、`--format`のエラーメッセージに利用可能フォーマット表示（v1.5.0-beta.1）
+10. **入力バリデーション**: `--since`の未知形式を警告、`--format`のエラーメッセージに利用可能フォーマット表示（v1.5.1-beta.1）
 11. **セキュリティ**: Git引数のオプション注入防止（ValidateRevisionArg、`--end-of-options`）（v1.4.0）
+12. **Stash/Restore対応**: stash退避中のチェックポイントを保全し、restore後のコミットでAI帰属を維持（v1.5.1-beta.1）
+13. **ファイルロック**: チェックポイント操作のTOCTOU防止（アドバイザリロック、v1.5.1-beta.1）
 
 ## 既知の制限事項
 
@@ -322,6 +324,6 @@ By Author:
 - **v1.2.0**: 安定版リリース、既知の制限事項の文書化
 - **v1.3.0**: レポート出力のアイコン改善
 - **v1.4.0**: N+1問題解消、JSONL保存、メモリ効率改善、セキュリティ強化、ハンドラerror返却統一、デッドコード削除
-- **v1.5.0-beta.1**: テストカバレッジ向上、`--since`入力バリデーション、`--format`エラーメッセージ改善
+- **v1.5.1-beta.1**: stash/restore時のAI帰属保全、TOCTOU修正（ファイルロック改善）、PurgeExpiredCheckpoints API簡素化、テストカバレッジ向上、`--since`入力バリデーション
 
 この仕様に基づいて、AICTはAIと人間のコード貢献を正確に追跡・管理します（99%以上の精度）。
