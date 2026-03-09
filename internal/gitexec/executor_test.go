@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -313,5 +314,58 @@ func TestValidateRevisionArg(t *testing.T) {
 				t.Errorf("ValidateRevisionArg(%q) error = %v, wantErr %v", tt.arg, err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestMockExecutor_RunWithStdin(t *testing.T) {
+	mock := NewMockExecutor()
+	mock.RunWithStdinFunc = func(stdin string, args ...string) (string, error) {
+		return "output:" + stdin, nil
+	}
+
+	result, err := mock.RunWithStdin("input\n", "cat-file", "--batch")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != "output:input\n" {
+		t.Errorf("got %q, want %q", result, "output:input\n")
+	}
+
+	// CallLog検証
+	calls := mock.GetCalls("RunWithStdin")
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 RunWithStdin call, got %d", len(calls))
+	}
+	if calls[0].Stdin != "input\n" {
+		t.Errorf("Stdin = %q, want %q", calls[0].Stdin, "input\n")
+	}
+	if len(calls[0].Args) != 2 || calls[0].Args[0] != "cat-file" {
+		t.Errorf("Args = %v, want [cat-file --batch]", calls[0].Args)
+	}
+}
+
+func TestMockExecutor_RunWithStdin_NilFunc(t *testing.T) {
+	mock := NewMockExecutor()
+	// RunWithStdinFunc未設定でパニックしないことを確認
+	result, err := mock.RunWithStdin("input", "cat-file")
+	if err != nil {
+		t.Errorf("expected nil error, got %v", err)
+	}
+	if result != "" {
+		t.Errorf("expected empty result, got %q", result)
+	}
+}
+
+func TestRealExecutor_RunWithStdin(t *testing.T) {
+	e := NewExecutor()
+	// git hash-object --stdinは入力をハッシュして返す
+	result, err := e.RunWithStdin("test content\n", "hash-object", "--stdin")
+	if err != nil {
+		t.Fatalf("RunWithStdin failed: %v", err)
+	}
+	// 出力はSHA-1ハッシュ + 改行
+	result = strings.TrimSpace(result)
+	if len(result) != 40 {
+		t.Errorf("expected 40-char hash, got %d chars: %q", len(result), result)
 	}
 }

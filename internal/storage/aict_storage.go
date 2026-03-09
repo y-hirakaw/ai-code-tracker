@@ -163,7 +163,11 @@ func loadCheckpointsFromFile(path string) ([]*tracker.CheckpointV2, error) {
 	return checkpoints, nil
 }
 
-// migrateToJSONLIfNeeded converts a legacy JSON array file to JSONL format.
+// migrateToJSONLIfNeeded は旧JSON配列形式のチェックポイントファイルを
+// JSONL（1行1JSON）形式にマイグレーションします。
+// SaveCheckpointのロック内で呼ばれるため、呼び出し元がロックを保持している前提です。
+// ファイルが存在しない・空・既にJSONL形式の場合は何もしません。
+// tmp+renameパターンでクラッシュ安全性を確保しています。
 func migrateToJSONLIfNeeded(path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -219,10 +223,18 @@ func (s *AIctStorage) ClearCheckpoints() error {
 // RemoveConsumedCheckpoints は照合で使用されたチェックポイントのみを削除し、
 // 未使用のチェックポイントを残します（stash退避中の変更の保全用）。
 // 同じBaseCommitを共有するペア（Developer baseline + AI edit）も一緒に消費します。
+// Load→Process→Rewrite全体をロック保護してTOCTOU競合を防止します。
 func (s *AIctStorage) RemoveConsumedCheckpoints(consumedTimestamps map[time.Time]bool) error {
 	if len(consumedTimestamps) == 0 {
 		return nil
 	}
+
+	// ロック取得（Load→Rewrite全体を保護）
+	lockFile, err := s.lockCheckpointsFile()
+	if err != nil {
+		return fmt.Errorf("acquiring checkpoint lock: %w", err)
+	}
+	defer unlockCheckpointsFile(lockFile)
 
 	checkpoints, err := s.LoadCheckpoints()
 	if err != nil {
@@ -230,7 +242,7 @@ func (s *AIctStorage) RemoveConsumedCheckpoints(consumedTimestamps map[time.Time
 	}
 
 	// 同じBaseCommitを共有するチェックポイントもペアで消費
-	ExpandConsumedByBaseCommit(checkpoints, consumedTimestamps)
+	expandConsumedByBaseCommit(checkpoints, consumedTimestamps)
 
 	var remaining []*tracker.CheckpointV2
 	for _, cp := range checkpoints {
@@ -240,17 +252,17 @@ func (s *AIctStorage) RemoveConsumedCheckpoints(consumedTimestamps map[time.Time
 	}
 
 	if len(remaining) == 0 {
-		return s.ClearCheckpoints()
+		return s.clearCheckpointsLocked()
 	}
 
-	return s.rewriteCheckpoints(remaining)
+	return s.rewriteCheckpointsLocked(remaining)
 }
 
-// ExpandConsumedByBaseCommit は消費対象のチェックポイントと同じBaseCommitを
+// expandConsumedByBaseCommit は消費対象のチェックポイントと同じBaseCommitを
 // 共有し、かつファイルパスが重複するチェックポイントも消費対象に追加します。
 // これにより、Developer baseline + AI editのペアが一緒に消費されます。
 // 同じBaseCommitでもファイルパスが重複しないチェックポイント（別のstashセッション由来）は残します。
-func ExpandConsumedByBaseCommit(checkpoints []*tracker.CheckpointV2, consumed map[time.Time]bool) {
+func expandConsumedByBaseCommit(checkpoints []*tracker.CheckpointV2, consumed map[time.Time]bool) {
 	// 消費済みチェックポイントの情報を収集
 	type baseGroup struct {
 		baseCommit string
@@ -314,12 +326,19 @@ func hasFileOverlap(cp *tracker.CheckpointV2, targetFiles map[string]bool) bool 
 }
 
 // PurgeExpiredCheckpoints はTTLを超えた古いチェックポイントを削除します。
-// ttlが0の場合はデフォルトのCheckpointTTL（24時間）を使用します。
-func (s *AIctStorage) PurgeExpiredCheckpoints(ttl ...time.Duration) error {
-	effectiveTTL := CheckpointTTL
-	if len(ttl) > 0 && ttl[0] > 0 {
-		effectiveTTL = ttl[0]
+// Load→Process→Rewrite全体をロック保護してTOCTOU競合を防止します。
+func (s *AIctStorage) PurgeExpiredCheckpoints(ttl time.Duration) error {
+	if ttl <= 0 {
+		ttl = CheckpointTTL
 	}
+	effectiveTTL := ttl
+
+	// ロック取得（Load→Rewrite全体を保護）
+	lockFile, err := s.lockCheckpointsFile()
+	if err != nil {
+		return fmt.Errorf("acquiring checkpoint lock: %w", err)
+	}
+	defer unlockCheckpointsFile(lockFile)
 
 	checkpoints, err := s.LoadCheckpoints()
 	if err != nil {
@@ -342,26 +361,31 @@ func (s *AIctStorage) PurgeExpiredCheckpoints(ttl ...time.Duration) error {
 	}
 
 	if len(valid) == 0 {
-		return s.ClearCheckpoints()
+		return s.clearCheckpointsLocked()
 	}
 
-	return s.rewriteCheckpoints(valid)
+	return s.rewriteCheckpointsLocked(valid)
 }
 
 // rewriteCheckpoints はチェックポイントリストをJSONL形式で書き直します。
 // アドバイザリロック + 一時ファイル + rename パターンでクラッシュ安全性を確保。
 func (s *AIctStorage) rewriteCheckpoints(checkpoints []*tracker.CheckpointV2) error {
-	checkpointsDir := filepath.Join(s.gitDir, CheckpointsDirName)
-	if err := os.MkdirAll(checkpointsDir, 0755); err != nil {
-		return err
-	}
-
-	// アドバイザリロック取得（SaveCheckpointとの競合防止）
 	lockFile, err := s.lockCheckpointsFile()
 	if err != nil {
 		return fmt.Errorf("acquiring checkpoint lock: %w", err)
 	}
 	defer unlockCheckpointsFile(lockFile)
+
+	return s.rewriteCheckpointsLocked(checkpoints)
+}
+
+// rewriteCheckpointsLocked はロック保持済みの状態でチェックポイントを書き直します。
+// 呼び出し元がロックを保持していることが前提です。
+func (s *AIctStorage) rewriteCheckpointsLocked(checkpoints []*tracker.CheckpointV2) error {
+	checkpointsDir := filepath.Join(s.gitDir, CheckpointsDirName)
+	if err := os.MkdirAll(checkpointsDir, 0755); err != nil {
+		return err
+	}
 
 	checkpointsFile := filepath.Join(checkpointsDir, LatestFileName)
 	tmpFile := checkpointsFile + ".tmp"
@@ -386,6 +410,16 @@ func (s *AIctStorage) rewriteCheckpoints(checkpoints []*tracker.CheckpointV2) er
 	}
 
 	return nil
+}
+
+// clearCheckpointsLocked はロック保持済みの状態でチェックポイントを削除します。
+func (s *AIctStorage) clearCheckpointsLocked() error {
+	checkpointsFile := filepath.Join(s.gitDir, CheckpointsDirName, LatestFileName)
+	err := os.Remove(checkpointsFile)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	return err
 }
 
 // SaveConfig saves config.json
@@ -436,6 +470,10 @@ func validateConfig(cfg *tracker.Config) error {
 
 	if cfg.DefaultAuthor == "" {
 		return fmt.Errorf("default_author must not be empty")
+	}
+
+	if cfg.CheckpointTTLHours < 0 {
+		return fmt.Errorf("checkpoint_ttl_hours must be >= 0, got %d", cfg.CheckpointTTLHours)
 	}
 
 	return nil

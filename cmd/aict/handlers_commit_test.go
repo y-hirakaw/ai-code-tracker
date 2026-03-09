@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"strings"
@@ -375,4 +377,270 @@ func TestGetCommitDiff_VerifiesCommandArgs(t *testing.T) {
 			t.Error("expected 'show' command for initial commit, but it was not called")
 		}
 	})
+}
+
+// sha256Hex はテスト用にSHA-256ハッシュを計算するヘルパー
+func sha256Hex(content string) string {
+	h := sha256.Sum256([]byte(content))
+	return hex.EncodeToString(h[:])
+}
+
+// makeCatFileBatchOutput はcat-file --batchの出力を生成するヘルパー
+func makeCatFileBatchOutput(entries []struct{ sha, content string }) string {
+	var b strings.Builder
+	for _, e := range entries {
+		fmt.Fprintf(&b, "%s blob %d\n%s\n", e.sha, len(e.content), e.content)
+	}
+	return b.String()
+}
+
+func TestBuildParentFileHashes_Normal(t *testing.T) {
+	origExecutor := newExecutor
+	defer func() { newExecutor = origExecutor }()
+
+	content1 := "package main\n"
+	content2 := "package util\n"
+
+	mock := gitexec.NewMockExecutor()
+	mock.RunFunc = func(args ...string) (string, error) {
+		if args[0] == "rev-parse" {
+			return "parenthash", nil
+		}
+		if args[0] == "ls-tree" {
+			return "100644 blob aaa111\tmain.go\n100644 blob bbb222\tutil.go", nil
+		}
+		return "", nil
+	}
+	mock.RunWithStdinFunc = func(stdin string, args ...string) (string, error) {
+		return makeCatFileBatchOutput([]struct{ sha, content string }{
+			{"aaa111", content1},
+			{"bbb222", content2},
+		}), nil
+	}
+	newExecutor = func() gitexec.Executor { return mock }
+
+	result := buildParentFileHashes("abc123", map[string]bool{"main.go": true, "util.go": true})
+
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if len(result) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(result))
+	}
+	if result["main.go"] != sha256Hex(content1) {
+		t.Errorf("main.go hash mismatch: got %s, want %s", result["main.go"], sha256Hex(content1))
+	}
+	if result["util.go"] != sha256Hex(content2) {
+		t.Errorf("util.go hash mismatch: got %s, want %s", result["util.go"], sha256Hex(content2))
+	}
+}
+
+func TestBuildParentFileHashes_InitialCommit(t *testing.T) {
+	origExecutor := newExecutor
+	defer func() { newExecutor = origExecutor }()
+
+	mock := gitexec.NewMockExecutor()
+	mock.RunFunc = func(args ...string) (string, error) {
+		if args[0] == "rev-parse" {
+			return "", fmt.Errorf("fatal: bad revision")
+		}
+		return "", nil
+	}
+	newExecutor = func() gitexec.Executor { return mock }
+
+	result := buildParentFileHashes("abc123", map[string]bool{"main.go": true})
+	if result != nil {
+		t.Errorf("expected nil for initial commit, got %v", result)
+	}
+}
+
+func TestBuildParentFileHashes_LsTreeFail(t *testing.T) {
+	origExecutor := newExecutor
+	defer func() { newExecutor = origExecutor }()
+
+	mock := gitexec.NewMockExecutor()
+	mock.RunFunc = func(args ...string) (string, error) {
+		if args[0] == "rev-parse" {
+			return "parenthash", nil
+		}
+		if args[0] == "ls-tree" {
+			return "", fmt.Errorf("ls-tree failed")
+		}
+		return "", nil
+	}
+	newExecutor = func() gitexec.Executor { return mock }
+
+	result := buildParentFileHashes("abc123", map[string]bool{"main.go": true})
+	if result != nil {
+		t.Errorf("expected nil on ls-tree failure, got %v", result)
+	}
+}
+
+func TestBuildParentFileHashes_CatFileFail(t *testing.T) {
+	origExecutor := newExecutor
+	defer func() { newExecutor = origExecutor }()
+
+	mock := gitexec.NewMockExecutor()
+	mock.RunFunc = func(args ...string) (string, error) {
+		if args[0] == "rev-parse" {
+			return "parenthash", nil
+		}
+		if args[0] == "ls-tree" {
+			return "100644 blob aaa111\tmain.go", nil
+		}
+		return "", nil
+	}
+	mock.RunWithStdinFunc = func(stdin string, args ...string) (string, error) {
+		return "", fmt.Errorf("cat-file failed")
+	}
+	newExecutor = func() gitexec.Executor { return mock }
+
+	result := buildParentFileHashes("abc123", map[string]bool{"main.go": true})
+	if result != nil {
+		t.Errorf("expected nil on cat-file failure, got %v", result)
+	}
+}
+
+func TestBuildParentFileHashes_MaxBlobSizeSkip(t *testing.T) {
+	origExecutor := newExecutor
+	defer func() { newExecutor = origExecutor }()
+
+	smallContent := "small\n"
+	// 大きなファイルサイズをヘッダーで宣言（実際にはスキップされる）
+	bigSize := maxBlobSize + 1
+
+	mock := gitexec.NewMockExecutor()
+	mock.RunFunc = func(args ...string) (string, error) {
+		if args[0] == "rev-parse" {
+			return "parenthash", nil
+		}
+		if args[0] == "ls-tree" {
+			return "100644 blob aaa111\tbig.bin\n100644 blob bbb222\tsmall.go", nil
+		}
+		return "", nil
+	}
+	mock.RunWithStdinFunc = func(stdin string, args ...string) (string, error) {
+		// 大ファイルはヘッダーだけ＋ダミー内容、その後に小さいファイル
+		bigContent := strings.Repeat("x", bigSize)
+		var b strings.Builder
+		fmt.Fprintf(&b, "aaa111 blob %d\n%s\n", bigSize, bigContent)
+		fmt.Fprintf(&b, "bbb222 blob %d\n%s\n", len(smallContent), smallContent)
+		return b.String(), nil
+	}
+	newExecutor = func() gitexec.Executor { return mock }
+
+	result := buildParentFileHashes("abc123", map[string]bool{"big.bin": true, "small.go": true})
+
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if _, ok := result["big.bin"]; ok {
+		t.Error("big.bin should be skipped due to maxBlobSize")
+	}
+	if result["small.go"] != sha256Hex(smallContent) {
+		t.Errorf("small.go hash mismatch")
+	}
+}
+
+func TestBuildParentFileHashes_DuplicateBlobSHA(t *testing.T) {
+	origExecutor := newExecutor
+	defer func() { newExecutor = origExecutor }()
+
+	content := "same content\n"
+
+	mock := gitexec.NewMockExecutor()
+	mock.RunFunc = func(args ...string) (string, error) {
+		if args[0] == "rev-parse" {
+			return "parenthash", nil
+		}
+		if args[0] == "ls-tree" {
+			// 同一blob SHAを持つ2ファイル
+			return "100644 blob aaa111\tfile1.go\n100644 blob aaa111\tfile2.go", nil
+		}
+		return "", nil
+	}
+	mock.RunWithStdinFunc = func(stdin string, args ...string) (string, error) {
+		// 1つのblobだけ返される（重複排除済み）
+		return makeCatFileBatchOutput([]struct{ sha, content string }{
+			{"aaa111", content},
+		}), nil
+	}
+	newExecutor = func() gitexec.Executor { return mock }
+
+	result := buildParentFileHashes("abc123", map[string]bool{"file1.go": true, "file2.go": true})
+
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	expected := sha256Hex(content)
+	if result["file1.go"] != expected {
+		t.Errorf("file1.go hash mismatch")
+	}
+	if result["file2.go"] != expected {
+		t.Errorf("file2.go hash mismatch")
+	}
+}
+
+func TestBuildParentFileHashes_MissingObject(t *testing.T) {
+	origExecutor := newExecutor
+	defer func() { newExecutor = origExecutor }()
+
+	goodContent := "good\n"
+
+	mock := gitexec.NewMockExecutor()
+	mock.RunFunc = func(args ...string) (string, error) {
+		if args[0] == "rev-parse" {
+			return "parenthash", nil
+		}
+		if args[0] == "ls-tree" {
+			return "100644 blob aaa111\tmissing.go\n100644 blob bbb222\tgood.go", nil
+		}
+		return "", nil
+	}
+	mock.RunWithStdinFunc = func(stdin string, args ...string) (string, error) {
+		// missingオブジェクト + 正常なオブジェクト
+		var b strings.Builder
+		b.WriteString("aaa111 missing\n")
+		fmt.Fprintf(&b, "bbb222 blob %d\n%s\n", len(goodContent), goodContent)
+		return b.String(), nil
+	}
+	newExecutor = func() gitexec.Executor { return mock }
+
+	result := buildParentFileHashes("abc123", map[string]bool{"missing.go": true, "good.go": true})
+
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if _, ok := result["missing.go"]; ok {
+		t.Error("missing.go should not have a hash")
+	}
+	if result["good.go"] != sha256Hex(goodContent) {
+		t.Errorf("good.go hash mismatch")
+	}
+}
+
+func TestBuildParentFileHashes_EmptyLsTree(t *testing.T) {
+	origExecutor := newExecutor
+	defer func() { newExecutor = origExecutor }()
+
+	mock := gitexec.NewMockExecutor()
+	mock.RunFunc = func(args ...string) (string, error) {
+		if args[0] == "rev-parse" {
+			return "parenthash", nil
+		}
+		if args[0] == "ls-tree" {
+			return "", nil // 親コミットに該当ファイルなし
+		}
+		return "", nil
+	}
+	newExecutor = func() gitexec.Executor { return mock }
+
+	result := buildParentFileHashes("abc123", map[string]bool{"new_file.go": true})
+
+	if result == nil {
+		t.Fatal("expected non-nil (empty) map, got nil")
+	}
+	if len(result) != 0 {
+		t.Errorf("expected 0 entries, got %d", len(result))
+	}
 }

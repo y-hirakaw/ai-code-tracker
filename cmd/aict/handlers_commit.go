@@ -263,14 +263,16 @@ func buildParentFileHashes(commitHash string, changedFiles map[string]bool) map[
 		}
 
 		size, err := strconv.Atoi(headerFields[2])
-		if err != nil {
+		if err != nil || size < 0 {
 			continue
 		}
 
 		// 大ファイルはスキップ
 		if size > maxBlobSize {
-			if len(remaining) > size {
+			if len(remaining) >= size+1 {
 				remaining = remaining[size+1:]
+			} else {
+				remaining = ""
 			}
 			continue
 		}

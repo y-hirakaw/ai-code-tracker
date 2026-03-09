@@ -618,7 +618,7 @@ func TestPurgeExpiredCheckpoints(t *testing.T) {
 		t.Fatalf("SaveCheckpoint failed: %v", err)
 	}
 
-	if err := store.PurgeExpiredCheckpoints(); err != nil {
+	if err := store.PurgeExpiredCheckpoints(CheckpointTTL); err != nil {
 		t.Fatalf("PurgeExpiredCheckpoints failed: %v", err)
 	}
 
@@ -644,7 +644,7 @@ func TestPurgeExpiredCheckpoints_AllValid(t *testing.T) {
 		t.Fatalf("SaveCheckpoint failed: %v", err)
 	}
 
-	if err := store.PurgeExpiredCheckpoints(); err != nil {
+	if err := store.PurgeExpiredCheckpoints(CheckpointTTL); err != nil {
 		t.Fatalf("PurgeExpiredCheckpoints failed: %v", err)
 	}
 
@@ -753,7 +753,7 @@ func TestExpandConsumedByBaseCommit_BasicPairing(t *testing.T) {
 
 	// AI CPだけ消費済み
 	consumed := map[time.Time]bool{cpAI.Timestamp: true}
-	ExpandConsumedByBaseCommit(checkpoints, consumed)
+	expandConsumedByBaseCommit(checkpoints, consumed)
 
 	// Developer baselineもペアで消費されるべき
 	if !consumed[cpBaseline.Timestamp] {
@@ -799,7 +799,7 @@ func TestExpandConsumedByBaseCommit_DoubleStash(t *testing.T) {
 
 	// セッション1のAI CPだけ消費済み
 	consumed := map[time.Time]bool{cp1AI.Timestamp: true}
-	ExpandConsumedByBaseCommit(checkpoints, consumed)
+	expandConsumedByBaseCommit(checkpoints, consumed)
 
 	// セッション1のDev baselineは消費（main.goが重複）
 	if !consumed[cp1Dev.Timestamp] {
@@ -843,7 +843,7 @@ func TestExpandConsumedByBaseCommit_EmptyBaseCommit(t *testing.T) {
 	checkpoints := []*tracker.CheckpointV2{cp1, cp2, cp3}
 
 	consumed := map[time.Time]bool{cp2.Timestamp: true}
-	ExpandConsumedByBaseCommit(checkpoints, consumed)
+	expandConsumedByBaseCommit(checkpoints, consumed)
 
 	if !consumed[cp1.Timestamp] {
 		t.Error("cp1 should be consumed (same BaseCommit + file overlap)")
@@ -865,9 +865,122 @@ func TestExpandConsumedByBaseCommit_NoConsumed(t *testing.T) {
 	checkpoints := []*tracker.CheckpointV2{cp}
 	consumed := map[time.Time]bool{}
 
-	ExpandConsumedByBaseCommit(checkpoints, consumed)
+	expandConsumedByBaseCommit(checkpoints, consumed)
 
 	if consumed[cp.Timestamp] {
 		t.Error("Nothing should be consumed when consumed set is empty")
+	}
+}
+
+func TestLockCheckpointsFile_BasicLockUnlock(t *testing.T) {
+	store, cleanup := createTestStorage(t)
+	defer cleanup()
+
+	lockFile, err := store.lockCheckpointsFile()
+	if err != nil {
+		t.Fatalf("lockCheckpointsFile() error = %v", err)
+	}
+	if lockFile == nil {
+		t.Fatal("lockCheckpointsFile() returned nil file")
+	}
+
+	// ロック解放がパニックしないことを確認
+	unlockCheckpointsFile(lockFile)
+}
+
+func TestUnlockCheckpointsFile_Nil(t *testing.T) {
+	// nil引数でパニックしないことを確認
+	unlockCheckpointsFile(nil)
+}
+
+func TestHasFileOverlap_EmptyCheckpoint(t *testing.T) {
+	// Changes/Snapshot共に空 → 常にtrue（ベースラインマーカー）
+	cp := &tracker.CheckpointV2{
+		Changes:  map[string]tracker.Change{},
+		Snapshot: map[string]tracker.FileSnapshot{},
+	}
+	if !hasFileOverlap(cp, map[string]bool{"main.go": true}) {
+		t.Error("empty checkpoint should always match")
+	}
+}
+
+func TestHasFileOverlap_NoOverlap(t *testing.T) {
+	cp := &tracker.CheckpointV2{
+		Changes:  map[string]tracker.Change{"util.go": {Added: 5}},
+		Snapshot: map[string]tracker.FileSnapshot{"util.go": {Hash: "h1"}},
+	}
+	if hasFileOverlap(cp, map[string]bool{"main.go": true}) {
+		t.Error("should not overlap when files are different")
+	}
+}
+
+func TestHasFileOverlap_SnapshotOverlap(t *testing.T) {
+	// Changesにはないがsnapshotでオーバーラップ
+	cp := &tracker.CheckpointV2{
+		Changes:  map[string]tracker.Change{},
+		Snapshot: map[string]tracker.FileSnapshot{"main.go": {Hash: "h1", Lines: 10}},
+	}
+	if !hasFileOverlap(cp, map[string]bool{"main.go": true}) {
+		t.Error("should overlap via Snapshot")
+	}
+}
+
+func TestPurgeExpiredCheckpoints_CustomTTL_Short(t *testing.T) {
+	store, cleanup := createTestStorage(t)
+	defer cleanup()
+
+	now := time.Now()
+	// 2時間前のCP
+	old := &tracker.CheckpointV2{
+		Timestamp: now.Add(-2 * time.Hour),
+		Author:    "test",
+		Type:      tracker.AuthorTypeHuman,
+	}
+	// 直近のCP
+	recent := &tracker.CheckpointV2{
+		Timestamp: now.Add(-10 * time.Minute),
+		Author:    "test",
+		Type:      tracker.AuthorTypeHuman,
+	}
+
+	store.SaveCheckpoint(old)
+	store.SaveCheckpoint(recent)
+
+	// TTL=1時間 → 2時間前のCPは期限切れ
+	if err := store.PurgeExpiredCheckpoints(1 * time.Hour); err != nil {
+		t.Fatalf("PurgeExpiredCheckpoints failed: %v", err)
+	}
+
+	remaining, _ := store.LoadCheckpoints()
+	if len(remaining) != 1 {
+		t.Fatalf("expected 1 remaining, got %d", len(remaining))
+	}
+	// JSON丸め誤差を考慮して1秒以内で比較
+	if remaining[0].Timestamp.Sub(recent.Timestamp).Abs() > time.Second {
+		t.Errorf("recent checkpoint should remain, got timestamp diff: %v", remaining[0].Timestamp.Sub(recent.Timestamp))
+	}
+}
+
+func TestPurgeExpiredCheckpoints_CustomTTL_Long(t *testing.T) {
+	store, cleanup := createTestStorage(t)
+	defer cleanup()
+
+	now := time.Now()
+	cp := &tracker.CheckpointV2{
+		Timestamp: now.Add(-2 * time.Hour),
+		Author:    "test",
+		Type:      tracker.AuthorTypeHuman,
+	}
+
+	store.SaveCheckpoint(cp)
+
+	// TTL=48時間 → 2時間前のCPはまだ有効
+	if err := store.PurgeExpiredCheckpoints(48 * time.Hour); err != nil {
+		t.Fatalf("PurgeExpiredCheckpoints failed: %v", err)
+	}
+
+	remaining, _ := store.LoadCheckpoints()
+	if len(remaining) != 1 {
+		t.Fatalf("expected 1 remaining, got %d", len(remaining))
 	}
 }
