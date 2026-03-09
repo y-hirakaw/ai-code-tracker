@@ -291,7 +291,7 @@ func TestBuildAuthorshipMap(t *testing.T) {
 		"other.go":   true,
 	}
 
-	result := BuildAuthorshipMap([]*tracker.CheckpointV2{cpHuman, cpAI}, changedFiles)
+	result := BuildAuthorshipMap([]*tracker.CheckpointV2{cpHuman, cpAI}, changedFiles, nil)
 
 	// main.go は最後のチェックポイント（cpAI）が優先される
 	if cp, exists := result["main.go"]; !exists {
@@ -322,7 +322,7 @@ func TestBuildAuthorshipMap(t *testing.T) {
 
 func TestBuildAuthorshipMap_EmptyCheckpoints(t *testing.T) {
 	changedFiles := map[string]bool{"main.go": true}
-	result := BuildAuthorshipMap(nil, changedFiles)
+	result := BuildAuthorshipMap(nil, changedFiles, nil)
 
 	if len(result) != 0 {
 		t.Errorf("expected empty map for nil checkpoints, got %d entries", len(result))
@@ -340,13 +340,147 @@ func TestBuildAuthorshipMap_FiltersByChangedFiles(t *testing.T) {
 	}
 
 	changedFiles := map[string]bool{"tracked.go": true}
-	result := BuildAuthorshipMap([]*tracker.CheckpointV2{cp}, changedFiles)
+	result := BuildAuthorshipMap([]*tracker.CheckpointV2{cp}, changedFiles, nil)
 
 	if _, exists := result["tracked.go"]; !exists {
 		t.Error("tracked.go should be in result")
 	}
 	if _, exists := result["untracked.go"]; exists {
 		t.Error("untracked.go should NOT be in result (not in changedFiles)")
+	}
+}
+
+func TestBuildAuthorshipMap_SnapshotFallback(t *testing.T) {
+	// Phase 1 失敗 + Phase 2 成功: Changes にファイルがないが Snapshot にはある（stash/pop シナリオ）
+	cp := &tracker.CheckpointV2{
+		Timestamp: time.Now(),
+		Author:    "Claude Code",
+		Type:      tracker.AuthorTypeAI,
+		Changes:   map[string]tracker.Change{}, // Changes は空（stash/pop で Changes がずれた）
+		Snapshot: map[string]tracker.FileSnapshot{
+			"main.go": {Hash: "abc123hash", Lines: 50},
+		},
+	}
+
+	changedFiles := map[string]bool{"main.go": true}
+	parentSnapshot := map[string]string{
+		"main.go": "old_parent_hash", // 親のハッシュと異なる → 変更あり
+	}
+
+	result := BuildAuthorshipMap([]*tracker.CheckpointV2{cp}, changedFiles, parentSnapshot)
+
+	if _, exists := result["main.go"]; !exists {
+		t.Error("main.go should be matched via Phase 2 snapshot fallback")
+	} else if result["main.go"].Author != "Claude Code" {
+		t.Errorf("main.go author = %q, want %q", result["main.go"].Author, "Claude Code")
+	}
+}
+
+func TestBuildAuthorshipMap_SnapshotNoMatch(t *testing.T) {
+	// Phase 1・2 ともに失敗: Snapshot のハッシュが親と同じ
+	cp := &tracker.CheckpointV2{
+		Timestamp: time.Now(),
+		Author:    "Claude Code",
+		Type:      tracker.AuthorTypeAI,
+		Changes:   map[string]tracker.Change{},
+		Snapshot: map[string]tracker.FileSnapshot{
+			"main.go": {Hash: "same_hash", Lines: 50},
+		},
+	}
+
+	changedFiles := map[string]bool{"main.go": true}
+	parentSnapshot := map[string]string{
+		"main.go": "same_hash", // 親のハッシュと同じ → このCPは変更していない
+	}
+
+	result := BuildAuthorshipMap([]*tracker.CheckpointV2{cp}, changedFiles, parentSnapshot)
+
+	if _, exists := result["main.go"]; exists {
+		t.Error("main.go should NOT be matched (snapshot hash equals parent)")
+	}
+}
+
+func TestFindCheckpointBySnapshot(t *testing.T) {
+	t.Run("changed file", func(t *testing.T) {
+		cp := &tracker.CheckpointV2{
+			Author: "AI",
+			Snapshot: map[string]tracker.FileSnapshot{
+				"file.go": {Hash: "new_hash"},
+			},
+		}
+		parentSnap := map[string]string{"file.go": "old_hash"}
+
+		result := findCheckpointBySnapshot([]*tracker.CheckpointV2{cp}, "file.go", parentSnap)
+		if result == nil {
+			t.Error("should find checkpoint for changed file")
+		}
+	})
+
+	t.Run("new file", func(t *testing.T) {
+		cp := &tracker.CheckpointV2{
+			Author: "AI",
+			Snapshot: map[string]tracker.FileSnapshot{
+				"new.go": {Hash: "some_hash"},
+			},
+		}
+		parentSnap := map[string]string{} // 親にファイルなし
+
+		result := findCheckpointBySnapshot([]*tracker.CheckpointV2{cp}, "new.go", parentSnap)
+		if result == nil {
+			t.Error("should find checkpoint for new file")
+		}
+	})
+
+	t.Run("unchanged file", func(t *testing.T) {
+		cp := &tracker.CheckpointV2{
+			Author: "AI",
+			Snapshot: map[string]tracker.FileSnapshot{
+				"file.go": {Hash: "same_hash"},
+			},
+		}
+		parentSnap := map[string]string{"file.go": "same_hash"}
+
+		result := findCheckpointBySnapshot([]*tracker.CheckpointV2{cp}, "file.go", parentSnap)
+		if result != nil {
+			t.Error("should NOT find checkpoint for unchanged file")
+		}
+	})
+
+	t.Run("file not in snapshot", func(t *testing.T) {
+		cp := &tracker.CheckpointV2{
+			Author:   "AI",
+			Snapshot: map[string]tracker.FileSnapshot{},
+		}
+		parentSnap := map[string]string{"file.go": "old_hash"}
+
+		result := findCheckpointBySnapshot([]*tracker.CheckpointV2{cp}, "file.go", parentSnap)
+		if result != nil {
+			t.Error("should NOT find checkpoint when file not in snapshot")
+		}
+	})
+}
+
+func TestFindCheckpointBySnapshot_LastWins(t *testing.T) {
+	cpOld := &tracker.CheckpointV2{
+		Author: "Human",
+		Snapshot: map[string]tracker.FileSnapshot{
+			"file.go": {Hash: "hash_v1"},
+		},
+	}
+	cpNew := &tracker.CheckpointV2{
+		Author: "AI",
+		Snapshot: map[string]tracker.FileSnapshot{
+			"file.go": {Hash: "hash_v2"},
+		},
+	}
+	parentSnap := map[string]string{"file.go": "old_hash"}
+
+	result := findCheckpointBySnapshot([]*tracker.CheckpointV2{cpOld, cpNew}, "file.go", parentSnap)
+	if result == nil {
+		t.Fatal("should find a checkpoint")
+	}
+	if result.Author != "AI" {
+		t.Errorf("should prefer last checkpoint, got %q", result.Author)
 	}
 }
 

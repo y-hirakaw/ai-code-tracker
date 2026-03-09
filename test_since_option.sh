@@ -136,7 +136,7 @@ echo ""
 # Test 9: JSON output format with --since
 echo "Test 9: JSON output format with --since"
 OUTPUT=$(./bin/aict report --since 7d --format json 2>&1)
-if echo "$OUTPUT" | grep -q -E '("range"|No commits found)'; then
+if echo "$OUTPUT" | grep -qi -E '("range"|no commits found)'; then
     pass "JSON format with --since works"
 else
     fail "JSON format with --since failed" "$OUTPUT"
@@ -147,7 +147,7 @@ echo ""
 echo "Test 10: Very old date - '10 years ago'"
 OUTPUT=$(./bin/aict report --since '10 years ago' 2>&1)
 # Should either show commits or "No commits found"
-if echo "$OUTPUT" | grep -q -E "(AI Code Generation Report|No commits found)"; then
+if echo "$OUTPUT" | grep -qi -E "(AI Code Generation Report|no commits found)"; then
     pass "Very old date handled gracefully"
 else
     fail "Very old date handling failed" "$OUTPUT"
@@ -207,7 +207,7 @@ echo ""
 # Test 14: Real-world scenario - Sprint review (2 weeks)
 echo "Test 14: Real-world scenario - Sprint review (2 weeks)"
 OUTPUT=$(./bin/aict report --since 2w 2>&1)
-if echo "$OUTPUT" | grep -q -E "(AI Code Generation Report|No commits found)"; then
+if echo "$OUTPUT" | grep -qi -E "(AI Code Generation Report|no commits found)"; then
     pass "Sprint review scenario (2w) works"
     info "  Use case: 2-week sprint retrospective"
 else
@@ -218,7 +218,7 @@ echo ""
 # Test 15: Real-world scenario - Daily standup (1 day)
 echo "Test 15: Real-world scenario - Daily standup (1 day)"
 OUTPUT=$(./bin/aict report --since 1d 2>&1)
-if echo "$OUTPUT" | grep -q -E "(AI Code Generation Report|No commits found)"; then
+if echo "$OUTPUT" | grep -qi -E "(AI Code Generation Report|no commits found)"; then
     pass "Daily standup scenario (1d) works"
     info "  Use case: Daily development review"
 else
@@ -229,7 +229,7 @@ echo ""
 # Test 16: Real-world scenario - Monthly release (1 month)
 echo "Test 16: Real-world scenario - Monthly release (1 month)"
 OUTPUT=$(./bin/aict report --since 1m 2>&1)
-if echo "$OUTPUT" | grep -q -E "(AI Code Generation Report|No commits found)"; then
+if echo "$OUTPUT" | grep -qi -E "(AI Code Generation Report|no commits found)"; then
     pass "Monthly release scenario (1m) works"
     info "  Use case: Monthly release retrospective"
 else

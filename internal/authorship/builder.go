@@ -7,10 +7,16 @@ import (
 )
 
 // BuildAuthorshipMap はチェックポイントから filepath -> author のマップを構築します。
-// 各ファイルについて最後に変更したチェックポイントが優先されます。
-func BuildAuthorshipMap(checkpoints []*tracker.CheckpointV2, changedFiles map[string]bool) map[string]*tracker.CheckpointV2 {
+// 照合戦略:
+//
+//	Phase 1: cp.Changes のファイルパスと changedFiles の完全一致（既存動作）
+//	Phase 2: cp.Snapshot のハッシュと commitParentSnapshot の比較（stash/restore対応）
+//
+// commitParentSnapshot が nil の場合は Phase 1 のみ実行します（後方互換）。
+func BuildAuthorshipMap(checkpoints []*tracker.CheckpointV2, changedFiles map[string]bool, commitParentSnapshot map[string]string) map[string]*tracker.CheckpointV2 {
 	authorMap := make(map[string]*tracker.CheckpointV2)
 
+	// Phase 1: ファイルパス完全一致（既存ロジック）
 	for _, cp := range checkpoints {
 		for fpath := range cp.Changes {
 			if changedFiles[fpath] {
@@ -19,7 +25,48 @@ func BuildAuthorshipMap(checkpoints []*tracker.CheckpointV2, changedFiles map[st
 		}
 	}
 
+	// Phase 2: Snapshot ハッシュベース照合（stash/restore対応）
+	if commitParentSnapshot != nil {
+		for fpath := range changedFiles {
+			if _, alreadyMatched := authorMap[fpath]; alreadyMatched {
+				continue
+			}
+			if bestCP := findCheckpointBySnapshot(checkpoints, fpath, commitParentSnapshot); bestCP != nil {
+				authorMap[fpath] = bestCP
+			}
+		}
+	}
+
 	return authorMap
+}
+
+// findCheckpointBySnapshot は Snapshot のハッシュを使ってファイルを変更したチェックポイントを逆順に探索します。
+// 照合条件:
+//  1. チェックポイントの Snapshot に対象ファイルが存在する
+//  2. そのハッシュが commitParentSnapshot のハッシュと異なる（= 変更の証拠）
+//  3. commitParentSnapshot に対象ファイルが存在しない場合は新規ファイルと見なす
+func findCheckpointBySnapshot(checkpoints []*tracker.CheckpointV2, targetFile string, commitParentSnapshot map[string]string) *tracker.CheckpointV2 {
+	parentHash, parentExists := commitParentSnapshot[targetFile]
+
+	for i := len(checkpoints) - 1; i >= 0; i-- {
+		cp := checkpoints[i]
+		snap, snapExists := cp.Snapshot[targetFile]
+		if !snapExists {
+			continue
+		}
+
+		if !parentExists {
+			// 親コミットにファイルが存在しない = 新規ファイル
+			return cp
+		}
+
+		if snap.Hash != parentHash {
+			// このチェックポイント時点のファイル状態が親コミットと異なる
+			return cp
+		}
+	}
+
+	return nil
 }
 
 // BuildAuthorshipLogFromDiff はdiffとauthorshipマッピングからAuthorship Logを作成します。

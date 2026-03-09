@@ -7,9 +7,14 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
 )
+
+// CheckpointTTL はチェックポイントの有効期限（24時間）。
+// stash等で長期間放置されたチェックポイントの誤照合を防止する。
+const CheckpointTTL = 24 * time.Hour
 
 const (
 	AictDirName        = "aict"
@@ -164,6 +169,94 @@ func (s *AIctStorage) ClearCheckpoints() error {
 		return nil // Already cleared
 	}
 	return err
+}
+
+// RemoveConsumedCheckpoints は照合で使用されたチェックポイントのみを削除し、
+// 未使用のチェックポイントを残します（stash退避中の変更の保全用）。
+func (s *AIctStorage) RemoveConsumedCheckpoints(consumedTimestamps map[time.Time]bool) error {
+	if len(consumedTimestamps) == 0 {
+		return nil
+	}
+
+	checkpoints, err := s.LoadCheckpoints()
+	if err != nil {
+		return err
+	}
+
+	var remaining []*tracker.CheckpointV2
+	for _, cp := range checkpoints {
+		if !consumedTimestamps[cp.Timestamp] {
+			remaining = append(remaining, cp)
+		}
+	}
+
+	if len(remaining) == 0 {
+		return s.ClearCheckpoints()
+	}
+
+	return s.rewriteCheckpoints(remaining)
+}
+
+// PurgeExpiredCheckpoints はTTLを超えた古いチェックポイントを削除します。
+func (s *AIctStorage) PurgeExpiredCheckpoints() error {
+	checkpoints, err := s.LoadCheckpoints()
+	if err != nil {
+		return err
+	}
+	if len(checkpoints) == 0 {
+		return nil
+	}
+
+	now := time.Now()
+	var valid []*tracker.CheckpointV2
+	for _, cp := range checkpoints {
+		if now.Sub(cp.Timestamp) < CheckpointTTL {
+			valid = append(valid, cp)
+		}
+	}
+
+	if len(valid) == len(checkpoints) {
+		return nil // 全て有効期限内
+	}
+
+	if len(valid) == 0 {
+		return s.ClearCheckpoints()
+	}
+
+	return s.rewriteCheckpoints(valid)
+}
+
+// rewriteCheckpoints はチェックポイントリストをJSONL形式で書き直します。
+// 一時ファイル + rename パターンでクラッシュ安全性を確保。
+func (s *AIctStorage) rewriteCheckpoints(checkpoints []*tracker.CheckpointV2) error {
+	checkpointsDir := filepath.Join(s.gitDir, CheckpointsDirName)
+	if err := os.MkdirAll(checkpointsDir, 0755); err != nil {
+		return err
+	}
+
+	checkpointsFile := filepath.Join(checkpointsDir, LatestFileName)
+	tmpFile := checkpointsFile + ".tmp"
+
+	var buf bytes.Buffer
+	for _, cp := range checkpoints {
+		line, err := json.Marshal(cp)
+		if err != nil {
+			return fmt.Errorf("marshal checkpoint: %w", err)
+		}
+		buf.Write(line)
+		buf.WriteByte('\n')
+	}
+
+	if err := os.WriteFile(tmpFile, buf.Bytes(), 0644); err != nil {
+		return fmt.Errorf("write temp file: %w", err)
+	}
+
+	if err := os.Rename(tmpFile, checkpointsFile); err != nil {
+		os.Remove(tmpFile)
+		return fmt.Errorf("rename temp file: %w", err)
+	}
+
+	return nil
 }
 
 // SaveConfig saves config.json

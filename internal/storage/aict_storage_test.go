@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -507,6 +508,182 @@ func TestAIctStorageConfig(t *testing.T) {
 	}
 }
 
+
+func createTestStorage(t *testing.T) (*AIctStorage, func()) {
+	t.Helper()
+	tmpDir := t.TempDir()
+	gitDir := filepath.Join(tmpDir, ".git")
+	if err := os.MkdirAll(gitDir, 0755); err != nil {
+		t.Fatalf("Failed to create .git directory: %v", err)
+	}
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current directory: %v", err)
+	}
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("Failed to change directory: %v", err)
+	}
+	store, err := NewAIctStorage()
+	if err != nil {
+		os.Chdir(oldDir)
+		t.Fatalf("NewAIctStorage failed: %v", err)
+	}
+	return store, func() { os.Chdir(oldDir) }
+}
+
+func TestRemoveConsumedCheckpoints(t *testing.T) {
+	store, cleanup := createTestStorage(t)
+	defer cleanup()
+
+	now := time.Now()
+	// 3つのチェックポイントを保存
+	for i, offset := range []time.Duration{-3 * time.Minute, -2 * time.Minute, -1 * time.Minute} {
+		cp := &tracker.CheckpointV2{
+			Timestamp: now.Add(offset),
+			Author:    fmt.Sprintf("author%d", i),
+			Type:      tracker.AuthorTypeHuman,
+		}
+		if err := store.SaveCheckpoint(cp); err != nil {
+			t.Fatalf("SaveCheckpoint failed: %v", err)
+		}
+	}
+
+	// LoadCheckpoints で JSON round-trip 後の timestamp を使う（monotonic clock 除去済み）
+	loaded, err := store.LoadCheckpoints()
+	if err != nil {
+		t.Fatalf("LoadCheckpoints failed: %v", err)
+	}
+
+	// author0 と author2 を消費済みとしてマーク → author1 だけ残る
+	consumed := map[time.Time]bool{
+		loaded[0].Timestamp: true,
+		loaded[2].Timestamp: true,
+	}
+	if err := store.RemoveConsumedCheckpoints(consumed); err != nil {
+		t.Fatalf("RemoveConsumedCheckpoints failed: %v", err)
+	}
+
+	remaining, err := store.LoadCheckpoints()
+	if err != nil {
+		t.Fatalf("LoadCheckpoints failed: %v", err)
+	}
+	if len(remaining) != 1 {
+		t.Fatalf("Expected 1 remaining checkpoint, got %d", len(remaining))
+	}
+	if remaining[0].Author != "author1" {
+		t.Errorf("Expected remaining author 'author1', got %q", remaining[0].Author)
+	}
+}
+
+func TestRemoveConsumedCheckpoints_Empty(t *testing.T) {
+	store, cleanup := createTestStorage(t)
+	defer cleanup()
+
+	cp := &tracker.CheckpointV2{Timestamp: time.Now(), Author: "test", Type: tracker.AuthorTypeHuman}
+	if err := store.SaveCheckpoint(cp); err != nil {
+		t.Fatalf("SaveCheckpoint failed: %v", err)
+	}
+
+	// 空のtimestampセット → 何も消えない
+	if err := store.RemoveConsumedCheckpoints(map[time.Time]bool{}); err != nil {
+		t.Fatalf("RemoveConsumedCheckpoints failed: %v", err)
+	}
+
+	remaining, _ := store.LoadCheckpoints()
+	if len(remaining) != 1 {
+		t.Errorf("Expected 1 checkpoint (nothing consumed), got %d", len(remaining))
+	}
+}
+
+func TestPurgeExpiredCheckpoints(t *testing.T) {
+	store, cleanup := createTestStorage(t)
+	defer cleanup()
+
+	// 期限切れ（25時間前）と有効（1分前）のチェックポイント
+	expired := &tracker.CheckpointV2{
+		Timestamp: time.Now().Add(-25 * time.Hour),
+		Author:    "old",
+		Type:      tracker.AuthorTypeAI,
+	}
+	valid := &tracker.CheckpointV2{
+		Timestamp: time.Now().Add(-1 * time.Minute),
+		Author:    "new",
+		Type:      tracker.AuthorTypeAI,
+	}
+	if err := store.SaveCheckpoint(expired); err != nil {
+		t.Fatalf("SaveCheckpoint failed: %v", err)
+	}
+	if err := store.SaveCheckpoint(valid); err != nil {
+		t.Fatalf("SaveCheckpoint failed: %v", err)
+	}
+
+	if err := store.PurgeExpiredCheckpoints(); err != nil {
+		t.Fatalf("PurgeExpiredCheckpoints failed: %v", err)
+	}
+
+	remaining, _ := store.LoadCheckpoints()
+	if len(remaining) != 1 {
+		t.Fatalf("Expected 1 remaining (valid), got %d", len(remaining))
+	}
+	if remaining[0].Author != "new" {
+		t.Errorf("Expected remaining author 'new', got %q", remaining[0].Author)
+	}
+}
+
+func TestPurgeExpiredCheckpoints_AllValid(t *testing.T) {
+	store, cleanup := createTestStorage(t)
+	defer cleanup()
+
+	cp := &tracker.CheckpointV2{
+		Timestamp: time.Now(),
+		Author:    "recent",
+		Type:      tracker.AuthorTypeHuman,
+	}
+	if err := store.SaveCheckpoint(cp); err != nil {
+		t.Fatalf("SaveCheckpoint failed: %v", err)
+	}
+
+	if err := store.PurgeExpiredCheckpoints(); err != nil {
+		t.Fatalf("PurgeExpiredCheckpoints failed: %v", err)
+	}
+
+	remaining, _ := store.LoadCheckpoints()
+	if len(remaining) != 1 {
+		t.Errorf("Expected 1 checkpoint (all valid), got %d", len(remaining))
+	}
+}
+
+func TestRewriteCheckpoints(t *testing.T) {
+	store, cleanup := createTestStorage(t)
+	defer cleanup()
+
+	// 3つ保存して2つに書き換え
+	for i := 0; i < 3; i++ {
+		cp := &tracker.CheckpointV2{
+			Timestamp: time.Now().Add(time.Duration(i) * time.Minute),
+			Author:    "test",
+			Type:      tracker.AuthorTypeHuman,
+		}
+		if err := store.SaveCheckpoint(cp); err != nil {
+			t.Fatalf("SaveCheckpoint failed: %v", err)
+		}
+	}
+
+	all, _ := store.LoadCheckpoints()
+	if len(all) != 3 {
+		t.Fatalf("Expected 3 checkpoints, got %d", len(all))
+	}
+
+	// 最初の2つだけ書き戻す
+	if err := store.rewriteCheckpoints(all[:2]); err != nil {
+		t.Fatalf("rewriteCheckpoints failed: %v", err)
+	}
+
+	remaining, _ := store.LoadCheckpoints()
+	if len(remaining) != 2 {
+		t.Errorf("Expected 2 checkpoints after rewrite, got %d", len(remaining))
+	}
+}
 
 func TestGetAictDir(t *testing.T) {
 	tmpDir := t.TempDir()

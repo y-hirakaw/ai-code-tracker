@@ -99,14 +99,18 @@ func handleCheckpoint() error {
 		debugf("Checkpoint: author=%s, files=%d, changes=%v", authorName, len(changes), getFileList(changes))
 	}
 
+	// 現在のHEADコミットハッシュを取得（stash対応の鮮度検証用）
+	currentHead, _ := executor.Run("rev-parse", "HEAD")
+
 	// チェックポイントを作成
 	checkpoint := &tracker.CheckpointV2{
-		Timestamp: time.Now(),
-		Author:    authorName,
-		Type:      authorType,
-		Metadata:  make(map[string]string),
-		Changes:   changes,
-		Snapshot:  currentSnapshot,
+		Timestamp:  time.Now(),
+		Author:     authorName,
+		Type:       authorType,
+		Metadata:   make(map[string]string),
+		Changes:    changes,
+		Snapshot:   currentSnapshot,
+		BaseCommit: currentHead,
 	}
 
 	// メタデータを追加
