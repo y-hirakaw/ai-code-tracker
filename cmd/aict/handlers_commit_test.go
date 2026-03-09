@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/y-hirakaw/ai-code-tracker/internal/gitexec"
 	"github.com/y-hirakaw/ai-code-tracker/internal/testutil"
@@ -268,6 +269,40 @@ func TestGetCommitDiff(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestCollectConsumedTimestamps(t *testing.T) {
+	now := time.Now()
+	ts1 := now.Add(-2 * time.Minute)
+	ts2 := now.Add(-1 * time.Minute)
+
+	cp1 := &tracker.CheckpointV2{Timestamp: ts1, Author: "Claude", Type: tracker.AuthorTypeAI}
+	cp2 := &tracker.CheckpointV2{Timestamp: ts2, Author: "Claude", Type: tracker.AuthorTypeAI}
+
+	authorMap := map[string]*tracker.CheckpointV2{
+		"main.go": cp1,
+		"util.go": cp2,
+		"lib.go":  cp1, // 同じCPが複数ファイルで使用
+	}
+
+	result := collectConsumedTimestamps(authorMap)
+
+	if len(result) != 2 {
+		t.Fatalf("Expected 2 unique timestamps, got %d", len(result))
+	}
+	if !result[ts1] {
+		t.Error("Expected ts1 to be in consumed set")
+	}
+	if !result[ts2] {
+		t.Error("Expected ts2 to be in consumed set")
+	}
+}
+
+func TestCollectConsumedTimestamps_Empty(t *testing.T) {
+	result := collectConsumedTimestamps(map[string]*tracker.CheckpointV2{})
+	if len(result) != 0 {
+		t.Errorf("Expected empty result, got %d entries", len(result))
 	}
 }
 

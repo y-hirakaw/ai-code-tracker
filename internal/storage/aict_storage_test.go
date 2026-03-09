@@ -536,12 +536,13 @@ func TestRemoveConsumedCheckpoints(t *testing.T) {
 	defer cleanup()
 
 	now := time.Now()
-	// 3つのチェックポイントを保存
+	// 3つのチェックポイントを保存（異なるBaseCommitで独立）
 	for i, offset := range []time.Duration{-3 * time.Minute, -2 * time.Minute, -1 * time.Minute} {
 		cp := &tracker.CheckpointV2{
-			Timestamp: now.Add(offset),
-			Author:    fmt.Sprintf("author%d", i),
-			Type:      tracker.AuthorTypeHuman,
+			Timestamp:  now.Add(offset),
+			Author:     fmt.Sprintf("author%d", i),
+			Type:       tracker.AuthorTypeHuman,
+			BaseCommit: fmt.Sprintf("abc%d", i),
 		}
 		if err := store.SaveCheckpoint(cp); err != nil {
 			t.Fatalf("SaveCheckpoint failed: %v", err)
@@ -727,5 +728,146 @@ func TestGetAictDir(t *testing.T) {
 		t.Errorf("GetAictDir() directory does not exist: %v", err)
 	} else if !info.IsDir() {
 		t.Errorf("GetAictDir() path is not a directory")
+	}
+}
+
+func TestExpandConsumedByBaseCommit_BasicPairing(t *testing.T) {
+	now := time.Now()
+	// Developer baseline (empty Changes) + AI edit のペア
+	cpBaseline := &tracker.CheckpointV2{
+		Timestamp:  now.Add(-2 * time.Minute),
+		Author:     "Developer",
+		Type:       tracker.AuthorTypeHuman,
+		BaseCommit: "abc123",
+		Snapshot:   map[string]tracker.FileSnapshot{"main.go": {Hash: "h1", Lines: 10}},
+	}
+	cpAI := &tracker.CheckpointV2{
+		Timestamp:  now.Add(-1 * time.Minute),
+		Author:     "Claude",
+		Type:       tracker.AuthorTypeAI,
+		BaseCommit: "abc123",
+		Changes:    map[string]tracker.Change{"main.go": {Added: 5}},
+		Snapshot:   map[string]tracker.FileSnapshot{"main.go": {Hash: "h2", Lines: 15}},
+	}
+	checkpoints := []*tracker.CheckpointV2{cpBaseline, cpAI}
+
+	// AI CPだけ消費済み
+	consumed := map[time.Time]bool{cpAI.Timestamp: true}
+	ExpandConsumedByBaseCommit(checkpoints, consumed)
+
+	// Developer baselineもペアで消費されるべき
+	if !consumed[cpBaseline.Timestamp] {
+		t.Error("Developer baseline should be consumed as pair with AI checkpoint")
+	}
+}
+
+func TestExpandConsumedByBaseCommit_DoubleStash(t *testing.T) {
+	now := time.Now()
+	// stashセッション1: main.go を編集
+	cp1Dev := &tracker.CheckpointV2{
+		Timestamp:  now.Add(-4 * time.Minute),
+		Author:     "Developer",
+		Type:       tracker.AuthorTypeHuman,
+		BaseCommit: "abc123",
+		Snapshot:   map[string]tracker.FileSnapshot{"main.go": {Hash: "h1"}},
+	}
+	cp1AI := &tracker.CheckpointV2{
+		Timestamp:  now.Add(-3 * time.Minute),
+		Author:     "Claude",
+		Type:       tracker.AuthorTypeAI,
+		BaseCommit: "abc123",
+		Changes:    map[string]tracker.Change{"main.go": {Added: 5}},
+		Snapshot:   map[string]tracker.FileSnapshot{"main.go": {Hash: "h2"}},
+	}
+	// stashセッション2: util.go を編集（同じBaseCommitだが別ファイル）
+	cp2Dev := &tracker.CheckpointV2{
+		Timestamp:  now.Add(-2 * time.Minute),
+		Author:     "Developer",
+		Type:       tracker.AuthorTypeHuman,
+		BaseCommit: "abc123",
+		Snapshot:   map[string]tracker.FileSnapshot{"util.go": {Hash: "h3"}},
+	}
+	cp2AI := &tracker.CheckpointV2{
+		Timestamp:  now.Add(-1 * time.Minute),
+		Author:     "Claude",
+		Type:       tracker.AuthorTypeAI,
+		BaseCommit: "abc123",
+		Changes:    map[string]tracker.Change{"util.go": {Added: 3}},
+		Snapshot:   map[string]tracker.FileSnapshot{"util.go": {Hash: "h4"}},
+	}
+	checkpoints := []*tracker.CheckpointV2{cp1Dev, cp1AI, cp2Dev, cp2AI}
+
+	// セッション1のAI CPだけ消費済み
+	consumed := map[time.Time]bool{cp1AI.Timestamp: true}
+	ExpandConsumedByBaseCommit(checkpoints, consumed)
+
+	// セッション1のDev baselineは消費（main.goが重複）
+	if !consumed[cp1Dev.Timestamp] {
+		t.Error("Session 1 Developer baseline should be consumed (file overlap)")
+	}
+	// セッション2は消費されない（util.goはmain.goと重複しない）
+	if consumed[cp2Dev.Timestamp] {
+		t.Error("Session 2 Developer baseline should NOT be consumed (no file overlap)")
+	}
+	if consumed[cp2AI.Timestamp] {
+		t.Error("Session 2 AI checkpoint should NOT be consumed (no file overlap)")
+	}
+}
+
+func TestExpandConsumedByBaseCommit_EmptyBaseCommit(t *testing.T) {
+	now := time.Now()
+	// 初回コミット前のチェックポイント（BaseCommit=""）
+	cp1 := &tracker.CheckpointV2{
+		Timestamp:  now.Add(-2 * time.Minute),
+		Author:     "Developer",
+		Type:       tracker.AuthorTypeHuman,
+		BaseCommit: "",
+		Snapshot:   map[string]tracker.FileSnapshot{"main.go": {Hash: "h1"}},
+	}
+	cp2 := &tracker.CheckpointV2{
+		Timestamp:  now.Add(-1 * time.Minute),
+		Author:     "Claude",
+		Type:       tracker.AuthorTypeAI,
+		BaseCommit: "",
+		Changes:    map[string]tracker.Change{"main.go": {Added: 10}},
+		Snapshot:   map[string]tracker.FileSnapshot{"main.go": {Hash: "h2"}},
+	}
+	// 別ファイル（BaseCommit=""だがファイル重複なし）
+	cp3 := &tracker.CheckpointV2{
+		Timestamp:  now.Add(-30 * time.Second),
+		Author:     "Developer",
+		Type:       tracker.AuthorTypeHuman,
+		BaseCommit: "",
+		Snapshot:   map[string]tracker.FileSnapshot{"other.go": {Hash: "h3"}},
+	}
+	checkpoints := []*tracker.CheckpointV2{cp1, cp2, cp3}
+
+	consumed := map[time.Time]bool{cp2.Timestamp: true}
+	ExpandConsumedByBaseCommit(checkpoints, consumed)
+
+	if !consumed[cp1.Timestamp] {
+		t.Error("cp1 should be consumed (same BaseCommit + file overlap)")
+	}
+	if consumed[cp3.Timestamp] {
+		t.Error("cp3 should NOT be consumed (same BaseCommit but no file overlap)")
+	}
+}
+
+func TestExpandConsumedByBaseCommit_NoConsumed(t *testing.T) {
+	now := time.Now()
+	cp := &tracker.CheckpointV2{
+		Timestamp:  now,
+		Author:     "Developer",
+		Type:       tracker.AuthorTypeHuman,
+		BaseCommit: "abc123",
+		Changes:    map[string]tracker.Change{"main.go": {Added: 5}},
+	}
+	checkpoints := []*tracker.CheckpointV2{cp}
+	consumed := map[time.Time]bool{}
+
+	ExpandConsumedByBaseCommit(checkpoints, consumed)
+
+	if consumed[cp.Timestamp] {
+		t.Error("Nothing should be consumed when consumed set is empty")
 	}
 }

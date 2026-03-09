@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/y-hirakaw/ai-code-tracker/internal/authorship"
@@ -42,8 +44,8 @@ func handleCommit() error {
 	if len(changedFiles) == 0 {
 		fmt.Println("No tracked files changed in this commit")
 		// TTL超過チェックポイントのみ消去（stash保全のため全削除はしない）
-		if store != nil {
-			_ = store.PurgeExpiredCheckpoints()
+		if store != nil && cfg != nil {
+			_ = store.PurgeExpiredCheckpoints(cfg.GetCheckpointTTL())
 		}
 		return nil
 	}
@@ -100,14 +102,11 @@ func handleCommit() error {
 
 	// 使用済みチェックポイントのみ選択的に削除（stash対応）
 	consumedTimestamps := collectConsumedTimestamps(authorshipMap)
-	// 同じBaseCommitを共有するチェックポイントもペアで消費
-	// （例: Developer baseline + AI editのペア）
-	expandConsumedByBaseCommit(checkpoints, consumedTimestamps)
 	if err := store.RemoveConsumedCheckpoints(consumedTimestamps); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to remove consumed checkpoints: %v\n", err)
 	}
 	// 有効期限切れチェックポイントの自動消去
-	if err := store.PurgeExpiredCheckpoints(); err != nil {
+	if err := store.PurgeExpiredCheckpoints(cfg.GetCheckpointTTL()); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to purge expired checkpoints: %v\n", err)
 	}
 
@@ -171,8 +170,12 @@ func getCommitDiff(commitHash string) (map[string]tracker.Change, error) {
 	return diffMap, nil
 }
 
+// maxBlobSize はbuildParentFileHashesで処理する最大ファイルサイズ（10MB）。
+// これを超えるファイル（バイナリ等）はスキップしてメモリ圧迫を防止。
+const maxBlobSize = 10 * 1024 * 1024
+
 // buildParentFileHashes はコミット親(HEAD~1)の各ファイルのSHA-256ハッシュを取得します。
-// Snapshot ベースの照合（Phase 2）でのみ使用。
+// git ls-tree + git cat-file --batch で2プロセスにバッチ化（N+1問題の解消）。
 // 初回コミットの場合は nil を返します。
 func buildParentFileHashes(commitHash string, changedFiles map[string]bool) map[string]string {
 	executor := newExecutor()
@@ -183,15 +186,109 @@ func buildParentFileHashes(commitHash string, changedFiles map[string]bool) map[
 		return nil // 初回コミット: Phase 2 無効化
 	}
 
-	hashes := make(map[string]string, len(changedFiles))
-	for fpath := range changedFiles {
-		content, err := executor.Run("show", fmt.Sprintf("%s~1:%s", commitHash, fpath))
-		if err != nil {
-			continue // 親コミットに存在しないファイル（新規追加）
-		}
-		hash := sha256.Sum256([]byte(content))
-		hashes[fpath] = hex.EncodeToString(hash[:])
+	// Step 1: 親コミットのls-treeでblob SHA一覧を取得（1プロセス）
+	fileList := make([]string, 0, len(changedFiles))
+	for f := range changedFiles {
+		fileList = append(fileList, f)
 	}
+	lsTreeArgs := append([]string{"ls-tree", commitHash + "~1", "--"}, fileList...)
+	lsTreeOutput, err := executor.Run(lsTreeArgs...)
+	if err != nil {
+		debugf("ls-tree failed, falling back: %v", err)
+		return nil
+	}
+
+	// ls-tree出力をパース: "100644 blob <sha>\t<path>"
+	type blobEntry struct {
+		sha  string
+		path string
+	}
+	var entries []blobEntry
+	blobToFiles := make(map[string][]string) // 同一内容の複数ファイル対応
+	for _, line := range strings.Split(lsTreeOutput, "\n") {
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "\t", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		fields := strings.Fields(parts[0])
+		if len(fields) != 3 || fields[1] != "blob" {
+			continue
+		}
+		blobSHA := fields[2]
+		filePath := parts[1]
+		entries = append(entries, blobEntry{sha: blobSHA, path: filePath})
+		blobToFiles[blobSHA] = append(blobToFiles[blobSHA], filePath)
+	}
+
+	if len(entries) == 0 {
+		return make(map[string]string)
+	}
+
+	// Step 2: cat-file --batchで全blobの内容を一括取得（1プロセス）
+	// 重複blob SHAを排除
+	seen := make(map[string]bool)
+	var uniqueSHAs []string
+	for _, e := range entries {
+		if !seen[e.sha] {
+			seen[e.sha] = true
+			uniqueSHAs = append(uniqueSHAs, e.sha)
+		}
+	}
+
+	stdinStr := strings.Join(uniqueSHAs, "\n") + "\n"
+	batchOutput, err := executor.RunWithStdin(stdinStr, "cat-file", "--batch")
+	if err != nil {
+		debugf("cat-file --batch failed, falling back: %v", err)
+		return nil
+	}
+
+	// cat-file --batch出力をパースしてSHA-256を計算
+	// 形式: "<sha> <type> <size>\n<content (size bytes)>\n"
+	hashes := make(map[string]string, len(entries))
+	remaining := batchOutput
+	for _, blobSHA := range uniqueSHAs {
+		headerEnd := strings.Index(remaining, "\n")
+		if headerEnd == -1 {
+			break
+		}
+		header := remaining[:headerEnd]
+		remaining = remaining[headerEnd+1:]
+
+		headerFields := strings.Fields(header)
+		if len(headerFields) < 3 || headerFields[1] == "missing" {
+			continue
+		}
+
+		size, err := strconv.Atoi(headerFields[2])
+		if err != nil {
+			continue
+		}
+
+		// 大ファイルはスキップ
+		if size > maxBlobSize {
+			if len(remaining) > size {
+				remaining = remaining[size+1:]
+			}
+			continue
+		}
+
+		if len(remaining) < size+1 {
+			break
+		}
+		content := remaining[:size]
+		remaining = remaining[size+1:] // skip trailing LF
+
+		hash := sha256.Sum256([]byte(content))
+		hashStr := hex.EncodeToString(hash[:])
+
+		for _, filePath := range blobToFiles[blobSHA] {
+			hashes[filePath] = hashStr
+		}
+	}
+
 	return hashes
 }
 
@@ -205,25 +302,3 @@ func collectConsumedTimestamps(authorMap map[string]*tracker.CheckpointV2) map[t
 	return timestamps
 }
 
-// expandConsumedByBaseCommit は消費対象のチェックポイントと同じBaseCommitを
-// 共有するチェックポイントも消費対象に追加します。
-// これにより、Developer baseline + AI editのペアが一緒に消費されます。
-func expandConsumedByBaseCommit(checkpoints []*tracker.CheckpointV2, consumed map[time.Time]bool) {
-	// 消費されたチェックポイントのBaseCommit集合を収集
-	// 空文字列も有効なグループ（初回コミット前のチェックポイント）
-	consumedBases := make(map[string]bool)
-	for _, cp := range checkpoints {
-		if consumed[cp.Timestamp] {
-			consumedBases[cp.BaseCommit] = true
-		}
-	}
-	if len(consumedBases) == 0 {
-		return
-	}
-	// 同じBaseCommitのチェックポイントを消費対象に追加
-	for _, cp := range checkpoints {
-		if consumedBases[cp.BaseCommit] {
-			consumed[cp.Timestamp] = true
-		}
-	}
-}

@@ -14,6 +14,10 @@ type Executor interface {
 
 	// RunInDir executes a git command with the given arguments in a specific directory
 	RunInDir(dir string, args ...string) (string, error)
+
+	// RunWithStdin executes a git command with the provided string as stdin.
+	// Unlike Run, the output is NOT trimmed (raw output preserved).
+	RunWithStdin(stdin string, args ...string) (string, error)
 }
 
 // RealExecutor implements Executor for actual git command execution
@@ -59,6 +63,24 @@ func (e *RealExecutor) RunInDir(dir string, args ...string) (string, error) {
 	return strings.TrimSpace(stdout.String()), nil
 }
 
+// RunWithStdin executes a git command with stdin input (raw output, no TrimSpace)
+func (e *RealExecutor) RunWithStdin(stdin string, args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Stdin = strings.NewReader(stdin)
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	if err != nil {
+		return "", fmt.Errorf("git %s failed: %w\nstderr: %s",
+			strings.Join(args, " "), err, stderr.String())
+	}
+
+	return stdout.String(), nil
+}
+
 // ValidateRevisionArg validates that a revision argument (commit hash, range spec)
 // does not start with "-" to prevent option injection attacks.
 func ValidateRevisionArg(arg string) error {
@@ -76,6 +98,9 @@ type MockExecutor struct {
 	// RunInDirFunc is called when RunInDir is invoked
 	RunInDirFunc func(dir string, args ...string) (string, error)
 
+	// RunWithStdinFunc is called when RunWithStdin is invoked
+	RunWithStdinFunc func(stdin string, args ...string) (string, error)
+
 	// CallLog stores all calls for verification
 	CallLog []MockCall
 }
@@ -84,6 +109,7 @@ type MockExecutor struct {
 type MockCall struct {
 	Method string
 	Dir    string
+	Stdin  string
 	Args   []string
 	Output string
 	Error  error
@@ -127,6 +153,26 @@ func (m *MockExecutor) RunInDir(dir string, args ...string) (string, error) {
 	m.CallLog = append(m.CallLog, MockCall{
 		Method: "RunInDir",
 		Dir:    dir,
+		Args:   args,
+		Output: output,
+		Error:  err,
+	})
+
+	return output, err
+}
+
+// RunWithStdin executes the mock RunWithStdin function
+func (m *MockExecutor) RunWithStdin(stdin string, args ...string) (string, error) {
+	var output string
+	var err error
+
+	if m.RunWithStdinFunc != nil {
+		output, err = m.RunWithStdinFunc(stdin, args...)
+	}
+
+	m.CallLog = append(m.CallLog, MockCall{
+		Method: "RunWithStdin",
+		Stdin:  stdin,
 		Args:   args,
 		Output: output,
 		Error:  err,

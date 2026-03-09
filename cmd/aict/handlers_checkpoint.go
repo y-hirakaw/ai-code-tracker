@@ -173,7 +173,8 @@ func captureSnapshot(trackedExtensions []string) (map[string]tracker.FileSnapsho
 		// 作業ディレクトリのファイル内容を読み込み（コミット済みでなくても良い）
 		content, err := os.ReadFile(filepath)
 		if err != nil {
-			continue // ファイルが読めない場合はスキップ
+			debugf("skipping file %s: %v", filepath, err)
+			continue
 		}
 
 		// ハッシュ計算

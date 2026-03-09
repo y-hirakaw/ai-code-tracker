@@ -107,8 +107,18 @@ type Config struct {
 	TrackedExtensions  []string          `json:"tracked_extensions"`
 	ExcludePatterns    []string          `json:"exclude_patterns"`
 	AuthorMappings     map[string]string `json:"author_mappings"`
-	DefaultAuthor      string            `json:"default_author,omitempty"` // SPEC.md準拠
-	AIAgents           []string          `json:"ai_agents,omitempty"`      // SPEC.md準拠
+	DefaultAuthor      string            `json:"default_author,omitempty"`       // SPEC.md準拠
+	AIAgents           []string          `json:"ai_agents,omitempty"`            // SPEC.md準拠
+	CheckpointTTLHours int              `json:"checkpoint_ttl_hours,omitempty"` // 0=デフォルト24時間
+}
+
+// GetCheckpointTTL はチェックポイントのTTLをtime.Durationで返します。
+// CheckpointTTLHoursが0または未設定の場合、デフォルト24時間を返します。
+func (c *Config) GetCheckpointTTL() time.Duration {
+	if c.CheckpointTTLHours > 0 {
+		return time.Duration(c.CheckpointTTLHours) * time.Hour
+	}
+	return 24 * time.Hour
 }
 
 // SPEC.md準拠の型定義

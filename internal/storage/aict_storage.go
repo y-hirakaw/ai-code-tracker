@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/y-hirakaw/ai-code-tracker/internal/tracker"
@@ -45,6 +46,35 @@ func NewAIctStorage() (*AIctStorage, error) {
 	return &AIctStorage{gitDir: aictDir}, nil
 }
 
+// lockCheckpointsFile はチェックポイントファイルのアドバイザリロックを取得します。
+// SaveCheckpointとrewriteCheckpointsの競合を防止。
+func (s *AIctStorage) lockCheckpointsFile() (*os.File, error) {
+	lockPath := filepath.Join(s.gitDir, CheckpointsDirName, LatestFileName+".lock")
+	if err := os.MkdirAll(filepath.Dir(lockPath), 0755); err != nil {
+		return nil, fmt.Errorf("creating lock directory: %w", err)
+	}
+
+	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		return nil, fmt.Errorf("opening lock file: %w", err)
+	}
+
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		f.Close()
+		return nil, fmt.Errorf("acquiring lock: %w", err)
+	}
+
+	return f, nil
+}
+
+// unlockCheckpointsFile はアドバイザリロックを解放します。
+func unlockCheckpointsFile(f *os.File) {
+	if f != nil {
+		syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		f.Close()
+	}
+}
+
 // SaveCheckpoint appends a checkpoint as a JSONL line to latest.json.
 // 旧JSON配列形式のファイルが存在する場合、自動的にJSONL形式にマイグレーションします。
 func (s *AIctStorage) SaveCheckpoint(cp *tracker.CheckpointV2) error {
@@ -52,6 +82,13 @@ func (s *AIctStorage) SaveCheckpoint(cp *tracker.CheckpointV2) error {
 	if err := os.MkdirAll(checkpointsDir, 0755); err != nil {
 		return err
 	}
+
+	// アドバイザリロック取得（rewriteCheckpointsとの競合防止）
+	lockFile, err := s.lockCheckpointsFile()
+	if err != nil {
+		return fmt.Errorf("acquiring checkpoint lock: %w", err)
+	}
+	defer unlockCheckpointsFile(lockFile)
 
 	checkpointsFile := filepath.Join(checkpointsDir, LatestFileName)
 
@@ -147,7 +184,7 @@ func migrateToJSONLIfNeeded(path string) error {
 		return err
 	}
 
-	// JSONL形式で書き直し
+	// JSONL形式でtmp+renameパターンで安全に書き直し
 	var buf bytes.Buffer
 	for _, cp := range checkpoints {
 		line, err := json.Marshal(cp)
@@ -158,7 +195,15 @@ func migrateToJSONLIfNeeded(path string) error {
 		buf.WriteByte('\n')
 	}
 
-	return os.WriteFile(path, buf.Bytes(), 0644)
+	tmpFile := path + ".migrate.tmp"
+	if err := os.WriteFile(tmpFile, buf.Bytes(), 0644); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpFile, path); err != nil {
+		os.Remove(tmpFile)
+		return err
+	}
+	return nil
 }
 
 // ClearCheckpoints removes all checkpoints
@@ -173,6 +218,7 @@ func (s *AIctStorage) ClearCheckpoints() error {
 
 // RemoveConsumedCheckpoints は照合で使用されたチェックポイントのみを削除し、
 // 未使用のチェックポイントを残します（stash退避中の変更の保全用）。
+// 同じBaseCommitを共有するペア（Developer baseline + AI edit）も一緒に消費します。
 func (s *AIctStorage) RemoveConsumedCheckpoints(consumedTimestamps map[time.Time]bool) error {
 	if len(consumedTimestamps) == 0 {
 		return nil
@@ -182,6 +228,9 @@ func (s *AIctStorage) RemoveConsumedCheckpoints(consumedTimestamps map[time.Time
 	if err != nil {
 		return err
 	}
+
+	// 同じBaseCommitを共有するチェックポイントもペアで消費
+	ExpandConsumedByBaseCommit(checkpoints, consumedTimestamps)
 
 	var remaining []*tracker.CheckpointV2
 	for _, cp := range checkpoints {
@@ -197,8 +246,81 @@ func (s *AIctStorage) RemoveConsumedCheckpoints(consumedTimestamps map[time.Time
 	return s.rewriteCheckpoints(remaining)
 }
 
+// ExpandConsumedByBaseCommit は消費対象のチェックポイントと同じBaseCommitを
+// 共有し、かつファイルパスが重複するチェックポイントも消費対象に追加します。
+// これにより、Developer baseline + AI editのペアが一緒に消費されます。
+// 同じBaseCommitでもファイルパスが重複しないチェックポイント（別のstashセッション由来）は残します。
+func ExpandConsumedByBaseCommit(checkpoints []*tracker.CheckpointV2, consumed map[time.Time]bool) {
+	// 消費済みチェックポイントの情報を収集
+	type baseGroup struct {
+		baseCommit string
+		files      map[string]bool // 消費済みCPのChangesファイルパス集合
+	}
+	groups := make(map[string]*baseGroup) // BaseCommit -> group
+	for _, cp := range checkpoints {
+		if !consumed[cp.Timestamp] {
+			continue
+		}
+		g, ok := groups[cp.BaseCommit]
+		if !ok {
+			g = &baseGroup{baseCommit: cp.BaseCommit, files: make(map[string]bool)}
+			groups[cp.BaseCommit] = g
+		}
+		for fpath := range cp.Changes {
+			g.files[fpath] = true
+		}
+		// Snapshotのファイルパスも考慮（Changes空のbaselineチェックポイント用）
+		for fpath := range cp.Snapshot {
+			g.files[fpath] = true
+		}
+	}
+	if len(groups) == 0 {
+		return
+	}
+
+	// 同じBaseCommitかつファイルパスが重複するチェックポイントを消費対象に追加
+	for _, cp := range checkpoints {
+		if consumed[cp.Timestamp] {
+			continue
+		}
+		g, ok := groups[cp.BaseCommit]
+		if !ok {
+			continue
+		}
+		if hasFileOverlap(cp, g.files) {
+			consumed[cp.Timestamp] = true
+		}
+	}
+}
+
+// hasFileOverlap はチェックポイントのファイルパスが対象ファイル集合と重複するか判定します。
+// ChangesもSnapshotも空のチェックポイント（初回ベースライン等）は常にマッチします。
+func hasFileOverlap(cp *tracker.CheckpointV2, targetFiles map[string]bool) bool {
+	// 空のチェックポイントはベースラインマーカーなので常にペア消費対象
+	if len(cp.Changes) == 0 && len(cp.Snapshot) == 0 {
+		return true
+	}
+	for fpath := range cp.Changes {
+		if targetFiles[fpath] {
+			return true
+		}
+	}
+	for fpath := range cp.Snapshot {
+		if targetFiles[fpath] {
+			return true
+		}
+	}
+	return false
+}
+
 // PurgeExpiredCheckpoints はTTLを超えた古いチェックポイントを削除します。
-func (s *AIctStorage) PurgeExpiredCheckpoints() error {
+// ttlが0の場合はデフォルトのCheckpointTTL（24時間）を使用します。
+func (s *AIctStorage) PurgeExpiredCheckpoints(ttl ...time.Duration) error {
+	effectiveTTL := CheckpointTTL
+	if len(ttl) > 0 && ttl[0] > 0 {
+		effectiveTTL = ttl[0]
+	}
+
 	checkpoints, err := s.LoadCheckpoints()
 	if err != nil {
 		return err
@@ -210,7 +332,7 @@ func (s *AIctStorage) PurgeExpiredCheckpoints() error {
 	now := time.Now()
 	var valid []*tracker.CheckpointV2
 	for _, cp := range checkpoints {
-		if now.Sub(cp.Timestamp) < CheckpointTTL {
+		if now.Sub(cp.Timestamp) < effectiveTTL {
 			valid = append(valid, cp)
 		}
 	}
@@ -227,12 +349,19 @@ func (s *AIctStorage) PurgeExpiredCheckpoints() error {
 }
 
 // rewriteCheckpoints はチェックポイントリストをJSONL形式で書き直します。
-// 一時ファイル + rename パターンでクラッシュ安全性を確保。
+// アドバイザリロック + 一時ファイル + rename パターンでクラッシュ安全性を確保。
 func (s *AIctStorage) rewriteCheckpoints(checkpoints []*tracker.CheckpointV2) error {
 	checkpointsDir := filepath.Join(s.gitDir, CheckpointsDirName)
 	if err := os.MkdirAll(checkpointsDir, 0755); err != nil {
 		return err
 	}
+
+	// アドバイザリロック取得（SaveCheckpointとの競合防止）
+	lockFile, err := s.lockCheckpointsFile()
+	if err != nil {
+		return fmt.Errorf("acquiring checkpoint lock: %w", err)
+	}
+	defer unlockCheckpointsFile(lockFile)
 
 	checkpointsFile := filepath.Join(checkpointsDir, LatestFileName)
 	tmpFile := checkpointsFile + ".tmp"
